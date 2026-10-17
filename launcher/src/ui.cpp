@@ -28,11 +28,11 @@ constexpr const char* kUpdatePanel = "data/ui/imgassets/custompanels/custompanel
 constexpr const char* kStroke = "data/ui/imgassets/custompanels/custompanels_61.dds";
 constexpr const char* kLogo = "data/ui/imgassets/custompanels/custompanels_39.dds";
 constexpr const char* kTiles = "data/ui/imgassets/tiles/mainhub/";
-constexpr const char* kHomeIcons[] = {"ct_gamesettings", "ct_settings", "ct_controls",
+constexpr const char* kHomeIcons[] = {"ct_selectarenaprofile", "ct_settings", "ct_controls",
                                       "ct_credits"};
 // Settings sections (Section::icon): Display, Graphics, Data, Sound, Controls.
-constexpr const char* kSectionIcons[] = {"ct_videocalibration", "ct_replaytheatre",
-                                         "ct_downloadupdates", "ct_musicandchants",
+constexpr const char* kSectionIcons[] = {"ct_videocalibration", "ct_gamesettings",
+                                         "ct_loadfifa2014wc_profile", "ct_musicandchants",
                                          "ct_basiccontrols"};
 constexpr const char* kHomeItems[] = {"Play", "Settings", "Controls", "About"};
 
@@ -78,6 +78,7 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
   background_ = LoadGameTexture(device, files, kBackground);
   panel_ = LoadGameTexture(device, files, kPanel);
   update_panel_ = LoadGameTexture(device, files, kUpdatePanel);
+  update_icon_ = LoadGameTexture(device, files, std::string(kTiles) + "ct_downloadupdates.dds");
   stroke_ = LoadGameTexture(device, files, kStroke);
   logo_ = LoadGameTexture(device, files, kLogo);
   for (size_t i = 0; i < home_icons_.size(); ++i) {
@@ -673,7 +674,8 @@ void Ui::SettingsScreen(float width, float height) {
   float board_h = std::min(720 * s, height * 0.84f), board_y = (height - board_h) * 0.5f;
   board_y = std::max(board_y, top);
   DrawBoard(board_x, board_y, board_w, board_h, true);
-  float icon_w = 230 * s;
+  // Data's tile (the World Cup cover) is a smaller picture than the others: drawn larger.
+  float icon_w = (section.icon == 2 ? 310 : 230) * s;
   DrawSplash(section_icons_[section.icon], std::min(board_x + board_w + 50 * s - icon_w * 0.5f, width - icon_w * 0.55f),
              board_y - 70 * s + icon_w * 0.33f, icon_w, splash_appear_);
 
@@ -1000,8 +1002,8 @@ void Ui::UpdateCommand(Command command) {
   }
 }
 
-// A painted panel over the dimmed menu, the Data section's "download updates"
-// tile on its corner: the new version and what changed, then Update now /
+// A painted panel over the dimmed menu, the game's "download updates" tile on
+// its corner: the new version and what changed, then Update now /
 // Later, or the download's progress.
 void Ui::UpdatePopup(float width, float height) {
   using State = UpdateJob::State;
@@ -1017,7 +1019,7 @@ void Ui::UpdatePopup(float width, float height) {
   float px = (width - panel_w) * 0.5f, py = (height - panel_h) * 0.5f + (1 - t) * 16 * s;
   Image(draw_, panel, ImVec2(px, py), ImVec2(px + panel_w, py + panel_h), WithAlpha(IM_COL32_WHITE, t));
   float icon_w = 190 * s;
-  DrawSplash(section_icons_[2], px + panel_w - 30 * s, py + 34 * s, icon_w, t);
+  DrawSplash(update_icon_, px + panel_w - 30 * s, py + 34 * s, icon_w, t);
 
   ImU32 ink = WithAlpha(kInk, t), soft = WithAlpha(kInk, 0.72f * t);
   float x = px + 62 * s, wrap = panel_w - 140 * s;

@@ -136,7 +136,7 @@ class Ui {
   InputDevice device_ = InputDevice::kKeyboard;
   std::unordered_map<std::string, float> anims_;
 
-  Texture background_, panel_, stroke_, logo_, update_panel_;
+  Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_;
   std::array<Texture, 4> home_icons_;
   std::array<Texture, 5> section_icons_;
   ImFont* bold_ = nullptr;
