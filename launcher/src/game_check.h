@@ -3,9 +3,12 @@
 // The game's default.xex (XEX2, big-endian) names the game in its execution
 // info (optional header 0x00040006): media id, version, base version, title
 // id, platform, executable table, disc number and disc count. The recompiled
-// code only fits the exact executables it was made from, so beyond the title
-// and version, default.xex and the two DLC modules the game loads are checked
-// by their SHA-256.
+// code only fits the exact code it was made from, so default.xex and the two
+// DLC modules the game loads are unpacked (decrypted and decompressed, as the
+// console loads them) and their code compared by SHA-256. Releases whose
+// executables differ only in their headers (region, media ID, version
+// number), such as the European and the US disc, have the same code and are
+// all accepted.
 
 #pragma once
 
@@ -18,24 +21,23 @@ class GameSource;
 
 struct GameCheck {
   enum class Result {
-    kFound,         // 2014 FIFA World Cup Brazil, the release this is made from
-    kNoGame,        // no default.xex (or not an Xbox 360 executable)
-    kOtherGame,     // an Xbox 360 game, but another one
-    kOtherVersion,  // this game, another version (or disc)
-    kChanged,       // the right version, but an executable differs from the disc
-    kIncomplete,    // the right default.xex, but a DLC module is missing
+    kFound,       // 2014 FIFA World Cup Brazil with the code the PC version is made from
+    kNoGame,      // no default.xex (or not an Xbox 360 executable)
+    kOtherGame,   // an Xbox 360 game, but another one
+    kOtherCode,   // this game, but an executable's code differs (another build, patched)
+    kIncomplete,  // default.xex is there, but a DLC module is missing
   };
   Result result = Result::kNoGame;
   uint32_t title_id = 0;
   uint32_t media_id = 0;
   std::string version;  // "0.0.0.13"
+  std::string region;   // "Europe", "USA" for the releases known to work; else empty
   int disc = 0, discs = 0;
-  std::string file;  // the changed or missing file, for kChanged / kIncomplete
+  std::string file;  // the differing or missing file, for kOtherCode / kIncomplete
 };
 
-// The title and version the PC version is made from.
+// The title the PC version is made from.
 constexpr uint32_t kGameTitleId = 0x454109D4;
-inline constexpr const char* kGameVersion = "0.0.0.13";
 
 GameCheck CheckGame(const GameSource& source);
 

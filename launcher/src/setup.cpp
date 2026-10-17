@@ -157,15 +157,15 @@ void Setup::Frame(float width, float height, float dt) {
     details = Utf8(location_);
     if (check_.title_id) {
       details += "\nTitle " + Hex(check_.title_id) + "  \xC2\xB7  Version " + check_.version +
-                 "  \xC2\xB7  Disc " + std::to_string(check_.disc) + " of " +
+                 (check_.region.empty() ? "" : " (" + check_.region + ")") + "  \xC2\xB7  Disc " + std::to_string(check_.disc) + " of " +
                  std::to_string(check_.discs);
     }
     icon = check_.result == Result::kFound ? kGreen : kOrange;
     switch (check_.result) {
       case Result::kFound:
         heading = "2014 FIFA World Cup Brazil detected";
-        body = "This is the release the PC version is made from. Continue to the menu; the "
-               "game is played from here.";
+        body = "Its game code is the code the PC version is made from. Continue to the menu; "
+               "the game is played from here.";
         break;
       case Result::kNoGame:
         heading = "No Xbox 360 game there";
@@ -179,17 +179,12 @@ void Setup::Frame(float width, float height, float dt) {
         body = "It's an Xbox 360 game, but not 2014 FIFA World Cup Brazil (its title ID is " +
                Hex(check_.title_id) + "). Choose your copy of 2014 FIFA World Cup Brazil.";
         break;
-      case Result::kOtherVersion:
-        heading = "A different version of the game";
-        body = "This is 2014 FIFA World Cup Brazil, version " + check_.version +
-               " (media ID " + Hex(check_.media_id) + "), but the PC version is made from " +
-               kGameVersion + " (media ID 5D31A745) and only runs that one.";
-        break;
-      case Result::kChanged:
-        heading = "The game's files have been changed";
-        body = "It's the right version, but " + check_.file +
-               " isn't as it is on the disc (patched or modded?), so the PC version can't run "
-               "it. Choose an unchanged copy.";
+      case Result::kOtherCode:
+        heading = "A different build of the game";
+        body = "This is 2014 FIFA World Cup Brazil, but the code in " +
+               fs::path(check_.file).filename().string() +
+               " isn't the code the PC version is made from (another build, or patched or "
+               "modded), so it can't run it. The European and US discs work.";
         break;
       case Result::kIncomplete:
         heading = "Some of the game is missing";
