@@ -1,0 +1,76 @@
+diff --git a/include/rex/system/kernel_state.h b/include/rex/system/kernel_state.h
+index 9b9cf9e..e0cb942 100644
+--- a/include/rex/system/kernel_state.h
++++ b/include/rex/system/kernel_state.h
+@@ -380,6 +380,11 @@ class KernelState {
+   std::vector<TerminateNotification> terminate_notifications_;
+   std::vector<RecompiledModuleInfo> recompiled_modules_;
+   std::unordered_map<std::string, rex::platform::DynamicLibrary> module_libraries_;
++  // The recompiled module (guest_path key) each loaded user module was wired
++  // to. Unloading uses it rather than looking the module's path up again: a
++  // loaded module's path is its resolved device path (\Device\Harddisk0\...),
++  // which doesn't normalize to the recompiled module's guest path.
++  std::unordered_map<const UserModule*, std::string> recompiled_module_keys_;
+   // FreeLibrary deferred to teardown so guest threads still in unloaded code
+   // don't return into freed pages. Drained at the end of ~KernelState.
+   std::vector<rex::platform::DynamicLibrary> deferred_unload_libraries_;
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index 697399c..6984f6b 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -708,9 +708,13 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+   // loading_paths_ serializes concurrent loaders of the same path; we
+   // can't hold the global lock across LoadFromFile or DllMain ATTACH.
+   {
++    // The same module can be asked for through different guest paths (device
++    // prefix, case): it is still the one already loaded.
++    const std::string normalized = NormalizeGuestPath(path);
+     auto global_lock = global_critical_region_.Acquire();
+     for (auto& existing_module : user_modules_) {
+-      if (existing_module->path() == path) {
++      if (existing_module->path() == path ||
++          NormalizeGuestPath(existing_module->path()) == normalized) {
+         return existing_module;
+       }
+     }
+@@ -752,7 +756,15 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+       auto global_lock = global_critical_region_.Acquire();
+       auto [lib_it, inserted] = module_libraries_.emplace(lib_key, rex::platform::DynamicLibrary{});
+       if (!inserted) {
+-        REXSYS_ERROR("Recompiled module '{}' already loaded; refusing duplicate load", lib_key);
++        REXSYS_ERROR("Recompiled module '{}' already loaded; refusing duplicate load (asked for "
++                     "'{}', loaded modules: {})",
++                     lib_key, path, [this] {
++                       std::string paths;
++                       for (auto& m : user_modules_) {
++                         paths += "'" + m->path() + "' ";
++                       }
++                       return paths;
++                     }());
+         object_table()->ReleaseHandle(module->handle());
+         return nullptr;
+       }
+@@ -795,6 +807,7 @@ object_ref<UserModule> KernelState::LoadUserModule(const std::string_view raw_na
+           auto lib_it = module_libraries_.find(lib_key);
+           assert_true(lib_it != module_libraries_.end());
+           lib_it->second = std::move(library_local);
++          recompiled_module_keys_[module.get()] = lib_key;
+           wired_recomp = true;
+         }
+       }
+@@ -853,7 +866,14 @@ void KernelState::UnloadUserModule(const object_ref<UserModule>& module, bool ca
+   {
+     auto global_lock = global_critical_region_.Acquire();
+ 
+-    auto recomp = FindRecompiledModule(module->path());
++    std::optional<RecompiledModuleInfo> recomp;
++    if (auto key_it = recompiled_module_keys_.find(module.get());
++        key_it != recompiled_module_keys_.end()) {
++      recomp = FindRecompiledModule(key_it->second);
++      recompiled_module_keys_.erase(key_it);
++    } else {
++      recomp = FindRecompiledModule(module->path());
++    }
+     if (recomp) {
+       const std::string& key = recomp->guest_path;
+       auto cleared_range = function_dispatcher_->UnregisterModule(key);

@@ -1,0 +1,13 @@
+# Code generation options shared by all three modules.
+#
+# By default every PowerPC register lives in a PPCContext struct in memory, so each
+# instruction is a load and a store. These options turn registers whose value never
+# outlives the function into C++ locals, which the compiler can keep in host registers.
+# Only registers that are scratch by the PowerPC calling convention are enabled here;
+# non_volatile_as_local / reserved_as_local interact with setjmp/longjmp and unwinding
+# and need setjmp_address/longjmp_address configured first.
+
+ctr_as_local = true           # count register (loops, indirect branches)
+xer_as_local = true           # carry/overflow flags
+cr_as_local = true            # condition register fields (compare results)
+non_argument_as_local = false # OFF: this game passes r12 across calls (mflr r12 + save-helper, r12-passing thunks); hangs at boot

@@ -1,0 +1,36 @@
+# Never commit game code or assets: your copy of the game stays outside this repo.
+*.xex
+*.xexp
+*.xex.dll
+*.big
+*.bh
+*.vp6
+*.xur
+*.cbac
+nxeart
+
+# Recompiled C++ is derived from the game binary: private, regenerate locally.
+**/generated/
+
+# Working notes stay private (the public build steps are in BUILDING.md).
+NOTES.md
+
+# Build output
+out/
+build/
+*.log
+*.dmp
+*frames*.csv
+
+# Editor / OS
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+
+# GPU frame captures (F9 in the PC build): game imagery, never commit
+captures/

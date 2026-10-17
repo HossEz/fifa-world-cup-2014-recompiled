@@ -1,0 +1,901 @@
+diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
+index da8e432..e1039b2 100644
+--- a/include/rex/graphics/command_processor.h
++++ b/include/rex/graphics/command_processor.h
+@@ -12,6 +12,7 @@
+ #pragma once
+ 
+ #include <atomic>
++#include <condition_variable>
+ #include <cstring>
+ #include <functional>
+ #include <memory>
+@@ -44,6 +45,9 @@ enum class ReadbackResolveMode {
+   kFast,
+   kSome,
+   kFull,
++  // Sync readback for one-off resolves; delayed readback for destinations resolved
++  // every 1-3 frames that keeps the GPU's newer copy, plus a final copy once quiet.
++  kAdaptive,
+ };
+ 
+ struct SwapState {
+@@ -129,7 +133,53 @@ class CommandProcessor {
+   bool Save(::rex::stream::ByteStream* stream);
+   bool Restore(::rex::stream::ByteStream* stream);
+ 
++  // GPU-resident data tracking. Resolves leave their newest data in GPU memory
++  // (guest memory is only updated by readback, if at all). Pages are marked on
++  // resolve and unmarked when the CPU writes them. Physical addresses.
++  bool IsGpuMemoryNewer(uint32_t physical_address, uint32_t length) const;
++  // Queues a copy between physical ranges to run in GPU memory on the command
++  // processor thread, ordered before any guest commands submitted afterwards.
++  // The destination counts as GPU-newer immediately. Returns false if the
++  // backend cannot copy in GPU memory.
++  bool QueueGpuMemoryCopy(uint32_t dst_physical, uint32_t src_physical, uint32_t length);
++  // Blocks the calling (guest) thread until the GPU-newer data of the physical
++  // range has been read back into guest memory. Returns false if unsupported.
++  bool ReadbackGpuMemory(uint32_t physical_address, uint32_t length);
++
+  protected:
++  void MarkGpuMemoryNewer(uint32_t physical_address, uint32_t length, bool newer);
++  void ExecuteQueuedGpuMemoryCopies();
++  // Backend hook: copy [src, +length) to [dst, +length) in GPU memory and mark
++  // dst as GPU-written. Runs on the command processor thread.
++  virtual bool SupportsGpuMemoryCopy() const { return false; }
++  virtual void ExecuteGpuMemoryCopy(uint32_t dst_physical, uint32_t src_physical,
++                                    uint32_t length) {
++    (void)dst_physical;
++    (void)src_physical;
++    (void)length;
++  }
++  // Backend hook: synchronously read [physical, +length) from GPU memory into
++  // guest memory. Runs on the command processor thread.
++  virtual void ExecuteGpuMemoryReadback(uint32_t physical_address, uint32_t length) {
++    (void)physical_address;
++    (void)length;
++  }
++
++  static constexpr uint32_t kGpuNewerPageShift = 12;
++  static constexpr uint32_t kGpuNewerPageCount = 0x20000000 >> kGpuNewerPageShift;
++  std::unique_ptr<std::atomic<uint64_t>[]> gpu_newer_pages_ =
++      std::make_unique<std::atomic<uint64_t>[]>(kGpuNewerPageCount / 64);
++  struct QueuedGpuMemoryCopy {
++    uint32_t dst;
++    uint32_t src;  // UINT32_MAX: readback of dst into guest memory
++    uint32_t length;
++    std::atomic<bool>* done = nullptr;  // readback: set when complete
++  };
++  std::condition_variable gpu_copy_done_cv_;
++  std::mutex gpu_copy_mutex_;
++  std::vector<QueuedGpuMemoryCopy> gpu_copies_;
++  std::atomic<bool> gpu_copies_pending_{false};
++
+   struct IndexBufferInfo {
+     xenos::IndexFormat format = xenos::IndexFormat::kInt16;
+     xenos::Endian endianness = xenos::Endian::kNone;
+diff --git a/include/rex/graphics/d3d12/command_processor.h b/include/rex/graphics/d3d12/command_processor.h
+index 96d362b..5b1a8ae 100644
+--- a/include/rex/graphics/d3d12/command_processor.h
++++ b/include/rex/graphics/d3d12/command_processor.h
+@@ -366,6 +366,16 @@ class D3D12CommandProcessor : public CommandProcessor {
+   bool UpdateBindings(const D3D12Shader* vertex_shader, const D3D12Shader* pixel_shader,
+                       ID3D12RootSignature* root_signature, bool shared_memory_is_uav);
+   bool IssueCopy_ReadbackResolvePath();
++
++  // GPU-side guest memory copies (see CommandProcessor::QueueGpuMemoryCopy).
++  bool SupportsGpuMemoryCopy() const override { return true; }
++  void ExecuteGpuMemoryCopy(uint32_t dst_physical, uint32_t src_physical,
++                            uint32_t length) override;
++  void ExecuteGpuMemoryReadback(uint32_t physical_address, uint32_t length) override;
++  static void GpuNewerGlobalWatchCallback(const std::unique_lock<std::recursive_mutex>& global_lock,
++                                          void* context, uint32_t address_first,
++                                          uint32_t address_last, bool invalidated_by_gpu);
++  SharedMemory::GlobalWatchHandle gpu_newer_watch_ = nullptr;
+   bool IssueDraw_MemexportReadbackFullPath(uint32_t total_size);
+   bool IssueDraw_MemexportReadbackFastPath(uint32_t total_size);
+ 
+@@ -380,8 +390,25 @@ class D3D12CommandProcessor : public CommandProcessor {
+     uint32_t written_size[2] = {0, 0};
+     uint32_t current_index = 0;
+     uint64_t last_used_frame = 0;
++    // Adaptive mode: consecutive frames this destination has been resolved in.
++    uint32_t hot_frames = 0;
++    // Adaptive mode: the newest resolve went through the delayed path and has not
++    // reached guest memory yet.
++    bool pending_flush = false;
++    uint32_t guest_address = 0;
++    uint32_t guest_length = 0;
+   };
+   void EvictOldReadbackBuffers(std::unordered_map<uint64_t, ReadbackBuffer>& buffer_map);
++  void FlushQuietReadbackResolves();
++  // Called after every resolve: GPU-newer tracking and the readback probe.
++  void ProbeResolve(uint32_t written_address, uint32_t written_length, bool guest_memory_current);
++  bool IsForcedSyncReadbackAddress(uint32_t address);
++  std::string forced_sync_readback_source_;
++  std::vector<uint32_t> forced_sync_readback_addresses_;
++  // Frames in a row a destination must be resolved before adaptive mode treats it
++  // as per-frame and stops waiting for the GPU on it.
++  static constexpr uint32_t kReadbackHotFrames = 8;
++  static constexpr uint64_t kReadbackHotGapFrames = 3;
+   static constexpr uint32_t kReadbackBufferSizeIncrement = 16 * 1024 * 1024;
+   static constexpr size_t kMaxReadbackBuffers = 256;
+   static constexpr uint64_t kReadbackBufferEvictionAgeFrames = 60;
+diff --git a/include/rex/graphics/d3d12/shared_memory.h b/include/rex/graphics/d3d12/shared_memory.h
+index 5100818..1b1ddec 100644
+--- a/include/rex/graphics/d3d12/shared_memory.h
++++ b/include/rex/graphics/d3d12/shared_memory.h
+@@ -56,6 +56,8 @@ class D3D12SharedMemory : public SharedMemory {
+   }
+   // Makes the buffer usable as a source for copy commands.
+   void UseAsCopySource() { CommitUAVWritesAndTransitionBuffer(D3D12_RESOURCE_STATE_COPY_SOURCE); }
++  // Makes the buffer usable as a destination for copy commands.
++  void UseAsCopyDestination() { CommitUAVWritesAndTransitionBuffer(D3D12_RESOURCE_STATE_COPY_DEST); }
+   // Must be called when doing draws/dispatches modifying data within the shared
+   // memory buffer as a UAV, to make sure that when UseForWriting is called the
+   // next time, a UAV barrier will be done, and subsequent overlapping UAV
+diff --git a/include/rex/graphics/flags.h b/include/rex/graphics/flags.h
+index 2cf24c4..4aa9612 100644
+--- a/include/rex/graphics/flags.h
++++ b/include/rex/graphics/flags.h
+@@ -27,6 +27,7 @@ REXCVAR_DECLARE(bool, resolve_resolution_scale_fill_half_pixel_offset);
+ REXCVAR_DECLARE(bool, draw_resolution_scaled_texture_offsets);
+ REXCVAR_DECLARE(std::string, readback_resolve);
+ REXCVAR_DECLARE(bool, readback_resolve_half_pixel_offset);
++REXCVAR_DECLARE(std::string, readback_resolve_sync_addresses);
+ REXCVAR_DECLARE(bool, readback_memexport);
+ REXCVAR_DECLARE(bool, readback_memexport_fast);
+ REXCVAR_DECLARE(bool, occlusion_query_enable);
+diff --git a/include/rex/graphics/graphics_system.h b/include/rex/graphics/graphics_system.h
+index ac6b056..da528eb 100644
+--- a/include/rex/graphics/graphics_system.h
++++ b/include/rex/graphics/graphics_system.h
+@@ -71,6 +71,10 @@ class GraphicsSystem : public system::IGraphicsSystem {
+   RegisterFile* register_file() { return &register_file_; }
+   CommandProcessor* command_processor() const { return command_processor_.get(); }
+ 
++  bool IsGpuMemoryNewer(uint32_t physical_address, uint32_t length) override;
++  bool CopyGpuMemory(uint32_t dst_physical, uint32_t src_physical, uint32_t length) override;
++  bool ReadbackGpuMemory(uint32_t physical_address, uint32_t length) override;
++
+   void InitializeRingBuffer(uint32_t ptr, uint32_t size_log2) override;
+   void EnableReadPointerWriteBack(uint32_t ptr, uint32_t block_size_log2) override;
+ 
+diff --git a/include/rex/graphics/readback_probe.h b/include/rex/graphics/readback_probe.h
+new file mode 100644
+index 0000000..fb66f58
+--- /dev/null
++++ b/include/rex/graphics/readback_probe.h
+@@ -0,0 +1,30 @@
++/**
++ * @file        graphics/readback_probe.h
++ * @brief       Diagnostic: report which host code first touches resolve output
++ *
++ * With readback_probe enabled, every resolve destination is made inaccessible in
++ * all guest virtual views of physical memory. The first CPU access faults, gets
++ * logged with the symbolized host function (recompiled sub_XXXXXXXX names come
++ * from the PDB) and the page protection is restored. Windows only; slow; for
++ * finding game code that consumes GPU-rendered data on the CPU.
++ */
++
++#pragma once
++
++#include <cstdint>
++
++#include <rex/cvar.h>
++
++REXCVAR_DECLARE(bool, readback_probe);
++
++namespace rex::memory {
++class Memory;
++}
++
++namespace rex::graphics {
++
++// Arms the probe for a resolve that wrote [physical_address, +length).
++void ReadbackProbeArm(rex::memory::Memory& memory, uint32_t physical_address, uint32_t length,
++                      uint32_t format);
++
++}  // namespace rex::graphics
+diff --git a/include/rex/system/gpu_plugin.h b/include/rex/system/gpu_plugin.h
+index 453c210..dd032a3 100644
+--- a/include/rex/system/gpu_plugin.h
++++ b/include/rex/system/gpu_plugin.h
+@@ -29,7 +29,7 @@
+ namespace rex::system {
+ 
+ // Bump on any change to GpuCreateInfo or to the IGraphicsSystem interface.
+-inline constexpr uint32_t kGpuPluginAbiVersion = 1;
++inline constexpr uint32_t kGpuPluginAbiVersion = 2;  // 2: IsGpuMemoryNewer, CopyGpuMemory, ReadbackGpuMemory
+ 
+ inline constexpr const char* kGpuCreateSymbol = "rex_gpu_create";
+ inline constexpr const char* kGpuAbiVersionSymbol = "rex_gpu_abi_version";
+diff --git a/include/rex/system/interfaces/graphics.h b/include/rex/system/interfaces/graphics.h
+index d54df86..16a276f 100644
+--- a/include/rex/system/interfaces/graphics.h
++++ b/include/rex/system/interfaces/graphics.h
+@@ -71,6 +71,30 @@ class IGraphicsSystem {
+     (void)block_size_log2;
+   }
+ 
++  // Whether any page of the physical range holds resolve output newer than guest
++  // memory (it was rendered on the GPU and not read back).
++  virtual bool IsGpuMemoryNewer(uint32_t physical_address, uint32_t length) {
++    (void)physical_address;
++    (void)length;
++    return false;
++  }
++  // Copies between physical ranges inside GPU memory, ordered before guest GPU
++  // commands submitted afterwards. Returns false if unsupported.
++  virtual bool CopyGpuMemory(uint32_t dst_physical, uint32_t src_physical, uint32_t length) {
++    (void)dst_physical;
++    (void)src_physical;
++    (void)length;
++    return false;
++  }
++
++  // Blocks until the GPU-newer data of the physical range is in guest memory.
++  // Returns false if unsupported.
++  virtual bool ReadbackGpuMemory(uint32_t physical_address, uint32_t length) {
++    (void)physical_address;
++    (void)length;
++    return false;
++  }
++
+   // Persistent shader/pipeline storage under the cache root. Default: none.
+   virtual void InitializeShaderStorage(const std::filesystem::path& cache_root, uint32_t title_id,
+                                        bool blocking) {
+diff --git a/src/graphics/CMakeLists.txt b/src/graphics/CMakeLists.txt
+index da7ae1a..2e10f0e 100644
+--- a/src/graphics/CMakeLists.txt
++++ b/src/graphics/CMakeLists.txt
+@@ -18,6 +18,7 @@ set(REXGPU_XENOS_SOURCES
+     # GPU system
+     graphics_system.cpp
+     command_processor.cpp
++    readback_probe.cpp
+     util/draw_extent_estimator.cpp
+     util/draw.cpp
+     packet_disassembler.cpp
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index a744375..3ab1f1c 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -50,8 +50,14 @@ REXCVAR_DEFINE_STRING(readback_resolve, "none", "GPU",
+                       " none: Disable readback (default)\n"
+                       " fast: Read previous frame (delayed, copy every frame)\n"
+                       " some: Read previous frame (delayed, copy on cache miss)\n"
+-                      " full: Immediate sync readback (accurate but stalls)")
+-    .allowed({"none", "fast", "some", "full"})
++                      " full: Immediate sync readback (accurate but stalls)\n"
++                      " adaptive: Sync for one-off resolves, delayed for per-frame ones")
++    .allowed({"none", "fast", "some", "full", "adaptive"})
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
++REXCVAR_DEFINE_STRING(readback_resolve_sync_addresses, "", "GPU",
++                      "Adaptive readback: comma-separated hex guest addresses whose resolves "
++                      "are always read back synchronously")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
+ REXCVAR_DEFINE_BOOL(readback_resolve_half_pixel_offset, false, "GPU",
+@@ -96,6 +102,9 @@ ReadbackResolveMode ParseReadbackResolveMode(std::string_view value) {
+   if (value == "full") {
+     return ReadbackResolveMode::kFull;
+   }
++  if (value == "adaptive") {
++    return ReadbackResolveMode::kAdaptive;
++  }
+   return ReadbackResolveMode::kDisabled;
+ }
+ 
+@@ -181,6 +190,109 @@ ReadbackResolveMode CommandProcessor::GetReadbackResolveMode(
+                                          : ReadbackResolveMode::kDisabled;
+ }
+ 
++void CommandProcessor::MarkGpuMemoryNewer(uint32_t physical_address, uint32_t length,
++                                          bool newer) {
++  if (!length) {
++    return;
++  }
++  physical_address &= 0x1FFFFFFF;
++  uint32_t first = physical_address >> kGpuNewerPageShift;
++  uint32_t last = std::min((physical_address + length - 1) >> kGpuNewerPageShift,
++                           kGpuNewerPageCount - 1);
++  for (uint32_t page = first; page <= last; ++page) {
++    uint64_t bit = uint64_t(1) << (page & 63);
++    if (newer) {
++      gpu_newer_pages_[page >> 6].fetch_or(bit, std::memory_order_relaxed);
++    } else {
++      gpu_newer_pages_[page >> 6].fetch_and(~bit, std::memory_order_relaxed);
++    }
++  }
++}
++
++bool CommandProcessor::IsGpuMemoryNewer(uint32_t physical_address, uint32_t length) const {
++  if (!length) {
++    return false;
++  }
++  physical_address &= 0x1FFFFFFF;
++  uint32_t first = physical_address >> kGpuNewerPageShift;
++  uint32_t last = std::min((physical_address + length - 1) >> kGpuNewerPageShift,
++                           kGpuNewerPageCount - 1);
++  for (uint32_t page = first; page <= last; ++page) {
++    if (gpu_newer_pages_[page >> 6].load(std::memory_order_relaxed) &
++        (uint64_t(1) << (page & 63))) {
++      return true;
++    }
++  }
++  return false;
++}
++
++bool CommandProcessor::QueueGpuMemoryCopy(uint32_t dst_physical, uint32_t src_physical,
++                                          uint32_t length) {
++  if (!SupportsGpuMemoryCopy() || !length) {
++    return false;
++  }
++  dst_physical &= 0x1FFFFFFF;
++  src_physical &= 0x1FFFFFFF;
++  if (dst_physical + length > 0x20000000 || src_physical + length > 0x20000000) {
++    return false;
++  }
++  // Later guest copies out of dst must also take the GPU path, even before the
++  // command processor has run this one.
++  MarkGpuMemoryNewer(dst_physical, length, true);
++  {
++    std::lock_guard lock(gpu_copy_mutex_);
++    gpu_copies_.push_back({dst_physical, src_physical, length});
++    gpu_copies_pending_.store(true, std::memory_order_release);
++  }
++  write_ptr_index_event_->Set();
++  return true;
++}
++
++bool CommandProcessor::ReadbackGpuMemory(uint32_t physical_address, uint32_t length) {
++  if (!SupportsGpuMemoryCopy() || !length) {
++    return false;
++  }
++  physical_address &= 0x1FFFFFFF;
++  length = std::min(length, 0x20000000 - physical_address);
++  std::atomic<bool> done{false};
++  {
++    std::lock_guard lock(gpu_copy_mutex_);
++    gpu_copies_.push_back({physical_address, UINT32_MAX, length, &done});
++    gpu_copies_pending_.store(true, std::memory_order_release);
++  }
++  write_ptr_index_event_->Set();
++  std::unique_lock lock(gpu_copy_mutex_);
++  gpu_copy_done_cv_.wait(lock, [&] { return done.load(std::memory_order_acquire); });
++  return true;
++}
++
++void CommandProcessor::ExecuteQueuedGpuMemoryCopies() {
++  if (!gpu_copies_pending_.load(std::memory_order_acquire)) {
++    return;
++  }
++  std::vector<QueuedGpuMemoryCopy> copies;
++  {
++    std::lock_guard lock(gpu_copy_mutex_);
++    copies.swap(gpu_copies_);
++    gpu_copies_pending_.store(false, std::memory_order_relaxed);
++  }
++  bool any_readback = false;
++  for (const QueuedGpuMemoryCopy& copy : copies) {
++    if (copy.src == UINT32_MAX) {
++      ExecuteGpuMemoryReadback(copy.dst, copy.length);
++      MarkGpuMemoryNewer(copy.dst, copy.length, false);
++      copy.done->store(true, std::memory_order_release);
++      any_readback = true;
++    } else {
++      ExecuteGpuMemoryCopy(copy.dst, copy.src, copy.length);
++    }
++  }
++  if (any_readback) {
++    std::lock_guard lock(gpu_copy_mutex_);
++    gpu_copy_done_cv_.notify_all();
++  }
++}
++
+ bool CommandProcessor::IsReadbackMemexportEnabled(bool legacy_backend_flag) const {
+   if (legacy_readback_memexport_cvar_name_ &&
+       rex::cvar::HasNonDefaultValue(legacy_readback_memexport_cvar_name_)) {
+@@ -209,6 +321,7 @@ void CommandProcessor::WorkerThreadMain() {
+       pending_fns_.pop();
+       fn();
+     }
++    ExecuteQueuedGpuMemoryCopies();
+ 
+     uint32_t write_ptr_index = write_ptr_index_.load();
+     if (write_ptr_index == 0xBAADF00D || read_ptr_index_ == write_ptr_index) {
+@@ -230,9 +343,11 @@ void CommandProcessor::WorkerThreadMain() {
+         loop_count++;
+         write_ptr_index = write_ptr_index_.load();
+       } while (worker_running_ && pending_fns_.empty() &&
++               !gpu_copies_pending_.load(std::memory_order_acquire) &&
+                (write_ptr_index == 0xBAADF00D || read_ptr_index_ == write_ptr_index));
+       ReturnFromWait();
+-      if (!worker_running_ || !pending_fns_.empty()) {
++      if (!worker_running_ || !pending_fns_.empty() ||
++          gpu_copies_pending_.load(std::memory_order_acquire)) {
+         continue;
+       }
+     }
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 19874a5..06e87c7 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -23,6 +23,7 @@
+ #include <rex/graphics/d3d12/graphics_system.h>
+ #include <rex/graphics/d3d12/shader.h>
+ #include <rex/graphics/flags.h>
++#include <rex/graphics/readback_probe.h>
+ #include <rex/graphics/registers.h>
+ #include <rex/graphics/util/draw.h>
+ #include <rex/graphics/xenos.h>
+@@ -930,6 +931,8 @@ bool D3D12CommandProcessor::SetupContext() {
+     REXGPU_ERROR("Failed to initialize shared memory");
+     return false;
+   }
++  // CPU writes make guest memory authoritative again for those pages.
++  gpu_newer_watch_ = shared_memory_->RegisterGlobalWatch(GpuNewerGlobalWatchCallback, this);
+ 
+   // Initialize the render target cache before configuring binding - need to
+   // know if using rasterizer-ordered views for the bindless root signature.
+@@ -1631,6 +1634,11 @@ void D3D12CommandProcessor::ShutdownContext() {
+   InvalidateAllVertexBufferResidency();
+   ShutdownOcclusionQueryResources();
+ 
++  if (shared_memory_ && gpu_newer_watch_) {
++    shared_memory_->UnregisterGlobalWatch(gpu_newer_watch_);
++    gpu_newer_watch_ = nullptr;
++  }
++
+   ui::d3d12::util::ReleaseAndNull(readback_buffer_);
+   readback_buffer_size_ = 0;
+   for (auto& resolve_readback_pair : readback_buffers_) {
+@@ -2880,12 +2888,99 @@ bool D3D12CommandProcessor::IssueCopy() {
+   ReadbackResolveMode readback_mode = GetReadbackResolveMode(REXCVAR_GET(d3d12_readback_resolve));
+   if (readback_mode == ReadbackResolveMode::kDisabled) {
+     uint32_t written_address, written_length;
+-    return render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_,
+-                                         written_address, written_length);
++    bool result = render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_,
++                                                written_address, written_length);
++    ProbeResolve(written_address, written_length, false);
++    return result;
+   }
+   return IssueCopy_ReadbackResolvePath();
+ }
+ 
++void D3D12CommandProcessor::GpuNewerGlobalWatchCallback(
++    const std::unique_lock<std::recursive_mutex>& global_lock, void* context,
++    uint32_t address_first, uint32_t address_last, bool invalidated_by_gpu) {
++  (void)global_lock;
++  if (invalidated_by_gpu) {
++    return;
++  }
++  static_cast<D3D12CommandProcessor*>(context)->MarkGpuMemoryNewer(
++      address_first, address_last - address_first + 1, false);
++}
++
++void D3D12CommandProcessor::ExecuteGpuMemoryCopy(uint32_t dst_physical, uint32_t src_physical,
++                                                 uint32_t length) {
++  if (!BeginSubmission(true)) {
++    return;
++  }
++  // Source holds resolve output; destination pages may be partially covered, so
++  // both must be current in GPU memory before copying (uploads if not).
++  if (!shared_memory_->RequestRange(src_physical, length) ||
++      !shared_memory_->RequestRange(dst_physical, length)) {
++    REXGPU_WARN("GPU memory copy {:08X} -> {:08X} +{:X}: shared memory request failed",
++                src_physical, dst_physical, length);
++    return;
++  }
++  // Source and destination may overlap or share a resource state, so bounce
++  // through a scratch buffer.
++  ID3D12Resource* scratch = RequestScratchGPUBuffer(length, D3D12_RESOURCE_STATE_COPY_DEST);
++  if (!scratch) {
++    return;
++  }
++  shared_memory_->UseAsCopySource();
++  SubmitBarriers();
++  deferred_command_list_.D3DCopyBufferRegion(scratch, 0, shared_memory_->GetBuffer(), src_physical,
++                                             length);
++  PushTransitionBarrier(scratch, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
++  shared_memory_->UseAsCopyDestination();
++  SubmitBarriers();
++  deferred_command_list_.D3DCopyBufferRegion(shared_memory_->GetBuffer(), dst_physical, scratch, 0,
++                                             length);
++  ReleaseScratchGPUBuffer(scratch, D3D12_RESOURCE_STATE_COPY_SOURCE);
++  // Invalidates textures over dst and keeps the pages valid (GPU-owned).
++  shared_memory_->RangeWrittenByGpu(dst_physical, length);
++  MarkGpuMemoryNewer(dst_physical, length, true);
++}
++
++void D3D12CommandProcessor::ExecuteGpuMemoryReadback(uint32_t physical_address,
++                                                     uint32_t length) {
++  if (!BeginSubmission(true)) {
++    return;
++  }
++  if (!shared_memory_->RequestRange(physical_address, length)) {
++    return;
++  }
++  ID3D12Resource* readback = RequestReadbackBuffer(length);
++  if (!readback) {
++    return;
++  }
++  shared_memory_->UseAsCopySource();
++  SubmitBarriers();
++  deferred_command_list_.D3DCopyBufferRegion(readback, 0, shared_memory_->GetBuffer(),
++                                             physical_address, length);
++  if (!AwaitAllQueueOperationsCompletion()) {
++    return;
++  }
++  D3D12_RANGE read_range = {0, length};
++  void* mapping;
++  if (FAILED(readback->Map(0, &read_range, &mapping))) {
++    return;
++  }
++  // Through the physical membase: does not trip the CPU write watches, so the
++  // GPU copy stays valid.
++  std::memcpy(memory_->TranslatePhysical(physical_address), mapping, length);
++  D3D12_RANGE written_range = {};
++  readback->Unmap(0, &written_range);
++}
++
++void D3D12CommandProcessor::ProbeResolve(uint32_t written_address, uint32_t written_length,
++                                         bool guest_memory_current) {
++  MarkGpuMemoryNewer(written_address, written_length, !guest_memory_current);
++  if (REXCVAR_GET(readback_probe) && written_length) {
++    ReadbackProbeArm(*memory_, written_address, written_length,
++                     uint32_t(register_file_->Get<reg::RB_COPY_DEST_INFO>().copy_dest_format));
++  }
++}
++
+ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
+   uint32_t written_address, written_length;
+   if (!render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_, written_address,
+@@ -2896,6 +2991,7 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
+   if (!written_length) {
+     return true;
+   }
++  MarkGpuMemoryNewer(written_address, written_length, true);
+ 
+   if (!memory_->TranslatePhysical(written_address)) {
+     return true;
+@@ -2904,6 +3000,13 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
+   bool is_scaled = texture_cache_->IsDrawResolutionScaled();
+   uint64_t resolve_key = MakeReadbackResolveKey(written_address, written_length);
+   ReadbackBuffer& rb = readback_buffers_[resolve_key];
++  if (rb.last_used_frame != frame_current_) {
++    // Games often alternate between 2-3 resolve targets (double/triple buffering),
++    // so a destination counts as per-frame if it recurs within kReadbackHotGapFrames.
++    rb.hot_frames = (rb.last_used_frame + kReadbackHotGapFrames >= frame_current_)
++                        ? rb.hot_frames + 1
++                        : 0;
++  }
+   rb.last_used_frame = frame_current_;
+ 
+   uint32_t write_index = rb.current_index;
+@@ -3070,8 +3173,23 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
+   }
+ 
+   ReadbackResolveMode readback_mode = GetReadbackResolveMode(REXCVAR_GET(d3d12_readback_resolve));
+-  bool use_delayed_sync =
+-      readback_mode == ReadbackResolveMode::kFast || readback_mode == ReadbackResolveMode::kSome;
++  bool adaptive_hot = readback_mode == ReadbackResolveMode::kAdaptive &&
++                      rb.hot_frames >= kReadbackHotFrames &&
++                      !IsForcedSyncReadbackAddress(written_address);
++  bool use_delayed_sync = readback_mode == ReadbackResolveMode::kFast ||
++                          readback_mode == ReadbackResolveMode::kSome || adaptive_hot;
++  if (readback_mode == ReadbackResolveMode::kAdaptive && !adaptive_hot) {
++    REXGPU_DEBUG("Adaptive readback: sync resolve {:08X} +{:X} (frame {}, hot {})", written_address,
++                 written_length, frame_current_, rb.hot_frames);
++  }
++  if (readback_mode == ReadbackResolveMode::kAdaptive && rb.hot_frames == kReadbackHotFrames) {
++    REXGPU_DEBUG("Adaptive readback: became hot {:08X} +{:X} (frame {}, fmt {})", written_address,
++                 written_length, frame_current_,
++                 uint32_t(register_file_->Get<reg::RB_COPY_DEST_INFO>().copy_dest_format));
++  }
++  rb.submission_written[write_index] = submission_current_;
++  rb.guest_address = written_address;
++  rb.guest_length = written_length;
+   uint32_t read_index = write_index;
+   if (use_delayed_sync) {
+     read_index = 1 - write_index;
+@@ -3089,16 +3207,44 @@ bool D3D12CommandProcessor::IssueCopy_ReadbackResolvePath() {
+     }
+   }
+ 
++  bool previous_not_ready = false;
++  if (adaptive_hot && read_index != write_index) {
++    // Unlike fast/some, only hand the CPU the previous result once the GPU has
++    // actually written it (normally already done: it is a frame old). If it was
++    // recorded in the still-open submission (resolved twice this frame), it cannot
++    // be ready without a stall, so deliver nothing this time.
++    uint64_t previous_submission = rb.submission_written[read_index];
++    if (previous_submission >= submission_current_) {
++      previous_not_ready = true;
++    } else {
++      CheckSubmissionFence(previous_submission);
++    }
++  }
++
+   bool should_copy = (readback_mode == ReadbackResolveMode::kSome) ? is_cache_miss : true;
++  should_copy = should_copy && !previous_not_ready;
++  bool delivered_current = false;
+   if (should_copy && rb.buffers[read_index] && written_length <= rb.sizes[read_index] &&
+       rb.mapped_data[read_index]) {
+     uint8_t* destination = memory_->TranslatePhysical(written_address);
+     if (destination) {
+       std::memcpy(destination, static_cast<uint8_t*>(rb.mapped_data[read_index]), written_length);
++      delivered_current = read_index == write_index;
++      if (adaptive_hot && read_index != write_index) {
++        // The CPU now sees last frame's result, but the GPU copy of this range is
++        // newer: per-frame targets are often re-read by the GPU next frame (HDR
++        // luminance ping-pong). The memcpy tripped the CPU write watch; re-mark the
++        // range GPU-valid so the stale bytes are not uploaded over the GPU's data.
++        shared_memory_->RangeWrittenByGpu(written_address, written_length);
++      }
+     }
+   }
++  // The delayed path leaves this resolve's own data undelivered until the next
++  // resolve here, or until FlushQuietReadbackResolves.
++  rb.pending_flush = adaptive_hot && read_index != write_index;
+ 
+   rb.current_index = 1 - rb.current_index;
++  ProbeResolve(written_address, written_length, delivered_current);
+   return true;
+ }
+ 
+@@ -3360,6 +3506,7 @@ bool D3D12CommandProcessor::BeginSubmission(bool is_guest_command) {
+       view_bindful_heap_pool_->Reclaim(frame_completed_);
+       sampler_bindful_heap_pool_->Reclaim(frame_completed_);
+     }
++    FlushQuietReadbackResolves();
+     EvictOldReadbackBuffers(readback_buffers_);
+     EvictOldReadbackBuffers(memexport_readback_buffers_);
+ 
+@@ -4743,6 +4890,48 @@ bool D3D12CommandProcessor::UpdateBindings(const D3D12Shader* vertex_shader,
+   return true;
+ }
+ 
++bool D3D12CommandProcessor::IsForcedSyncReadbackAddress(uint32_t address) {
++  // readback_resolve_sync_addresses: comma-separated hex guest addresses whose
++  // resolves adaptive mode always reads back synchronously (per-game tuning).
++  const std::string& list = REXCVAR_GET(readback_resolve_sync_addresses);
++  if (list != forced_sync_readback_source_) {
++    forced_sync_readback_source_ = list;
++    forced_sync_readback_addresses_.clear();
++    std::stringstream stream(list);
++    std::string item;
++    while (std::getline(stream, item, ',')) {
++      try {
++        forced_sync_readback_addresses_.push_back(uint32_t(std::stoul(item, nullptr, 16)));
++      } catch (...) {
++        REXGPU_WARN("readback_resolve_sync_addresses: ignoring '{}'", item);
++      }
++    }
++  }
++  return std::find(forced_sync_readback_addresses_.begin(), forced_sync_readback_addresses_.end(),
++                   address) != forced_sync_readback_addresses_.end();
++}
++
++void D3D12CommandProcessor::FlushQuietReadbackResolves() {
++  // A per-frame resolve stream that stopped (e.g. a multi-frame bake that finished)
++  // still owes guest memory its last result: deliver it once the GPU wrote it.
++  for (auto& [key, rb] : readback_buffers_) {
++    if (!rb.pending_flush || rb.last_used_frame + kReadbackHotGapFrames >= frame_current_) {
++      continue;
++    }
++    rb.pending_flush = false;
++    uint32_t last_index = 1 - rb.current_index;
++    if (!rb.mapped_data[last_index] || rb.guest_length > rb.sizes[last_index]) {
++      continue;
++    }
++    CheckSubmissionFence(rb.submission_written[last_index]);
++    uint8_t* destination = memory_->TranslatePhysical(rb.guest_address);
++    if (destination) {
++      std::memcpy(destination, rb.mapped_data[last_index], rb.guest_length);
++      shared_memory_->RangeWrittenByGpu(rb.guest_address, rb.guest_length);
++    }
++  }
++}
++
+ void D3D12CommandProcessor::EvictOldReadbackBuffers(
+     std::unordered_map<uint64_t, ReadbackBuffer>& buffer_map) {
+   if (buffer_map.empty()) {
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+index 8f2fcb0..904cd73 100644
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -284,6 +284,20 @@ void GraphicsSystem::InitializeRingBuffer(uint32_t ptr, uint32_t size_log2) {
+   command_processor_->InitializeRingBuffer(ptr, size_log2);
+ }
+ 
++bool GraphicsSystem::IsGpuMemoryNewer(uint32_t physical_address, uint32_t length) {
++  return command_processor_ && command_processor_->IsGpuMemoryNewer(physical_address, length);
++}
++
++bool GraphicsSystem::CopyGpuMemory(uint32_t dst_physical, uint32_t src_physical,
++                                   uint32_t length) {
++  return command_processor_ &&
++         command_processor_->QueueGpuMemoryCopy(dst_physical, src_physical, length);
++}
++
++bool GraphicsSystem::ReadbackGpuMemory(uint32_t physical_address, uint32_t length) {
++  return command_processor_ && command_processor_->ReadbackGpuMemory(physical_address, length);
++}
++
+ void GraphicsSystem::EnableReadPointerWriteBack(uint32_t ptr, uint32_t block_size_log2) {
+   command_processor_->EnableReadPointerWriteBack(ptr, block_size_log2);
+ }
+diff --git a/src/graphics/readback_probe.cpp b/src/graphics/readback_probe.cpp
+new file mode 100644
+index 0000000..7c3c3b6
+--- /dev/null
++++ b/src/graphics/readback_probe.cpp
+@@ -0,0 +1,164 @@
++/**
++ * @file        graphics/readback_probe.cpp
++ * @brief       Diagnostic: report which host code first touches resolve output
++ */
++
++#include <rex/graphics/readback_probe.h>
++
++#include <rex/logging/macros.h>
++#include <rex/system/xmemory.h>
++
++REXCVAR_DEFINE_BOOL(readback_probe, false, "GPU",
++                    "Diagnostic: log which host function first touches each resolve "
++                    "destination (Windows, slow)");
++
++#if defined(_WIN32)
++
++#include <Windows.h>
++#include <DbgHelp.h>
++
++#include <mutex>
++#include <set>
++#include <string>
++#include <vector>
++
++#pragma comment(lib, "dbghelp.lib")
++
++namespace rex::graphics {
++namespace {
++
++struct ArmedPage {
++  uint8_t* host_page;
++  DWORD old_protect;
++};
++
++struct ArmedRange {
++  uint32_t physical_address;
++  uint32_t length;
++  uint32_t format;
++  std::vector<ArmedPage> pages;
++};
++
++std::mutex g_mutex;
++std::vector<ArmedRange> g_ranges;
++std::set<std::string> g_reported;  // "function|address|length|r/w" already logged
++PVOID g_veh = nullptr;
++bool g_symbols_ready = false;
++size_t g_page_size = 4096;
++
++std::string Symbolize(uintptr_t rip) {
++  HANDLE process = GetCurrentProcess();
++  if (!g_symbols_ready) {
++    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
++    SymInitialize(process, nullptr, TRUE);
++    g_symbols_ready = true;
++  }
++  alignas(SYMBOL_INFO) char buffer[sizeof(SYMBOL_INFO) + 256];
++  auto* symbol = reinterpret_cast<SYMBOL_INFO*>(buffer);
++  symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
++  symbol->MaxNameLen = 255;
++  DWORD64 displacement = 0;
++  if (SymFromAddr(process, rip, &displacement, symbol)) {
++    return std::string(symbol->Name) + "+0x" + std::to_string(displacement);
++  }
++  return "?";
++}
++
++void Restore(ArmedRange& range) {
++  for (const ArmedPage& page : range.pages) {
++    DWORD ignored;
++    VirtualProtect(page.host_page, g_page_size, page.old_protect, &ignored);
++  }
++  range.pages.clear();
++}
++
++LONG CALLBACK ProbeHandler(EXCEPTION_POINTERS* info) {
++  if (info->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION ||
++      info->ExceptionRecord->NumberParameters < 2) {
++    return EXCEPTION_CONTINUE_SEARCH;
++  }
++  auto fault = static_cast<uintptr_t>(info->ExceptionRecord->ExceptionInformation[1]);
++  bool is_write = info->ExceptionRecord->ExceptionInformation[0] == 1;
++  std::lock_guard lock(g_mutex);
++  for (auto it = g_ranges.begin(); it != g_ranges.end(); ++it) {
++    for (const ArmedPage& page : it->pages) {
++      auto base = reinterpret_cast<uintptr_t>(page.host_page);
++      if (fault < base || fault >= base + g_page_size) {
++        continue;
++      }
++      std::string function = Symbolize(info->ContextRecord->Rip);
++      std::string key = function.substr(0, function.find('+')) + "|" +
++                        std::to_string(it->physical_address) + "|" + std::to_string(it->length) +
++                        (is_write ? "|w" : "|r");
++      if (g_reported.insert(key).second) {
++        REXGPU_WARN("Readback probe: {} {} resolve {:08X} +{:X} (fmt {}) at host {:016X}",
++                    function, is_write ? "WRITES" : "reads", it->physical_address, it->length,
++                    it->format, fault);
++      }
++      Restore(*it);
++      g_ranges.erase(it);
++      return EXCEPTION_CONTINUE_EXECUTION;
++    }
++  }
++  return EXCEPTION_CONTINUE_SEARCH;
++}
++
++}  // namespace
++
++void ReadbackProbeArm(rex::memory::Memory& memory, uint32_t physical_address, uint32_t length,
++                      uint32_t format) {
++  if (!REXCVAR_GET(readback_probe) || !length) {
++    return;
++  }
++  std::lock_guard lock(g_mutex);
++  if (!g_veh) {
++    SYSTEM_INFO system_info;
++    GetSystemInfo(&system_info);
++    g_page_size = system_info.dwPageSize;
++    g_veh = AddVectoredExceptionHandler(1, ProbeHandler);
++  }
++  // Re-arming a destination: drop the previous (untouched) arming first.
++  for (auto it = g_ranges.begin(); it != g_ranges.end();) {
++    if (it->physical_address == physical_address) {
++      Restore(*it);
++      it = g_ranges.erase(it);
++    } else {
++      ++it;
++    }
++  }
++  ArmedRange range{physical_address, length, format, {}};
++  // The same physical page is visible through the A0/C0/E0 guest views; protect
++  // the host pages of every view that maps it.
++  for (uint32_t view_base : {0xA0000000u, 0xC0000000u, 0xE0000000u}) {
++    for (uint32_t delta : {0u, 0x1000u}) {
++      uint32_t virtual_address = view_base + physical_address - delta;
++      if (memory.GetPhysicalAddress(virtual_address) != physical_address) {
++        continue;
++      }
++      auto* host = memory.TranslateVirtual<uint8_t*>(virtual_address);
++      auto first = reinterpret_cast<uintptr_t>(host) & ~uintptr_t(g_page_size - 1);
++      auto last = (reinterpret_cast<uintptr_t>(host) + length - 1) & ~uintptr_t(g_page_size - 1);
++      for (uintptr_t page = first; page <= last; page += g_page_size) {
++        DWORD old_protect;
++        if (VirtualProtect(reinterpret_cast<void*>(page), g_page_size, PAGE_NOACCESS,
++                           &old_protect)) {
++          range.pages.push_back({reinterpret_cast<uint8_t*>(page), old_protect});
++        }
++      }
++      break;
++    }
++  }
++  if (!range.pages.empty()) {
++    g_ranges.push_back(std::move(range));
++  }
++}
++
++}  // namespace rex::graphics
++
++#else
++
++namespace rex::graphics {
++void ReadbackProbeArm(rex::memory::Memory&, uint32_t, uint32_t, uint32_t) {}
++}  // namespace rex::graphics
++
++#endif

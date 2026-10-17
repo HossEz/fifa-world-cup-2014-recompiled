@@ -1,0 +1,19 @@
+2014 FIFA World Cup Brazil: Recompiled
+An unofficial PC port of the Xbox 360 game.
+
+Unofficial fan project. Not affiliated with, endorsed or sponsored by
+Electronic Arts, FIFA or Microsoft. 2014 FIFA World Cup Brazil, its content
+and trademarks belong to their owners.
+
+No game files are included: you need your own copy of the game (Xbox 360),
+as its folder or its disc image (.iso). The first start asks for it.
+
+This release contains code recompiled from the original game's executable; no
+right to redistribute it is claimed. If a rights holder raises a valid legal
+concern, it will be addressed.
+
+This project's own code is under the BSD 3-Clause licence (LICENSE.txt); the
+third-party components keep theirs (THIRD-PARTY-NOTICES.txt).
+
+Your saves and settings are kept in Documents\2014 FIFA World Cup Brazil
+(also after an uninstall).

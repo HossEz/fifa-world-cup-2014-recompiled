@@ -1,0 +1,15 @@
+# Copy next to fifawc14.exe as fifawc14.toml and adjust the paths.
+# Any setting can also be passed on the command line as --name=value.
+
+game_data_root = "E:/fifawc14"   # folder containing default.xex and the .big files
+gpu_plugin = "xenos"             # Xenia-derived GPU emulation (D3D12)
+log_file = "fifawc14.log"        # written to the current working directory
+log_level = "debug"
+
+# Known requirements for this game (Xenia compatibility issue #273 and FIFA 14 #253):
+gpu_allow_invalid_fetch_constants = true  # EA titles leave texture fetch type bits unset
+readback_resolve = "none"                 # GPU-rendered data the game reads on the CPU is handled by hooks in pc/fixes/gpu_memcpy.cpp (untile readback, GPU-side memcpy); no per-resolve readback needed
+protect_zero = false                      # the game reads address 0 (allowed on hardware); protecting it crashes
+execute_unclipped_draw_vs_on_cpu = true    # estimate the extent of unclipped draws from their vertices (Xenia default; the SDK turns it off): without it, stencil/depth buffers claim all of the render memory and wipe the EA logo and the menu backgrounds behind 3D players (black)
+present_interval_cap = 1                  # the game holds cutscenes and many menus at 30 FPS (each frame shown for 2 refreshes, pc/fixes/present_interval.cpp); 1 lets them run at the refresh rate
+frame_rate_floor = 60                     # the game limits cutscenes (pre-match intro, goal celebrations) to 40 FPS (pc/src/frame_rate.cpp); 60 lifts that

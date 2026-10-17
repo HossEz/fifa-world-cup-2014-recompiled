@@ -1,0 +1,37 @@
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index 3ab1f1c..4376d8d 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -1152,7 +1152,10 @@ bool CommandProcessor::ExecutePacketType3_WAIT_REG_MEM(memory::RingBuffer* reade
+           // User wants it fast and dangerous.
+           rex::thread::MaybeYield();
+         } else {
+-          rex::thread::Sleep(std::chrono::milliseconds(wait / 0x100));
++          // Poll often: the game's wait value asks for milliseconds per
++          // poll, and a vblank (or fence) seen a few ms late can make the
++          // frame miss the next refresh.
++          rex::thread::Sleep(std::chrono::microseconds(250));
+         }
+         rex::thread::SyncMemory();
+         ReturnFromWait();
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+index 904cd73..5b51421 100644
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -166,7 +166,15 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+             MarkVblank();
+             last_frame_time += interval_ticks;
+           }
+-          rex::thread::Sleep(std::chrono::milliseconds(1));
++          // Sleep until the next vblank is due rather than polling every
++          // millisecond, so vblanks arrive on time (not up to ~1 ms late).
++          uint64_t remaining_ticks =
++              last_frame_time + interval_ticks - chrono::Clock::QueryGuestTickCount();
++          if (int64_t(remaining_ticks) > 0) {
++            uint64_t remaining_us = remaining_ticks * 1000000 / guest_tick_frequency;
++            rex::thread::Sleep(std::chrono::microseconds(
++                std::clamp<uint64_t>(remaining_us, 50, 1000)));
++          }
+         }
+         return 0;
+       }));

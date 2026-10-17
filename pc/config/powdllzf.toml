@@ -1,0 +1,6 @@
+# Analysis overrides for dlc/.../powdllzf.xex.dll (loaded at 0x89700000).
+
+[functions]
+# Same hand-written CRT memcpy as in FootballCompEngzf (identical size 0x530); see
+# footballcompengzf.toml. The 8 bytes after it (0x897240F0) are data, not code.
+0x89723BC0 = { name = "memcpy_pow", end = 0x897240F0 }

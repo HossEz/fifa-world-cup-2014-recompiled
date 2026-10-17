@@ -1,0 +1,22 @@
+# Analysis overrides for default.xex (2014 FIFA World Cup Brazil, title 0x454109D4).
+#
+# [functions]: function starts the analyser missed. These are only ever reached by
+# a tail jump (`b`, not `bl`) from a small thunk, so nothing marks them as functions.
+# Each one begins right after the previous routine's final blr/bctr/b.
+# No size given: the analyser works out the bounds from the seed.
+
+[functions]
+0x8247DFA8 = { name = "sub_8247DFA8" } # lwz r3,36(r3); b 0x8247D448   <- thunk 0x82F73910
+0x82482CA8 = { name = "sub_82482CA8" } # load global singleton, vcall slot 0x24 <- thunk 0x82F70250
+0x8249E668 = { name = "sub_8249E668" } # vcall slot 0x30 with tag 'oprt' <- thunk 0x82F70178
+0x824ACD10 = { name = "sub_824ACD10" } # tail-calls 0x823EDD80 <- this-adjust thunk 0x824ACE20
+0x824F7C98 = { name = "sub_824F7C98" } # <- thunk 0x824A9B60
+0x8279B3D8 = { name = "sub_8279B3D8" } # returns address of a global <- thunk 0x82F73818
+0x830A2900 = { name = "sub_830A2900" } # float math, <- switch-like dispatcher 0x8349B468
+0x83191CE8 = { name = "sub_83191CE8" } # clamp of a float array entry <- 0x8307EDC0
+0x837B3F98 = { name = "sub_837B3F98" } # hash compare chain <- 0x837E29A0
+
+# Shared leaf tail (no .pdata, no stack frame, ends in blr) jumped into from several
+# switch-case stubs in 0x83158DB8..0x831591B0. Without this, the jump from 0x831591AC
+# crosses function bounds and is emitted as REX_FATAL.
+0x83158E68 = { name = "sub_83158E68", end = 0x83158ED4 }

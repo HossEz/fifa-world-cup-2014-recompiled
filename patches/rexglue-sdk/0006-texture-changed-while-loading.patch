@@ -1,0 +1,112 @@
+diff --git a/include/rex/graphics/pipeline/texture/cache.h b/include/rex/graphics/pipeline/texture/cache.h
+index d26cd4f..622cb35 100644
+--- a/include/rex/graphics/pipeline/texture/cache.h
++++ b/include/rex/graphics/pipeline/texture/cache.h
+@@ -614,6 +614,8 @@ class TextureCache {
+   // so need to recheck if textures aren't outdated, disregarding whether fetch
+   // constants have been changed.
+   std::atomic<bool> texture_became_outdated_{false};
++  // Loads whose data the CPU changed before they were watched (logged).
++  uint64_t textures_changed_during_load_ = 0;
+ 
+   std::array<TextureBinding, xenos::kTextureFetchConstantCount> texture_bindings_;
+   // Bit vector with bits reset on fetch constant writes to avoid parsing fetch
+diff --git a/include/rex/graphics/shared_memory.h b/include/rex/graphics/shared_memory.h
+index 4d85a2b..6504a44 100644
+--- a/include/rex/graphics/shared_memory.h
++++ b/include/rex/graphics/shared_memory.h
+@@ -129,6 +129,13 @@ class SharedMemory {
+   // Mark the memory range as updated and protect it.
+   void MakeRangeValid(uint32_t start, uint32_t length, bool written_by_gpu);
+ 
++ public:
++  // Whether every page of the range is still valid, that is, hasn't been
++  // written by the CPU since it was last uploaded or resolved to.
++  bool IsRangeValid(uint32_t start, uint32_t length);
++
++ protected:
++
+   // Uploads a range of host pages - only called if host GPU sparse memory
+   // allocation succeeded if needed. While uploading, MakeRangeValid must be
+   // called for each successfully uploaded range as early as possible, before
+diff --git a/src/graphics/pipeline/texture/cache.cpp b/src/graphics/pipeline/texture/cache.cpp
+index 76f5600..83923c0 100644
+--- a/src/graphics/pipeline/texture/cache.cpp
++++ b/src/graphics/pipeline/texture/cache.cpp
+@@ -689,14 +689,37 @@ TextureCache::Texture::~Texture() {
+ void TextureCache::Texture::MakeUpToDateAndWatch(
+     const std::unique_lock<std::recursive_mutex>& global_lock) {
+   SharedMemory& shared_memory = texture_cache().shared_memory();
+-  if (base_outdated_) {
++  // The data was copied from guest memory before this point, and the watches
++  // are only set up here. A CPU write in between (another guest thread filling
++  // the texture, such as a font's glyph cache gaining a letter) invalidated
++  // the pages without any watch to notice, and also lifted their write
++  // protection, so later writes wouldn't be seen either: the texture would stay
++  // stale for good. Keep such a part outdated, to be loaded again next time.
++  auto changed_during_load = [&](uint32_t start, uint32_t length) {
++    if (shared_memory.IsRangeValid(start, length)) {
++      return false;
++    }
++    uint64_t count = texture_cache_.textures_changed_during_load_++;
++    if (count < 20 || (count & (count - 1)) == 0) {
++      REXGPU_INFO("Texture at {:08X} (+{:X}) changed by the CPU while loading, loading again "
++                  "(#{})",
++                  start, length, count + 1);
++    }
++    texture_cache_.texture_became_outdated_.store(true, std::memory_order_release);
++    return true;
++  };
++  if (base_outdated_ && changed_during_load(key().base_page << 12, GetGuestBaseSize())) {
++    // Stays outdated.
++  } else if (base_outdated_) {
+     assert_not_zero(GetGuestBaseSize());
+     base_outdated_ = false;
+     base_watch_handle_ = shared_memory.WatchMemoryRange(
+         key().base_page << 12, GetGuestBaseSize(), TextureCache::WatchCallback, this, nullptr, 0);
+     outdated_mask_.fetch_and(~kOutdatedBitBase, std::memory_order_release);
+   }
+-  if (mips_outdated_) {
++  if (mips_outdated_ && changed_during_load(key().mip_page << 12, GetGuestMipsSize())) {
++    // Stays outdated.
++  } else if (mips_outdated_) {
+     assert_not_zero(GetGuestMipsSize());
+     mips_outdated_ = false;
+     mips_watch_handle_ = shared_memory.WatchMemoryRange(
+diff --git a/src/graphics/shared_memory.cpp b/src/graphics/shared_memory.cpp
+index ec0df7c..978795d 100644
+--- a/src/graphics/shared_memory.cpp
++++ b/src/graphics/shared_memory.cpp
+@@ -315,6 +315,32 @@ void SharedMemory::MakeRangeValid(uint32_t start, uint32_t length, bool written_
+   }
+ }
+ 
++bool SharedMemory::IsRangeValid(uint32_t start, uint32_t length) {
++  if (length == 0 || start >= kBufferSize) {
++    return true;
++  }
++  length = std::min(length, kBufferSize - start);
++  uint32_t page_first = start >> page_size_log2_;
++  uint32_t page_last = (start + length - 1) >> page_size_log2_;
++  uint32_t block_first = page_first >> 6;
++  uint32_t block_last = page_last >> 6;
++
++  auto global_lock = global_critical_region_.Acquire();
++  for (uint32_t i = block_first; i <= block_last; ++i) {
++    uint64_t range_bits = UINT64_MAX;
++    if (i == block_first) {
++      range_bits &= ~((uint64_t(1) << (page_first & 63)) - 1);
++    }
++    if (i == block_last && (page_last & 63) != 63) {
++      range_bits &= (uint64_t(1) << ((page_last & 63) + 1)) - 1;
++    }
++    if ((system_page_flags_valid_[i] & range_bits) != range_bits) {
++      return false;
++    }
++  }
++  return true;
++}
++
+ void SharedMemory::UnlinkWatchRange(WatchRange* range) {
+   uint32_t bucket = range->page_first << page_size_log2_ >> kWatchBucketSizeLog2;
+   WatchNode* node = range->node_first;

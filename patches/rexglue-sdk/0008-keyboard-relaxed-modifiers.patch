@@ -1,0 +1,25 @@
+diff --git a/src/input/mnk/mnk_input_driver.cpp b/src/input/mnk/mnk_input_driver.cpp
+index 3d2c378..cee8960 100644
+--- a/src/input/mnk/mnk_input_driver.cpp
++++ b/src/input/mnk/mnk_input_driver.cpp
+@@ -24,6 +24,11 @@
+ #include <string_view>
+ 
+ REXCVAR_DEFINE_BOOL(mnk_mode, false, "Input", "Enable keyboard/mouse controller emulation");
++REXCVAR_DEFINE_BOOL(mnk_exact_modifiers, true, "Input",
++                    "Keybinds match Shift/Ctrl/Alt exactly: \"Up\" is silent while Shift is held. "
++                    "Off: a bind without modifiers works whatever modifiers are held, one with "
++                    "them needs at least those, and a modifier can be bound alone (\"Shift\"), "
++                    "for example to sprint while steering.");
+ REXCVAR_DEFINE_BOOL(mnk_mouse, false, "Input",
+                     "Use the mouse for the right stick. Off means the right stick comes "
+                     "from the keybind_rstick_* keys only");
+@@ -133,7 +138,7 @@ std::string_view TrimSpaces(std::string_view s) {
+ 
+ bool TokenPressed(const bool (&key_down)[256], std::string_view token, uint8_t live_mods) {
+   uint8_t want = TakeModifiers(token);
+-  if (want != live_mods) {
++  if (REXCVAR_GET(mnk_exact_modifiers) ? want != live_mods : (want & live_mods) != want) {
+     return false;
+   }
+   rex::ui::VirtualKey vk = rex::ui::ParseVirtualKey(token);

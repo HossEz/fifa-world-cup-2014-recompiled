@@ -1,0 +1,7 @@
+# Analysis overrides for dlc/.../FootballCompEngzf.xex.dll (loaded at 0x88000000).
+
+[functions]
+# Hand-written CRT memcpy (no .pdata record). Its misaligned-source path sits after an
+# early blr and jumps back with `b 0x8806472C`, so the analyser cut the function short.
+# Bounds: first instruction `std r3,-8(r1)` up to the next .pdata function.
+0x88064250 = { name = "memcpy_fce", end = 0x88064780 }

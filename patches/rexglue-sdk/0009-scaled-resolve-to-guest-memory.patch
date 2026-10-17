@@ -1,0 +1,130 @@
+diff --git a/include/rex/graphics/d3d12/command_processor.h b/include/rex/graphics/d3d12/command_processor.h
+index 5b1a8ae..22fd286 100644
+--- a/include/rex/graphics/d3d12/command_processor.h
++++ b/include/rex/graphics/d3d12/command_processor.h
+@@ -366,6 +366,13 @@ class D3D12CommandProcessor : public CommandProcessor {
+   bool UpdateBindings(const D3D12Shader* vertex_shader, const D3D12Shader* pixel_shader,
+                       ID3D12RootSignature* root_signature, bool shared_memory_is_uav);
+   bool IssueCopy_ReadbackResolvePath();
++  // With draw resolution scaling, a resolve writes only the scaled resolve
++  // buffer, leaving guest (shared) memory stale for anything that reads the
++  // result at the guest's resolution: CPU readbacks and GPU-side copies of
++  // resolved data (the game's untile / memcpy hooks). This writes the resolve's
++  // downscaled result (resolve_downscale shader, the one the readback path
++  // uses) into shared memory as well. Call right after the resolve.
++  void DownscaleResolveToSharedMemory(uint32_t written_address, uint32_t written_length);
+ 
+   // GPU-side guest memory copies (see CommandProcessor::QueueGpuMemoryCopy).
+   bool SupportsGpuMemoryCopy() const override { return true; }
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 4c11c25..4aa663c 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -3043,6 +3043,9 @@ bool D3D12CommandProcessor::IssueCopy() {
+     uint32_t written_address, written_length;
+     bool result = render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_,
+                                                 written_address, written_length);
++    if (result && written_length && texture_cache_->IsDrawResolutionScaled()) {
++      DownscaleResolveToSharedMemory(written_address, written_length);
++    }
+     ProbeResolve(written_address, written_length, false);
+     if (g_capture_frame && written_length) {
+       ExecuteGpuMemoryReadback(written_address, written_length);
+@@ -3069,6 +3072,97 @@ bool D3D12CommandProcessor::IssueCopy() {
+   return IssueCopy_ReadbackResolvePath();
+ }
+ 
++void D3D12CommandProcessor::DownscaleResolveToSharedMemory(uint32_t written_address,
++                                                           uint32_t written_length) {
++  if (!resolve_downscale_pipeline_ || !resolve_downscale_root_signature_) {
++    return;
++  }
++  const FormatInfo* format_info = FormatInfo::Get(
++      uint32_t(register_file_->Get<reg::RB_COPY_DEST_INFO>().copy_dest_format));
++  uint32_t pixel_size_log2;
++  if (!rex::bit_scan_forward(format_info->bits_per_pixel >> 3, &pixel_size_log2) ||
++      pixel_size_log2 > 3) {
++    return;
++  }
++  uint32_t tile_count = written_length / (32 * 32 * (uint32_t(1) << pixel_size_log2));
++  uint32_t scaled_length = uint32_t(texture_cache_->GetCurrentScaledResolveRangeLengthScaled());
++  uint64_t scaled_address = texture_cache_->GetCurrentScaledResolveRangeStartScaled();
++  ID3D12Resource* scaled_buffer = texture_cache_->GetCurrentScaledResolveBufferResource();
++  uint64_t scaled_base =
++      uint64_t(texture_cache_->GetCurrentScaledResolveBufferIndexPublic()) << 30;
++  if (!tile_count || !scaled_length || !scaled_buffer || scaled_address < scaled_base) {
++    return;
++  }
++
++  uint32_t buffer_size = AlignReadbackBufferSize(written_length);
++  if (buffer_size > resolve_downscale_buffer_size_) {
++    const ui::d3d12::D3D12Provider& provider = GetD3D12Provider();
++    D3D12_RESOURCE_DESC desc;
++    ui::d3d12::util::FillBufferResourceDesc(desc, buffer_size,
++                                            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
++    ID3D12Resource* buffer = nullptr;
++    if (FAILED(provider.GetDevice()->CreateCommittedResource(
++            &ui::d3d12::util::kHeapPropertiesDefault, provider.GetHeapFlagCreateNotZeroed(), &desc,
++            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&buffer)))) {
++      return;
++    }
++    if (resolve_downscale_buffer_) {
++      resources_for_deletion_.emplace_back(GetCurrentSubmission(),
++                                           resolve_downscale_buffer_.Detach());
++    }
++    resolve_downscale_buffer_.Attach(buffer);
++    resolve_downscale_buffer_size_ = buffer_size;
++  }
++
++  ui::d3d12::util::DescriptorCpuGpuHandlePair descriptors[2];
++  if (!RequestOneUseSingleViewDescriptors(2, descriptors)) {
++    return;
++  }
++  ID3D12Device* device = GetD3D12Provider().GetDevice();
++  ui::d3d12::util::CreateBufferRawSRV(
++      device, descriptors[0].first, scaled_buffer,
++      rex::align(scaled_length, uint32_t(D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT)),
++      scaled_address - scaled_base);
++  ui::d3d12::util::CreateBufferRawUAV(
++      device, descriptors[1].first, resolve_downscale_buffer_.Get(),
++      rex::align(written_length, uint32_t(D3D12_RAW_UAV_SRV_BYTE_ALIGNMENT)), 0);
++
++  PushUAVBarrier(scaled_buffer);
++  texture_cache_->TransitionCurrentScaledResolveRange(
++      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
++  SubmitBarriers();
++  SetExternalPipeline(resolve_downscale_pipeline_.Get());
++  deferred_command_list_.D3DSetComputeRootSignature(resolve_downscale_root_signature_.Get());
++  ResolveDownscaleConstants constants;
++  constants.scale_x = texture_cache_->draw_resolution_scale_x();
++  constants.scale_y = texture_cache_->draw_resolution_scale_y();
++  constants.pixel_size_log2 = pixel_size_log2;
++  constants.tile_count = tile_count;
++  constants.half_pixel_offset = REXCVAR_GET(readback_resolve_half_pixel_offset) ? 1u : 0u;
++  deferred_command_list_.D3DSetComputeRoot32BitConstants(
++      UINT(ResolveDownscaleRootParameter::kConstants), sizeof(constants) / sizeof(uint32_t),
++      &constants, 0);
++  deferred_command_list_.D3DSetComputeRootDescriptorTable(
++      UINT(ResolveDownscaleRootParameter::kSource), descriptors[0].second);
++  deferred_command_list_.D3DSetComputeRootDescriptorTable(
++      UINT(ResolveDownscaleRootParameter::kDestination), descriptors[1].second);
++  deferred_command_list_.D3DDispatch(tile_count, 1, 1);
++
++  // Into shared memory at the resolve's own address; its pages are already
++  // valid and GPU-written (the resolve marked them).
++  PushUAVBarrier(resolve_downscale_buffer_.Get());
++  PushTransitionBarrier(resolve_downscale_buffer_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
++                        D3D12_RESOURCE_STATE_COPY_SOURCE);
++  shared_memory_->UseAsCopyDestination();
++  SubmitBarriers();
++  deferred_command_list_.D3DCopyBufferRegion(shared_memory_->GetBuffer(), written_address,
++                                             resolve_downscale_buffer_.Get(), 0, written_length);
++  PushTransitionBarrier(resolve_downscale_buffer_.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
++                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
++  texture_cache_->TransitionCurrentScaledResolveRange(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
++  SubmitBarriers();
++}
++
+ void D3D12CommandProcessor::GpuNewerGlobalWatchCallback(
+     const std::unique_lock<std::recursive_mutex>& global_lock, void* context,
+     uint32_t address_first, uint32_t address_last, bool invalidated_by_gpu) {
