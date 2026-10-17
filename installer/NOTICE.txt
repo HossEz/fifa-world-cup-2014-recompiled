@@ -1,5 +1,6 @@
 2014 FIFA World Cup Brazil: Recompiled
-An unofficial PC port of the Xbox 360 game.
+An unofficial PC port of the Xbox 360 game, by hosse.
+The original: github.com/HossEz/fifa-world-cup-2014-recompiled
 
 Unofficial fan project. Not affiliated with, endorsed or sponsored by
 Electronic Arts, FIFA or Microsoft. 2014 FIFA World Cup Brazil, its content

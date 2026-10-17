@@ -41,6 +41,11 @@ AppId={{6E0F3B52-8C1D-4F7A-9E35-2B7C1D4A9F10}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
+; Shown in Windows' Apps list.
+AppPublisher=hosse
+AppPublisherURL=https://github.com/HossEz/fifa-world-cup-2014-recompiled
+AppSupportURL=https://github.com/HossEz/fifa-world-cup-2014-recompiled/issues
+AppUpdatesURL=https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases
 DefaultDirName={autopf}\{#InstallFolder}
 DefaultGroupName={#ShortcutName}
 ; One page: the notice with an Install button. No welcome, folder, shortcut

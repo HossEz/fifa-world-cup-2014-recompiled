@@ -16,7 +16,9 @@ const std::vector<Topic>& AboutTopics() {
   static const std::vector<Topic> topics = {
       {"This project",
        {"2014 FIFA World Cup Brazil, the Xbox 360 game, running natively on Windows. An "
-        "unofficial fan project.",
+        "unofficial fan project, ported by hosse.",
+        "The original, with its source and downloads, is on GitHub:",
+        "github.com/HossEz/fifa-world-cup-2014-recompiled",
         "It is a static recompilation, not an emulator: the game's PowerPC code was translated "
         "ahead of time into C++ and compiled for your PC, so it runs the game's own logic "
         "directly instead of interpreting Xbox instructions."}},
