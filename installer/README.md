@@ -47,17 +47,19 @@ player's own copy (folder or `.iso`) at the first start.
 ## The installer
 
 `setup.iss`: installs into `C:\Program Files\2014 FIFA World Cup Brazil
-Recompiled` (one admin prompt), with a Start menu entry, a desktop shortcut and
-an entry in Windows' Apps list. It has one page: `NOTICE.txt` and an Install
-button; then the launcher opens by itself (as the player, not as admin), at its
+Recompiled` by default (one admin prompt; the player may choose another folder
+on the first install, later updates keep it), with a Start menu entry, a desktop
+shortcut and an entry in Windows' Apps list. Its pages: `NOTICE.txt`, then the
+folder; then the launcher opens by itself (as the player, not as admin), at its
 "find your game" screen.
 
-Nothing is written into Program Files afterwards: the launcher and the game
-keep their settings, logs, icon and font copy in `Documents\2014 FIFA World
-Cup Brazil`, with the saves. Uninstalling removes the program; that folder
-stays. The portable zip carries `portable.txt`, which makes them use their
-own folder instead (saves still go to Documents); so does a `fifawc14.toml`
-next to the exe, as in a developer build.
+Nothing is written into the install folder afterwards: the launcher and the
+game keep their settings, logs, icon and font copy in `Documents\2014 FIFA World
+Cup Brazil`, with the saves, so any folder works. Uninstalling removes the
+program and asks whether to delete that folder too (default: keep it). The
+portable zip carries `portable.txt`, which makes them use their own folder
+instead (saves still go to Documents); so does a `fifawc14.toml` next to the
+exe, as in a developer build.
 
 The display name is "2014 FIFA World Cup Brazil: Recompiled"; the install
 folder is "2014 FIFA World Cup Brazil Recompiled" (`InstallFolder`); the

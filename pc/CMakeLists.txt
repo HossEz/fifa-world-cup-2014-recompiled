@@ -5,7 +5,7 @@
 # generated/rexglue.cmake.
 
 cmake_minimum_required(VERSION 3.25)
-project(fifawc14 LANGUAGES CXX)
+project(fifawc14 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,6 +51,9 @@ else()
 endif()
 
 rexglue_setup_target(fifawc14 GPU_PLUGINS xenos)
+# Properties, Details in Explorer: name, version, publisher.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../installer/version_resource.cmake)
+add_version_resource(fifawc14 "2014 FIFA World Cup Brazil: Recompiled - Game" "fifawc14.exe")
 # The game window's 16:9 resizing hooks the window with SetWindowSubclass.
 if(WIN32)
     target_link_libraries(fifawc14 PRIVATE comctl32)

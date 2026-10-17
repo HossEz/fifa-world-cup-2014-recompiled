@@ -10,7 +10,7 @@
 # libmspack's LZX decoder); the launcher doesn't link the game runtime.
 
 cmake_minimum_required(VERSION 3.25)
-project(launcher LANGUAGES C CXX)
+project(launcher LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,9 +65,11 @@ target_compile_definitions(Launcher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN
 # commit is made (it watches git's HEAD and the branch it points to), so a
 # release built after its commit shows that commit.
 set(REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# Properties, Details in Explorer: name, version, publisher.
+include(${REPO_ROOT}/installer/version_resource.cmake)
+add_version_resource(Launcher "2014 FIFA World Cup Brazil: Recompiled - Launcher" "Launcher.exe")
 file(READ ${REPO_ROOT}/VERSION LAUNCHER_VERSION)
 string(STRIP "${LAUNCHER_VERSION}" LAUNCHER_VERSION)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${REPO_ROOT}/VERSION)
 execute_process(COMMAND git rev-parse --short HEAD
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 OUTPUT_VARIABLE LAUNCHER_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)

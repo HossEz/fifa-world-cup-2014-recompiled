@@ -16,5 +16,5 @@ concern, it will be addressed.
 This project's own code is under the BSD 3-Clause licence (LICENSE.txt); the
 third-party components keep theirs (THIRD-PARTY-NOTICES.txt).
 
-Your saves and settings are kept in Documents\2014 FIFA World Cup Brazil
-(also after an uninstall).
+Your saves and settings are kept in Documents\2014 FIFA World Cup Brazil.
+When uninstalling, you choose whether to keep them or delete them too.
