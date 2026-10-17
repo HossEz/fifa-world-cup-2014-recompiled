@@ -11,9 +11,13 @@ repository or its releases.
 ## Playing
 
 1. Download `fifa-world-cup-2014-recompiled-<version>-setup.exe` from the
-   Releases page and run it. It installs for your Windows user only (no admin
-   rights needed) and opens the launcher. Prefer no install? Take the
-   `-portable.zip`, unzip it anywhere and run `Launcher.exe`.
+   [Releases page](https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases)
+   and run it. It installs for your Windows user only (no admin rights needed)
+   and opens the launcher. Prefer no install? Take the `-portable.zip`, unzip
+   it anywhere and run `Launcher.exe`.
+
+   The program isn't code-signed, so Windows may show "Windows protected your
+   PC" the first time: choose **More info**, then **Run anyway**.
 2. The launcher asks for your copy of the game: its folder (the one with
    `default.xex`) or its disc image (`.iso`). Choose it or drop it on the
    window; it checks that it's the right game and version.
@@ -40,9 +44,9 @@ Controls page.
 | Saves, settings, shader cache | `Documents\2014 FIFA World Cup Brazil` (kept on uninstall) |
 | The program, its logs | `%LOCALAPPDATA%\Programs\fifa-world-cup-2014-recompiled` |
 
-When reporting a problem, include `fifawc14.log` from the program's folder
-(the launcher's Settings, Data, Logs opens it) and the version from the
-launcher's About page.
+Problems go in the [Issues](https://github.com/HossEz/fifa-world-cup-2014-recompiled/issues).
+Include `fifawc14.log` from the program's folder (the launcher's Settings,
+Data, Logs opens it) and the version from the launcher's About page.
 
 ### Known issues
 
