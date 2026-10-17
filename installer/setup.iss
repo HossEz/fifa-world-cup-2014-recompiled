@@ -3,14 +3,16 @@
 ;
 ;   ISCC /DAppVersion=0.1.0 /DSourceDir=<release folder> /DOutputDir=<out> setup.iss
 ;
-; Installs for the current user only (no admin prompt), under
-; %LOCALAPPDATA%\Programs, where the launcher and the game can write their
-; settings and logs next to themselves. Saves stay in
-; Documents\2014 FIFA World Cup Brazil, also after an uninstall.
+; Installs into Program Files (one admin prompt), like other games. Nothing is
+; written there afterwards: the launcher and the game keep their settings, logs,
+; icon and font copy in Documents\2014 FIFA World Cup Brazil with the saves
+; (launcher/src/main.cpp DataFolder, pc/src/data_folder.h). That folder stays
+; after an uninstall.
 ;
 ; No icon ships (it would be the game's art): the shortcuts and the Apps list
-; point at icon.ico, which the launcher makes from the player's own copy once
-; the game is found (launcher/src/icon.h). Until then Windows shows its plain icon.
+; point at icon.ico in that folder, which the launcher makes from the player's
+; own copy once the game is found (launcher/src/icon.h). Until then Windows
+; shows its plain icon.
 
 #ifndef AppVersion
   #error Pass /DAppVersion=x.y.z (package.ps1 does)
@@ -26,8 +28,12 @@
 ; The shortcuts' file names: the same without the colon, which Windows doesn't
 ; allow in file names.
 #define ShortcutName "2014 FIFA World Cup Brazil - Recompiled"
-; Folder and file names.
+; The install folder's name (in Program Files).
+#define InstallFolder "2014 FIFA World Cup Brazil Recompiled"
+; File names.
 #define AppSlug "fifa-world-cup-2014-recompiled"
+; The player's folder: settings, logs, icon and saves.
+#define UserFolder "{userdocs}\2014 FIFA World Cup Brazil"
 
 [Setup]
 ; Identifies the app for upgrades and uninstall: never change it.
@@ -35,7 +41,7 @@ AppId={{6E0F3B52-8C1D-4F7A-9E35-2B7C1D4A9F10}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-DefaultDirName={localappdata}\Programs\{#AppSlug}
+DefaultDirName={autopf}\{#InstallFolder}
 DefaultGroupName={#ShortcutName}
 ; One page: the notice with an Install button. No welcome, folder, shortcut
 ; or summary pages (the default folder suits everyone), and no last page: the
@@ -45,7 +51,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=yes
 DisableFinishedPage=yes
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -55,24 +61,21 @@ OutputBaseFilename={#AppSlug}-{#AppVersion}-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayIcon={app}\icon.ico
+UninstallDisplayIcon={#UserFolder}\icon.ico
 UninstallDisplayName={#AppName}
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
-Name: "{autoprograms}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{app}\icon.ico"
-Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{app}\icon.ico"
+Name: "{autoprograms}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{#UserFolder}\icon.ico"
+Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{#UserFolder}\icon.ico"
 
 [Run]
-Filename: "{app}\Launcher.exe"; Flags: nowait skipifsilent
-
-[UninstallDelete]
-; What the launcher and the game wrote next to themselves (not the saves).
-Type: files; Name: "{app}\fifawc14.toml"
-Type: files; Name: "{app}\launcher.toml"
-Type: files; Name: "{app}\icon.ico"
-Type: files; Name: "{app}\futurastd-condensed.ttf"
-Type: files; Name: "{app}\*.log"
-Type: filesandordirs; Name: "{app}\logs"
+; As the player, not as the installer's admin: an elevated window couldn't
+; take a folder or .iso dropped from Explorer, and its files would be the
+; admin's.
+Filename: "{app}\Launcher.exe"; Flags: nowait skipifsilent runasoriginaluser
+; An update (the launcher runs this setup silently, launcher/src/updater.h):
+; the launcher closed itself for it, so start it again.
+Filename: "{app}\Launcher.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent

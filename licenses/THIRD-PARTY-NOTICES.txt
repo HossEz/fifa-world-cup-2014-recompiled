@@ -6,28 +6,29 @@ its licence and where it comes from, followed by its licence text.
 
  1. ReXGlue SDK (includes code from the Xenia project): BSD 3-Clause
  2. Dear ImGui: MIT
- 3. SDL 3: zlib
- 4. FFmpeg (libavcodec, libavutil): LGPL 2.1 or later
- 5. libmspack (LZX decompressor): LGPL 2.1
- 6. stb_image: MIT (or public domain)
- 7. {fmt}: MIT
- 8. spdlog: MIT
- 9. toml++: MIT
-10. xxHash: BSD 2-Clause
-11. o1heap: MIT
-12. UTF8-CPP: Boost Software License 1.0
-13. SIMD Everywhere: MIT
-14. disruptorplus: MIT
-15. aes_128: MIT
-16. tiny-AES-c: The Unlicense (public domain)
-17. DES (Faraz Fallahi): MIT
-18. TinySHA1: ISC-style
-19. RC4 (Whistle Communications): BSD-style
-20. Rijndael reference code: public domain
-21. SHA-256 (Stephan Brumme): zlib
-22. DXBC checksum (AMD), derived from the RSA Data Security, Inc. MD5 Message Digest Algorithm: RSA MD5 licence
-23. RenderDoc in-application API header: MIT
-24. Microsoft Visual C++ runtime (msvcp140*.dll, vcruntime140*.dll): Microsoft Visual Studio redistributable
+ 3. JSON for Modern C++ (nlohmann/json 3.11.3): MIT
+ 4. SDL 3: zlib
+ 5. FFmpeg (libavcodec, libavutil): LGPL 2.1 or later
+ 6. libmspack (LZX decompressor): LGPL 2.1
+ 7. stb_image: MIT (or public domain)
+ 8. {fmt}: MIT
+ 9. spdlog: MIT
+10. toml++: MIT
+11. xxHash: BSD 2-Clause
+12. o1heap: MIT
+13. UTF8-CPP: Boost Software License 1.0
+14. SIMD Everywhere: MIT
+15. disruptorplus: MIT
+16. aes_128: MIT
+17. tiny-AES-c: The Unlicense (public domain)
+18. DES (Faraz Fallahi): MIT
+19. TinySHA1: ISC-style
+20. RC4 (Whistle Communications): BSD-style
+21. Rijndael reference code: public domain
+22. SHA-256 (Stephan Brumme): zlib
+23. DXBC checksum (AMD), derived from the RSA Data Security, Inc. MD5 Message Digest Algorithm: RSA MD5 licence
+24. RenderDoc in-application API header: MIT
+25. Microsoft Visual C++ runtime (msvcp140*.dll, vcruntime140*.dll): Microsoft Visual Studio redistributable
 
 
 1. ReXGlue SDK (includes code from the Xenia project)
@@ -99,7 +100,36 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-3. SDL 3
+3. JSON for Modern C++ (nlohmann/json 3.11.3)
+---------------------------------------------
+Used in: launcher (the update check)
+Licence: MIT
+Source: https://github.com/nlohmann/json
+
+MIT License
+
+Copyright (c) 2013-2023 Niels Lohmann
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+4. SDL 3
 --------
 Used in: launcher (controllers), game runtime
 Licence: zlib
@@ -124,7 +154,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 
 
-4. FFmpeg (libavcodec, libavutil)
+5. FFmpeg (libavcodec, libavutil)
 ---------------------------------
 Used in: launcher (menu music), game runtime (game audio)
 Licence: LGPL 2.1 or later
@@ -634,7 +664,7 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 
 
-5. libmspack (LZX decompressor)
+6. libmspack (LZX decompressor)
 -------------------------------
 Used in: launcher (game archives), game runtime (executables)
 Licence: LGPL 2.1
@@ -1144,7 +1174,7 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 
 
-6. stb_image
+7. stb_image
 ------------
 Used in: launcher, game runtime
 Licence: MIT (or public domain)
@@ -1188,7 +1218,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ------------------------------------------------------------------------------
 
 
-7. {fmt}
+8. {fmt}
 --------
 Used in: game runtime, GPU plugin, game
 Licence: MIT
@@ -1223,7 +1253,7 @@ source code, you may redistribute such embedded portions in such object form
 without including the above copyright and permission notices.
 
 
-8. spdlog
+9. spdlog
 ---------
 Used in: game runtime, GPU plugin, game
 Licence: MIT
@@ -1256,8 +1286,8 @@ This software depends on the fmt lib (MIT License),
 and users must comply to its license: https://raw.githubusercontent.com/fmtlib/fmt/master/LICENSE
 
 
-9. toml++
----------
+10. toml++
+----------
 Used in: game runtime, game
 Licence: MIT
 Source: https://github.com/marzer/tomlplusplus
@@ -1280,7 +1310,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER I
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-10. xxHash
+11. xxHash
 ----------
 Used in: game runtime, GPU plugin
 Licence: BSD 2-Clause
@@ -1314,7 +1344,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-11. o1heap
+12. o1heap
 ----------
 Used in: game runtime
 Licence: MIT
@@ -1343,7 +1373,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-12. UTF8-CPP
+13. UTF8-CPP
 ------------
 Used in: game runtime
 Licence: Boost Software License 1.0
@@ -1374,7 +1404,7 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
 
-13. SIMD Everywhere
+14. SIMD Everywhere
 -------------------
 Used in: game runtime
 Licence: MIT
@@ -1402,7 +1432,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-14. disruptorplus
+15. disruptorplus
 -----------------
 Used in: game runtime
 Licence: MIT
@@ -1412,7 +1442,7 @@ MIT License. Copyright (c) Lewis Baker. (The SDK's copy carries no licence
 file; see the project's repository for the full text.)
 
 
-15. aes_128
+16. aes_128
 -----------
 Used in: game runtime
 Licence: MIT
@@ -1441,7 +1471,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-16. tiny-AES-c
+17. tiny-AES-c
 --------------
 Used in: game runtime
 Licence: The Unlicense (public domain)
@@ -1451,7 +1481,7 @@ Released into the public domain under The Unlicense. (The SDK's copy
 carries no licence file.)
 
 
-17. DES (Faraz Fallahi)
+18. DES (Faraz Fallahi)
 -----------------------
 Used in: game runtime
 Licence: MIT
@@ -1480,7 +1510,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-18. TinySHA1
+19. TinySHA1
 ------------
 Used in: game runtime
 Licence: ISC-style
@@ -1512,7 +1542,7 @@ Source: the SDK's thirdparty/crypto
  */
 
 
-19. RC4 (Whistle Communications)
+20. RC4 (Whistle Communications)
 --------------------------------
 Used in: game runtime
 Licence: BSD-style
@@ -1555,7 +1585,7 @@ Source: the SDK's thirdparty/crypto
 */
 
 
-20. Rijndael reference code
+21. Rijndael reference code
 ---------------------------
 Used in: game runtime
 Licence: public domain
@@ -1588,7 +1618,7 @@ Source: the SDK's thirdparty/crypto
  */
 
 
-21. SHA-256 (Stephan Brumme)
+22. SHA-256 (Stephan Brumme)
 ----------------------------
 Used in: game runtime
 Licence: zlib
@@ -1602,7 +1632,7 @@ Source: the SDK's thirdparty/crypto
 // Altered for use in Xenia. Licensed under zlib license when acquired.
 
 
-22. DXBC checksum (AMD), derived from the RSA Data Security, Inc. MD5 Message Digest Algorithm
+23. DXBC checksum (AMD), derived from the RSA Data Security, Inc. MD5 Message Digest Algorithm
 ----------------------------------------------------------------------------------------------
 Used in: GPU plugin
 Licence: RSA MD5 licence
@@ -1682,7 +1712,7 @@ Source: the SDK's thirdparty/dxbc
  */
 
 
-23. RenderDoc in-application API header
+24. RenderDoc in-application API header
 ---------------------------------------
 Used in: GPU plugin
 Licence: MIT
@@ -1713,7 +1743,7 @@ Source: https://github.com/baldurk/renderdoc
  ******************************************************************************/
 
 
-24. Microsoft Visual C++ runtime (msvcp140*.dll, vcruntime140*.dll)
+25. Microsoft Visual C++ runtime (msvcp140*.dll, vcruntime140*.dll)
 -------------------------------------------------------------------
 Used in: all programs
 Licence: Microsoft Visual Studio redistributable

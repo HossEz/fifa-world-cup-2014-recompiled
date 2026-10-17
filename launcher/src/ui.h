@@ -12,6 +12,7 @@
 #include <array>
 #include <future>
 #include <map>
+#include <optional>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -24,6 +25,7 @@
 #include "audio.h"
 #include "settings.h"
 #include "textures.h"
+#include "updater.h"
 
 struct ImFont;
 struct ImDrawList;
@@ -42,7 +44,7 @@ enum class ControllerStyle { kXbox, kPlayStation };
 class Ui {
  public:
   // Loads the art and fonts from the game. False if something essential is missing.
-  bool Load(ID3D11Device* device, const GameFiles& files, const std::filesystem::path& game_folder,
+  bool Load(ID3D11Device* device, const GameFiles& files, const std::filesystem::path& data_folder,
             const std::filesystem::path& user_folder);
   // Menu sounds and music (may be silent); the Sound settings apply to it.
   void SetAudio(Audio* audio);
@@ -64,6 +66,15 @@ class Ui {
   std::function<void()> on_quit;
   std::function<void()> on_change_game;
 
+  // The update popup (updater.h): shown over every screen once the first
+  // start's welcome is closed, and until then it waits. While it's up, it
+  // takes all input, so nothing behind it (Play) can be pressed.
+  void ShowUpdate(const Release& release);
+  // The running update, to show its progress (null: none).
+  void SetUpdateJob(const UpdateJob* job) { update_job_ = job; }
+  // Set by the host: the player chose Update (and again after a failure).
+  std::function<void()> on_update;
+
  private:
   enum class Screen { kHome, kSettings, kControls, kAbout, kNotice };
   struct Hint {
@@ -79,8 +90,9 @@ class Ui {
   void DrawBoard(float x, float y, float w, float h, bool mirrored);
   // A focusable text item with the brush stroke; returns its bottom edge.
   // `focus` 0..1 animates the stroke; `selected` keeps a faint stroke.
+  // `rest` is the label's colour when not focused (cream on the dark boards).
   float DrawItem(float x, float y, const std::string& label, ImFont* font, float size, float focus,
-                 float faint = 0.0f);
+                 float faint = 0.0f, unsigned int rest = 0);
   void DrawSplash(const Texture& texture, float center_x, float center_y, float width, float appear);
   void DrawHints(float width, float height, const std::vector<Hint>& hints);
   // Text wrapped at `wrap` pixels with 1.4x line spacing; returns its height.
@@ -111,6 +123,9 @@ class Ui {
   GameConfig& ConfigFor(const Option& option) { return option.local ? *launcher_config_ : *config_; }
   void DrawNowPlaying(float x, float bottom, float width);
   void DrawMessage(float width, float height);
+  bool UpdateVisible() const;
+  void UpdatePopup(float width, float height);
+  void UpdateCommand(Command command);
   void HomeCommand(Command command);
   void SettingsCommand(Command command);
 
@@ -121,7 +136,7 @@ class Ui {
   InputDevice device_ = InputDevice::kKeyboard;
   std::unordered_map<std::string, float> anims_;
 
-  Texture background_, panel_, stroke_, logo_;
+  Texture background_, panel_, stroke_, logo_, update_panel_;
   std::array<Texture, 4> home_icons_;
   std::array<Texture, 5> section_icons_;
   ImFont* bold_ = nullptr;
@@ -154,6 +169,12 @@ class Ui {
   int armed_option_ = -1;  // an action waiting for its confirming second press
   int topic_focus_ = 0;
   float screen_appear_ = 1.0f;  // 0..1 since the screen changed (fade and slide in)
+  // The update popup.
+  std::optional<Release> update_;
+  const UpdateJob* update_job_ = nullptr;
+  int update_focus_ = 0;      // Update now / Later
+  float update_appear_ = 0;   // 0..1, its fade-in
+  bool blocked_ = false;      // drawing the screen behind the popup: no mouse, no hints
   std::string message_;
   float message_left_ = 0.0f;  // seconds the message still shows
 };

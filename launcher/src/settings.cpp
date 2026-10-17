@@ -2,6 +2,9 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
 
 #include <fstream>
 #include <regex>
@@ -172,6 +175,51 @@ std::string Size(uint64_t bytes) {
   return text;
 }
 
+// The desktop shortcut's file on a desktop (the player's own, or the shared
+// one the installer puts it on), named as the installer names it.
+fs::path DesktopShortcut(REFKNOWNFOLDERID desktop_id) {
+  PWSTR desktop = nullptr;
+  fs::path path;
+  if (SUCCEEDED(SHGetKnownFolderPath(desktop_id, 0, nullptr, &desktop))) {
+    path = fs::path(desktop) / L"2014 FIFA World Cup Brazil - Recompiled.lnk";
+  }
+  CoTaskMemFree(desktop);
+  return path;
+}
+
+bool HasDesktopShortcut() {
+  std::error_code ec;
+  return fs::exists(DesktopShortcut(FOLDERID_Desktop), ec) ||
+         fs::exists(DesktopShortcut(FOLDERID_PublicDesktop), ec);
+}
+
+// A desktop shortcut to this launcher with the game's icon (icon.ico in the
+// data folder, made from the player's copy, see icon.h): the portable version
+// has none, and a deleted one comes back this way. Not when one is there already.
+void CreateDesktopShortcut(const fs::path& data_folder) {
+  if (HasDesktopShortcut()) return;
+  wchar_t exe[MAX_PATH];
+  GetModuleFileNameW(nullptr, exe, MAX_PATH);
+  fs::path shortcut = DesktopShortcut(FOLDERID_Desktop);
+  Microsoft::WRL::ComPtr<IShellLinkW> link;
+  Microsoft::WRL::ComPtr<IPersistFile> file;
+  if (shortcut.empty() ||
+      FAILED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                              IID_PPV_ARGS(&link))) ||
+      FAILED(link.As(&file))) {
+    return;
+  }
+  link->SetPath(exe);
+  link->SetWorkingDirectory(fs::path(exe).parent_path().c_str());
+  link->SetDescription(L"2014 FIFA World Cup Brazil: Recompiled");
+  std::error_code ec;
+  fs::path icon = data_folder / "icon.ico";
+  if (fs::exists(icon, ec)) link->SetIconLocation(icon.c_str(), 0);
+  if (SUCCEEDED(file->Save(shortcut.c_str(), TRUE))) {
+    SHChangeNotify(SHCNE_CREATE, SHCNF_PATHW, shortcut.c_str(), nullptr);
+  }
+}
+
 Option OnOff(std::string label, std::string key, std::string fallback, std::string help) {
   Option option;
   option.label = std::move(label);
@@ -183,7 +231,7 @@ Option OnOff(std::string label, std::string key, std::string fallback, std::stri
 
 }  // namespace
 
-std::vector<Section> MakeSections(const fs::path& game_folder, const fs::path& user_folder) {
+std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& user_folder) {
   std::vector<Section> sections;
 
   Section display{"Display", 0, {}};
@@ -201,17 +249,17 @@ std::vector<Section> MakeSections(const fs::path& game_folder, const fs::path& u
 
     Option size;
     size.label = "Window size";
-    size.help = "The game's window when Window is Windowed (in fullscreen the game fills your "
-                "screen).";
+    size.help = "The game's window when Window is Windowed. Automatic: as large as fits your "
+                "screen. A size larger than the screen is fitted to it.";
     size.applies = [](const GameConfig& config) { return config.Get("fullscreen", "true") == "false"; };
-    size.choices = {{"Automatic", {{"window_width", "0"}, {"window_height", "0"}}, {}}};
+    size.choices = {{"Automatic", {{"windowed_width", "0"}, {"windowed_height", "0"}}, {}}};
     for (auto [w, h] : {std::pair{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}}) {
       size.choices.push_back({std::to_string(w) + " x " + std::to_string(h),
-                              {{"window_width", std::to_string(w)},
-                               {"window_height", std::to_string(h)}},
+                              {{"windowed_width", std::to_string(w)},
+                               {"windowed_height", std::to_string(h)}},
                               {}});
     }
-    size.defaults = {{"window_width", "0"}, {"window_height", "0"}};
+    size.defaults = {{"windowed_width", "0"}, {"windowed_height", "0"}};
     display.options.push_back(size);
 
     int monitors = GetSystemMetrics(SM_CMONITORS);
@@ -257,16 +305,6 @@ std::vector<Section> MakeSections(const fs::path& game_folder, const fs::path& u
                           {"4K", {{"resolution_scale", "3"}}, {}}};
     resolution.defaults = {{"resolution_scale", "1"}};
     graphics.options.push_back(resolution);
-
-    Option aa;
-    aa.label = "Anti-aliasing";
-    aa.help = "Smooths jagged edges on top of the game's own. FXAA is light; Extreme smooths "
-              "more and softens the picture a little.";
-    aa.choices = {{"Off", {{"swap_post_effect", "\"none\""}}, {}},
-                  {"FXAA", {{"swap_post_effect", "\"fxaa\""}}, {}},
-                  {"FXAA Extreme", {{"swap_post_effect", "\"fxaa_extreme\""}}, {}}};
-    aa.defaults = {{"swap_post_effect", "\"none\""}};
-    graphics.options.push_back(aa);
 
     Option filtering;
     filtering.label = "Texture filtering";
@@ -341,8 +379,23 @@ std::vector<Section> MakeSections(const fs::path& game_folder, const fs::path& u
     logs.label = "Logs";
     logs.action = "Open folder";
     logs.help = "The game's log (fifawc14.log). Attach it when you report a problem.";
-    logs.run = [game_folder] { OpenFolder(game_folder); };
+    logs.run = [data_folder] { OpenFolder(data_folder); };
     data.options.push_back(logs);
+
+    Option updates = OnOff("Check for updates", "check_updates", "true",
+                           "At start, asks this project's GitHub page whether a newer version is "
+                           "out, and offers it. Nothing is sent about you or your game.");
+    updates.local = true;
+    data.options.push_back(updates);
+
+    Option shortcut;
+    shortcut.label = "Desktop shortcut";
+    shortcut.action = "Create";
+    shortcut.info = [] { return HasDesktopShortcut() ? std::string("On desktop") : std::string(); };
+    shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
+    shortcut.help = "A shortcut to this launcher on your desktop, with the game's icon: for the "
+                    "portable version, or if you deleted the one the installer made.";
+    data.options.push_back(shortcut);
   }
   sections.push_back(data);
   return sections;

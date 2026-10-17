@@ -12,9 +12,11 @@ repository or its releases.
 
 1. Download `fifa-world-cup-2014-recompiled-<version>-setup.exe` from the
    [Releases page](https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases)
-   and run it. It installs for your Windows user only (no admin rights needed)
-   and opens the launcher. Prefer no install? Take the `-portable.zip`, unzip
-   it anywhere and run `Launcher.exe`.
+   and run it. It installs into Program Files (Windows asks for permission
+   once) and opens the launcher. Prefer no install? Take the
+   `-portable.zip`, unzip it anywhere and run `Launcher.exe`: it keeps its
+   settings in its own folder (your saves stay in Documents). For a desktop
+   shortcut with the game's icon: Settings, Data, Desktop shortcut.
 
    The program isn't code-signed, so Windows may show "Windows protected your
    PC" the first time: choose **More info**, then **Run anyway**.
@@ -27,6 +29,14 @@ The launcher's Settings set how the game runs (window, resolution, frame
 rate, Show FPS, ...) and where it's read from. A controller is recommended
 (Xbox, PlayStation and others); the keyboard works too, its keys are on the
 Controls page.
+
+### Updates
+
+At start the launcher checks this page for a newer release and offers it;
+**Update now** downloads it, checks it against the release's checksums and
+installs it (the installed version asks Windows for permission, as when it was
+installed; the portable version replaces its own files). Settings and saves stay.
+Settings, Data, Check for updates turns this off.
 
 ### Requirements
 
@@ -41,12 +51,12 @@ Controls page.
 
 | | |
 |---|---|
-| Saves, settings, shader cache | `Documents\2014 FIFA World Cup Brazil` (kept on uninstall) |
-| The program, its logs | `%LOCALAPPDATA%\Programs\fifa-world-cup-2014-recompiled` |
+| The program | `C:\Program Files\2014 FIFA World Cup Brazil Recompiled` |
+| Saves, settings, logs, shader cache | `Documents\2014 FIFA World Cup Brazil` (kept on uninstall; the portable version keeps its settings and logs in its own folder) |
 
 Problems go in the [Issues](https://github.com/HossEz/fifa-world-cup-2014-recompiled/issues).
-Include `fifawc14.log` from the program's folder (the launcher's Settings,
-Data, Logs opens it) and the version from the launcher's About page.
+Include `fifawc14.log` from `Documents\2014 FIFA World Cup Brazil` (the
+launcher's Settings, Data, Logs opens it) and the version from the launcher's About page.
 
 ### Known issues
 

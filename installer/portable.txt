@@ -1,0 +1,9 @@
+This is the portable version of 2014 FIFA World Cup Brazil: Recompiled.
+
+Because this file is here, the launcher and the game keep their settings, logs
+and icon in this folder, so the copy works on its own (on a USB stick too).
+Your saves stay in Documents\2014 FIFA World Cup Brazil, shared with an
+installed copy.
+
+Delete this file to use the settings in Documents instead, like the installed
+version.

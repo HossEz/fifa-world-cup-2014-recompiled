@@ -32,11 +32,12 @@ include(generated/rexglue.cmake)
 set(FIXES ${CMAKE_CURRENT_SOURCE_DIR}/fixes)
 set(FIFAWC14_SOURCES
     src/main.cpp
+    src/data_folder.cpp
     src/fps_counter.cpp
     src/frame_rate.cpp
     src/launcher_redirect.cpp
     src/thread_stats.cpp
-    src/window_branding.cpp
+    src/game_window.cpp
     ${FIXES}/kernel_stubs.cpp
     ${FIXES}/gpu_memcpy.cpp
     ${FIXES}/boot_race_fixes.cpp
@@ -50,3 +51,7 @@ else()
 endif()
 
 rexglue_setup_target(fifawc14 GPU_PLUGINS xenos)
+# The game window's 16:9 resizing hooks the window with SetWindowSubclass.
+if(WIN32)
+    target_link_libraries(fifawc14 PRIVATE comctl32)
+endif()

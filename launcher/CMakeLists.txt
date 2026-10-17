@@ -43,6 +43,7 @@ add_executable(Launcher WIN32
   src/settings.cpp
   src/setup.cpp
   src/textures.cpp
+  src/updater.cpp
   src/ui.cpp
   src/watchdog.cpp
   ${IMGUI}/imgui.cpp
@@ -54,21 +55,42 @@ add_executable(Launcher WIN32
   ${MSPACK}/lzxd.c
 )
 target_include_directories(Launcher PRIVATE src ${IMGUI} ${IMGUI}/backends ${TP}/stb ${MSPACK}
-                                            ${TP}/FFmpeg)
+                                            ${TP}/FFmpeg
+                                            # nlohmann/json (the update feed), carried by the SDK's inja
+                                            ${TP}/inja/third_party/include)
 target_compile_definitions(Launcher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN
                                             IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
-# Which build this is, for the About screen (refreshed when CMake reconfigures).
+# Which build this is, for the About screen: the version (../VERSION), the
+# commit and the date. CMake runs again by itself when VERSION changes or a
+# commit is made (it watches git's HEAD and the branch it points to), so a
+# release built after its commit shows that commit.
+set(REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+file(READ ${REPO_ROOT}/VERSION LAUNCHER_VERSION)
+string(STRIP "${LAUNCHER_VERSION}" LAUNCHER_VERSION)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${REPO_ROOT}/VERSION)
 execute_process(COMMAND git rev-parse --short HEAD
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 OUTPUT_VARIABLE LAUNCHER_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git rev-parse --absolute-git-dir
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                OUTPUT_VARIABLE GIT_DIR OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND git symbolic-ref -q HEAD
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                OUTPUT_VARIABLE GIT_BRANCH_REF OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(GIT_DIR)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GIT_DIR}/HEAD)
+  if(GIT_BRANCH_REF AND EXISTS ${GIT_DIR}/${GIT_BRANCH_REF})
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GIT_DIR}/${GIT_BRANCH_REF})
+  endif()
+endif()
 string(TIMESTAMP LAUNCHER_DATE "%d %B %Y" UTC)
 set_source_files_properties(src/about.cpp PROPERTIES COMPILE_DEFINITIONS
-  "LAUNCHER_COMMIT=\"${LAUNCHER_COMMIT}\";LAUNCHER_DATE=\"${LAUNCHER_DATE}\"")
+  "LAUNCHER_VERSION=\"${LAUNCHER_VERSION}\";LAUNCHER_COMMIT=\"${LAUNCHER_COMMIT}\";LAUNCHER_DATE=\"${LAUNCHER_DATE}\"")
 
 # Controllers through SDL3 (Xbox, PlayStation, Switch and others), as the game reads them.
 target_include_directories(Launcher PRIVATE ${REXSDK_INSTALL}/include)
 target_link_libraries(Launcher PRIVATE d3d11 dxgi windowscodecs ole32 shell32 xaudio2
-                                       bcrypt ${REXSDK_INSTALL}/lib/libavcodec.lib
+                                       bcrypt winhttp ${REXSDK_INSTALL}/lib/libavcodec.lib
                                        ${REXSDK_INSTALL}/lib/libavutil.lib
                                        ${REXSDK_INSTALL}/lib/SDL3-static.lib
                                        dbghelp winmm imm32 oleaut32 version uuid advapi32 setupapi

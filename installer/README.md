@@ -9,7 +9,9 @@ player's own copy (folder or `.iso`) at the first start.
 
 1. Build the game's Release config (in `pc/`: `cmake --preset win-amd64-release`,
    then `cmake --build out/build/win-amd64-release`) and the launcher, and test them.
-2. Set the version in `VERSION` (repo root).
+2. Set the version in `VERSION` (repo root) and commit: the launcher's About
+   page shows the version and the commit it was built from, so build the
+   release after its commit (CMake picks the new commit up by itself).
 3. Install Inno Setup 6 once: `winget install JRSoftware.InnoSetup`.
 4. From the repo root:
 
@@ -26,6 +28,7 @@ player's own copy (folder or `.iso`) at the first start.
    | `fifa-world-cup-2014-recompiled-<version>-setup.exe` | the installer, for the GitHub release |
    | `fifa-world-cup-2014-recompiled-<version>-portable.zip` | the same, without installing |
    | `fifa-world-cup-2014-recompiled-<version>-symbols.zip` | PDBs for reading crash reports: keep, don't publish |
+   | `SHA256SUMS.txt` | checksums of the setup and the zip: publish it with them, the launcher's updater needs it |
    | `fifa-world-cup-2014-recompiled-<version>/` | the release folder both are made from |
 
 ## What's in the release folder
@@ -38,26 +41,32 @@ player's own copy (folder or `.iso`) at the first start.
 | `msvcp140*.dll`, `vcruntime140*.dll` | Visual Studio's C++ runtime (redistributable, app-local) |
 | `NOTICE.txt` | `installer/NOTICE.txt`: the unofficial / own-copy note |
 | `LICENSE.txt` | `LICENSE`: this project's licence (BSD 3-Clause) |
+| `portable.txt` (zip only) | `installer/portable.txt`: makes the copy keep its settings, logs and icon next to it (saves stay in Documents) |
 | `THIRD-PARTY-NOTICES.txt` | `licenses/`: every third-party component's licence. After an SDK update, rerun `python tools/collect_licenses.py <sdk checkout>` |
 
 ## The installer
 
-`setup.iss`: installs for the current user (no admin prompt) into
-`%LOCALAPPDATA%\Programs\fifa-world-cup-2014-recompiled`, with a Start menu
-entry, a desktop shortcut and an entry in Windows' Apps list. It has one page:
-`NOTICE.txt` and an Install button; then the launcher opens by itself, at its
-"find your game" screen. Uninstalling
-removes the program and the settings and logs it wrote next to itself; the
-player's saves in `Documents\2014 FIFA World Cup Brazil` stay.
+`setup.iss`: installs into `C:\Program Files\2014 FIFA World Cup Brazil
+Recompiled` (one admin prompt), with a Start menu entry, a desktop shortcut and
+an entry in Windows' Apps list. It has one page: `NOTICE.txt` and an Install
+button; then the launcher opens by itself (as the player, not as admin), at its
+"find your game" screen.
 
-The display name is "2014 FIFA World Cup Brazil: Recompiled"; folders and
-files use `fifa-world-cup-2014-recompiled` (`AppName` and `AppSlug` in
-`setup.iss`); the shortcuts are named "2014 FIFA World Cup Brazil -
+Nothing is written into Program Files afterwards: the launcher and the game
+keep their settings, logs, icon and font copy in `Documents\2014 FIFA World
+Cup Brazil`, with the saves. Uninstalling removes the program; that folder
+stays. The portable zip carries `portable.txt`, which makes them use their
+own folder instead (saves still go to Documents); so does a `fifawc14.toml`
+next to the exe, as in a developer build.
+
+The display name is "2014 FIFA World Cup Brazil: Recompiled"; the install
+folder is "2014 FIFA World Cup Brazil Recompiled" (`InstallFolder`); the
+release files use `fifa-world-cup-2014-recompiled` (`AppSlug`); the shortcuts are named "2014 FIFA World Cup Brazil -
 Recompiled" (`ShortcutName`), since Windows doesn't allow a colon in file
 names. Keep `[Setup] AppId` (the GUID) as it is: Windows uses it to
 recognise upgrades.
 
 No icon ships: it would be the game's art. The shortcuts and the Apps list
-point at `icon.ico`, which the launcher makes from the player's own copy when
-the game is found (`launcher/src/icon.h`); until then Windows shows its plain
-icon.
+point at `icon.ico` in the player's folder, which the launcher makes from the
+player's own copy when the game is found (`launcher/src/icon.h`); until then
+Windows shows its plain icon.

@@ -67,7 +67,11 @@ $forbidden = "*.xex", "*.xexp", "*.xex.dll", "*.big", "*.bh", "*.iso", "*.vp6", 
 $found = Get-ChildItem $folder -Recurse -Include $forbidden
 if ($found) { throw "Not for release: $($found.Name -join ', ')" }
 
+# The portable zip has portable.txt, which keeps its settings next to it; the
+# installer's copy doesn't (its settings go to Documents).
+Copy-Item "installer\portable.txt" $folder
 Compress-Archive -Path $folder -DestinationPath (Join-Path $release "$name-portable.zip")
+Remove-Item (Join-Path $folder "portable.txt")
 Compress-Archive -Path "$symbols\*" -DestinationPath (Join-Path $release "$name-symbols.zip")
 Remove-Item -Recurse -Force $symbols
 
@@ -80,6 +84,12 @@ if ($iscc) {
 } else {
   Write-Warning "Inno Setup 6 not installed: no Setup.exe (winget install JRSoftware.InnoSetup)"
 }
+
+# Checksums of what players download, for the launcher's updater (it refuses a
+# download that doesn't match). Published with the release.
+$sums = Get-ChildItem $release -File | Where-Object { $_.Name -like "*-setup.exe" -or $_.Name -like "*-portable.zip" } |
+  ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+[IO.File]::WriteAllText((Join-Path $release "SHA256SUMS.txt"), (($sums -join "`n") + "`n"))
 
 Write-Host "`nIn $release :"
 Get-ChildItem $release -File | ForEach-Object { Write-Host ("  {0,-36} {1,8:N1} MB" -f $_.Name, ($_.Length / 1MB)) }

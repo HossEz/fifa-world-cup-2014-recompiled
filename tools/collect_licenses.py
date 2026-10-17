@@ -16,6 +16,28 @@ import sys
 
 SDK_COMMIT = "bd833a2"  # the patch series' base (patches/rexglue-sdk/README.md)
 
+MIT = """MIT License
+
+Copyright (c) {}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE."""
+
 # name, where it is in the release, licence, source, how to get the text:
 # ("file", path) a licence file, ("header", path) the file's first comment,
 # ("tail", path, marker) from a marker to the end of the comment,
@@ -26,6 +48,8 @@ COMPONENTS = [
      "BSD 3-Clause", "https://github.com/rexglue/rexglue-sdk", ("file", "LICENSE")),
     ("Dear ImGui", "launcher, game overlay", "MIT", "https://github.com/ocornut/imgui",
      ("file", "thirdparty/imgui/LICENSE.txt")),
+    ("JSON for Modern C++ (nlohmann/json 3.11.3)", "launcher (the update check)", "MIT",
+     "https://github.com/nlohmann/json", ("text", MIT.format("2013-2023 Niels Lohmann"))),
     ("SDL 3", "launcher (controllers), game runtime", "zlib", "https://github.com/libsdl-org/SDL",
      ("file", "thirdparty/sdl3/LICENSE.txt")),
     ("FFmpeg (libavcodec, libavutil)", "launcher (menu music), game runtime (game audio)",

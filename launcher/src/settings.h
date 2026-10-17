@@ -86,9 +86,10 @@ const std::vector<ControlRow>& KeyboardLayout();
 // mnk_exact_modifiers off so Shift can sprint while steering.
 std::map<std::string, std::string> KeyboardSettings();
 
-// The launcher's sections. `game_folder`: where fifawc14.exe and its log are;
-// `user_folder`: the game's saves and caches (Documents\2014 FIFA World Cup Brazil).
-std::vector<Section> MakeSections(const std::filesystem::path& game_folder,
+// The launcher's sections. `data_folder`: the settings and logs (see
+// DataFolder in main.cpp); `user_folder`: the game's saves and caches
+// (Documents\2014 FIFA World Cup Brazil).
+std::vector<Section> MakeSections(const std::filesystem::path& data_folder,
                                   const std::filesystem::path& user_folder);
 
 }  // namespace launcher

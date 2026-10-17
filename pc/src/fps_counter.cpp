@@ -17,7 +17,7 @@ REXCVAR_DEFINE_BOOL(show_fps, false, "Game",
 
 namespace {
 
-// The launcher copies it here from the player's game (launcher/src/icon.h).
+// The launcher copies it into the data folder from the player's game.
 constexpr const char* kFontFile = "futurastd-condensed.ttf";
 constexpr ImU32 kCream = IM_COL32(244, 239, 200, 255);
 

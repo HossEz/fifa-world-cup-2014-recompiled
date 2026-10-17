@@ -14,10 +14,11 @@
 #include <rex/ui/overlay/debug_overlay.h>
 #include <rex/runtime.h>
 
+#include "data_folder.h"
 #include "fps_counter.h"
 #include "launcher_redirect.h"
 #include "thread_stats.h"
-#include "window_branding.h"
+#include "game_window.h"
 
 REXCVAR_DECLARE(std::string, perf_log_csv);  // defined in the SDK's perf/counter.cpp
 
@@ -44,7 +45,7 @@ class Fifawc14App : public rex::ReXApp {
       rex::perf::SetCsvLogPath(csv);
     }
     StartThreadCpuLog();
-    ApplyWindowBranding(window());
+    SetUpGameWindow(window());
     SetGuestFrameStats([smoothed_ms = 0.0, frames = uint64_t{0}]() mutable {
       rex::ui::FrameStats stats;
       double ms = rex::perf::GetSnapshotCounter(rex::perf::CounterId::kFrameTimeUs) / 1000.0;
@@ -58,7 +59,7 @@ class Fifawc14App : public rex::ReXApp {
   }
   // The players' overlay: the frame rate if it's on, and no developer keys.
   void OnConfigureFonts(ImFontAtlas* atlas) override {
-    fps_font_ = AddFpsFont(atlas, rex::filesystem::GetExecutableFolder());
+    fps_font_ = AddFpsFont(atlas, DataFolder());
   }
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
     RemoveDebugKeys();
@@ -68,25 +69,24 @@ class Fifawc14App : public rex::ReXApp {
   // std::unique_ptr<rex::ui::AchievementNotificationDialog>
   // CreateAchievementNotificationDialog() override;
   // void OnShutdown() override {}
-  // The SDK resolves game_data_root before it loads fifawc14.toml, so a path set in
-  // the config file would be ignored. Load the config early when no path was given.
   void OnConfigurePaths(rex::PathConfig& paths) override {
-    if (paths.game_data_root.empty() && std::filesystem::exists(paths.config_path)) {
+    // fifawc14.toml in the data folder (data_folder.h), not necessarily next to
+    // the exe. It's also the working folder, so the config's relative paths (the
+    // log file, perf_log_csv, F9 captures) land there and not in Program Files.
+    std::filesystem::path data = DataFolder();
+    std::error_code ec;
+    paths.config_path = data / "fifawc14.toml";
+    std::filesystem::current_path(data, ec);
+    // The SDK resolves game_data_root before it loads fifawc14.toml, so a path set in
+    // the config file would be ignored. Load the config early when no path was given.
+    if (paths.game_data_root.empty() && std::filesystem::exists(paths.config_path, ec)) {
       rex::cvar::LoadConfig(paths.config_path);
       paths.game_data_root = REXCVAR_GET(game_data_root);
     }
-    // Saves, settings and the shader cache in Documents\2014 FIFA World Cup
-    // Brazil (the SDK's default is Documents\<app name>, Documents\fifawc14,
-    // which earlier builds used: moved over once). An explicit user_data_root /
-    // cache_root is kept.
+    // Saves and the shader cache in the user folder (the SDK's default would be
+    // Documents\<app name>). An explicit user_data_root / cache_root is kept.
     if (REXCVAR_GET(user_data_root).empty()) {
-      std::filesystem::path documents = rex::filesystem::GetUserFolder();
-      std::filesystem::path folder = documents / "2014 FIFA World Cup Brazil";
-      std::filesystem::path old = documents / "fifawc14";
-      std::error_code ec;
-      if (!std::filesystem::exists(folder, ec) && std::filesystem::is_directory(old, ec)) {
-        std::filesystem::rename(old, folder, ec);
-      }
+      std::filesystem::path folder = UserFolder();
       paths.user_data_root = folder;
       if (REXCVAR_GET(cache_root).empty()) paths.cache_root = folder / "cache";
     }

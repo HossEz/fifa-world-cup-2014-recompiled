@@ -23,6 +23,8 @@ constexpr ImU32 kAlarm = IM_COL32(200, 51, 31, 255);  // an armed (confirm) butt
 // Art in the game's archives.
 constexpr const char* kBackground = "data/ui/imgassets/fluxwaves/fluxwaves_0.dds";
 constexpr const char* kPanel = "data/ui/imgassets/custompanels/custompanels_27.dds";
+// The update popup's light painted panel, with leaves at its edges.
+constexpr const char* kUpdatePanel = "data/ui/imgassets/custompanels/custompanels_5.dds";
 constexpr const char* kStroke = "data/ui/imgassets/custompanels/custompanels_61.dds";
 constexpr const char* kLogo = "data/ui/imgassets/custompanels/custompanels_39.dds";
 constexpr const char* kTiles = "data/ui/imgassets/tiles/mainhub/";
@@ -71,10 +73,11 @@ void Arrow(ImDrawList* draw, float x, float y, float size, bool right, ImU32 col
 
 // ------------------------------------------------------------------ setup
 
-bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesystem::path& game_folder,
+bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesystem::path& data_folder,
               const std::filesystem::path& user_folder) {
   background_ = LoadGameTexture(device, files, kBackground);
   panel_ = LoadGameTexture(device, files, kPanel);
+  update_panel_ = LoadGameTexture(device, files, kUpdatePanel);
   stroke_ = LoadGameTexture(device, files, kStroke);
   logo_ = LoadGameTexture(device, files, kLogo);
   for (size_t i = 0; i < home_icons_.size(); ++i) {
@@ -99,9 +102,9 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
   book_ = add_font("data/ui/fonts/futurastd-book.ttf");
   condensed_ = add_font("data/ui/fonts/futurastd-condensed.ttf");
 
-  config_ = std::make_unique<GameConfig>(game_folder / "fifawc14.toml");
-  launcher_config_ = std::make_unique<GameConfig>(game_folder / "launcher.toml");
-  sections_ = MakeSections(game_folder, user_folder);
+  config_ = std::make_unique<GameConfig>(data_folder / "fifawc14.toml");
+  launcher_config_ = std::make_unique<GameConfig>(data_folder / "launcher.toml");
+  sections_ = MakeSections(data_folder, user_folder);
   // Data starts with where the game is read from; changing it is the host's
   // (it reopens the setup screen).
   for (Section& section : sections_) {
@@ -170,6 +173,10 @@ std::string Ui::OptionInfo(const Option& option) {
 
 void Ui::OnCommand(Command command, InputDevice device) {
   device_ = device;
+  if (UpdateVisible()) {
+    UpdateCommand(command);
+    return;
+  }
   switch (screen_) {
     case Screen::kHome: HomeCommand(command); break;
     case Screen::kSettings: SettingsCommand(command); break;
@@ -300,6 +307,7 @@ void Ui::SettingsCommand(Command command) {
 }
 
 bool Ui::MouseIn(float x0, float y0, float x1, float y1) const {
+  if (blocked_) return false;  // behind the update popup
   ImVec2 mouse = ImGui::GetIO().MousePos;
   return mouse.x >= x0 && mouse.x < x1 && mouse.y >= y0 && mouse.y < y1;
 }
@@ -328,6 +336,7 @@ void Ui::Frame(float width, float height, float dt) {
   // A new screen fades in and slides a little from the left: everything drawn
   // for it gets its alpha and position eased.
   int first_vertex = draw_->VtxBuffer.Size;
+  blocked_ = UpdateVisible();
   switch (screen_) {
     case Screen::kHome: HomeScreen(width, height); break;
     case Screen::kSettings: SettingsScreen(width, height); break;
@@ -345,6 +354,8 @@ void Ui::Frame(float width, float height, float dt) {
       v.col = (v.col & ~IM_COL32_A_MASK) | (uint32_t(alpha * t) << IM_COL32_A_SHIFT);
     }
   }
+  blocked_ = false;
+  if (UpdateVisible()) UpdatePopup(width, height);
 }
 
 void Ui::ShowMessage(std::string text) {
@@ -398,7 +409,7 @@ void Ui::DrawBoard(float x, float y, float w, float h, bool mirrored) {
 }
 
 float Ui::DrawItem(float x, float y, const std::string& label, ImFont* font, float size,
-                   float focus, float faint) {
+                   float focus, float faint, unsigned int rest) {
   ImVec2 text = font->CalcTextSizeA(size, FLT_MAX, 0.0f, label.c_str());
   float em = size;
   // The item's box: padding 0.08em 0.55em 0.12em 0.15em around the text.
@@ -412,7 +423,7 @@ float Ui::DrawItem(float x, float y, const std::string& label, ImFont* font, flo
     Image(draw_, stroke_, ImVec2(x0, y - 0.02f * em),
           ImVec2(x0 + (x1 - x0) * sweep, box_y1 + 0.08f * em), WithAlpha(IM_COL32_WHITE, alpha));
   }
-  ImU32 color = LerpColor(kCream, kInk, std::clamp(focus * 1.5f, 0.0f, 1.0f));
+  ImU32 color = LerpColor(rest ? ImU32(rest) : kCream, kInk, std::clamp(focus * 1.5f, 0.0f, 1.0f));
   draw_->AddText(font, size, ImVec2(x + 0.15f * em, y + 0.08f * em + size * 0.07f), color,
                  label.c_str());
   return box_y1;
@@ -495,6 +506,7 @@ float Ui::DrawWrapped(ImFont* font, float size, float x, float y, float wrap, Im
 }
 
 void Ui::DrawHints(float width, float height, const std::vector<Hint>& hints) {
+  if (blocked_) return;  // the update popup shows its own
   float s = scale_;
   float size = 21 * s;
   // Laid out right to left from the bottom-right corner. A hint is also a
@@ -948,6 +960,145 @@ void Ui::NoticeScreen(float width, float height) {
     OnCommand(Command::kAccept, device_);
   }
   DrawHints(width, height, {{"Enter", "A", "Continue", Command::kAccept}});
+}
+
+// ------------------------------------------------------------------ update popup
+
+void Ui::ShowUpdate(const Release& release) {
+  update_ = release;
+  update_focus_ = 0;
+  update_appear_ = 0;
+}
+
+bool Ui::UpdateVisible() const { return update_.has_value() && screen_ != Screen::kNotice; }
+
+void Ui::UpdateCommand(Command command) {
+  using State = UpdateJob::State;
+  bool busy = update_job_ && update_job_->state() != State::kFailed;
+  if (busy) return;  // downloading or installing: nothing to choose
+  switch (command) {
+    case Command::kUp:
+    case Command::kDown:
+    case Command::kLeft:
+    case Command::kRight:
+      update_focus_ = 1 - update_focus_;
+      Sound(Audio::Effect::kList);
+      break;
+    case Command::kAccept:
+      Sound(Audio::Effect::kSelect);
+      if (update_focus_ == 0) {
+        if (on_update) on_update();
+      } else {
+        update_.reset();  // Later: until the next start
+      }
+      break;
+    case Command::kBack:
+      Sound(Audio::Effect::kBack);
+      update_.reset();
+      break;
+    default: break;
+  }
+}
+
+// A painted panel over the dimmed menu, the Data section's "download updates"
+// tile on its corner: the new version and what changed, then Update now /
+// Later, or the download's progress.
+void Ui::UpdatePopup(float width, float height) {
+  using State = UpdateJob::State;
+  float s = scale_;
+  update_appear_ = std::min(1.0f, update_appear_ + dt_ / 0.25f);
+  float t = EaseOut(update_appear_);
+  draw_ = ImGui::GetForegroundDrawList();
+  draw_->AddRectFilled(ImVec2(0, 0), ImVec2(width, height), IM_COL32(0, 8, 24, int(200 * t)));
+
+  const Texture& panel = update_panel_ ? update_panel_ : panel_;
+  float panel_w = std::min(600 * s, width - 80 * s);
+  float panel_h = panel_w * panel.height / std::max(1, panel.width);
+  float px = (width - panel_w) * 0.5f, py = (height - panel_h) * 0.5f + (1 - t) * 16 * s;
+  Image(draw_, panel, ImVec2(px, py), ImVec2(px + panel_w, py + panel_h), WithAlpha(IM_COL32_WHITE, t));
+  float icon_w = 190 * s;
+  DrawSplash(section_icons_[2], px + panel_w - 30 * s, py + 34 * s, icon_w, t);
+
+  ImU32 ink = WithAlpha(kInk, t), soft = WithAlpha(kInk, 0.72f * t);
+  float x = px + 62 * s, wrap = panel_w - 140 * s;
+  State state = update_job_ ? update_job_->state() : State::kFailed;
+  bool choosing = !update_job_ || state == State::kFailed;
+  // The content's height, to centre it in the panel's painted area.
+  float content_h = 38 * s * 1.2f + 24 * s * 1.5f + 22 * s;
+  for (const std::string& change : update_->changes) {
+    content_h += book_->CalcTextSizeA(18 * s, FLT_MAX, wrap - 18 * s, change.c_str()).y * 1.4f + 6 * s;
+  }
+  if (update_job_ && state == State::kFailed) content_h += 18 * s * 2.6f;
+  content_h += choosing ? 2 * (32 * s * 1.35f + 6 * s) : 24 * s * 1.5f + 12 * s;
+  float y = py + std::max(56 * s, (panel_h * 0.9f - content_h) * 0.5f);
+  draw_->AddText(bold_, 38 * s, ImVec2(x, y), ink, "Update available");
+  y += 38 * s * 1.2f;
+  std::string versions = "Version " + update_->version + "   \xC2\xB7   you have " +
+                         std::string(*LauncherVersion() ? LauncherVersion() : "?");
+  draw_->AddText(condensed_, 24 * s, ImVec2(x, y), soft, versions.c_str());
+  y += 24 * s * 1.5f;
+  for (const std::string& change : update_->changes) {
+    draw_->AddText(book_, 18 * s, ImVec2(x, y), soft, "\xE2\x80\xA2");
+    y += DrawWrapped(book_, 18 * s, x + 18 * s, y, wrap - 18 * s, soft, change) + 6 * s;
+  }
+  y += 22 * s;
+  if (update_job_ && state == State::kFailed) {
+    DrawWrapped(book_, 18 * s, x, y, wrap, WithAlpha(kAlarm, t), update_job_->error());
+    y += 18 * s * 2.6f;
+  }
+  if (choosing) {
+    const char* labels[] = {update_job_ ? "Try again" : "Update now", "Later"};
+    for (int i = 0; i < 2; ++i) {
+      float focus = Anim("update" + std::to_string(i), i == update_focus_ ? 1.0f : 0.0f, 0.2f);
+      float top = y;
+      y = DrawItem(x, y, labels[i], bold_, 32 * s, focus * t, 0.0f, soft);
+      if (MouseIn(x - 20 * s, top, x + 320 * s, y)) {
+        if (mouse_moved_ && update_focus_ != i) {
+          update_focus_ = i;
+          Sound(Audio::Effect::kList);
+        }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          update_focus_ = i;
+          UpdateCommand(Command::kAccept);
+          return;
+        }
+      }
+      y += 6 * s;
+    }
+    DrawHints(width, height, {{"Enter", "A", "Select", Command::kAccept},
+                              {"Esc", "B", "Later", Command::kBack}});
+  } else {
+    // Progress: a bar while downloading, then what's happening.
+    uint64_t done = update_job_->downloaded(), total = update_job_->total();
+    std::string line;
+    char text[96];
+    if (state == State::kDownloading) {
+      if (total) {
+        std::snprintf(text, sizeof(text), "Downloading   %.1f of %.1f MB", done / 1048576.0,
+                      total / 1048576.0);
+      } else {
+        std::snprintf(text, sizeof(text), "Downloading   %.1f MB", done / 1048576.0);
+      }
+      line = text;
+    } else if (state == State::kVerifying) {
+      line = "Checking the download";
+    } else if (state == State::kInstalling) {
+      line = "Installing";
+    } else {
+      line = "Starting the update";
+    }
+    draw_->AddText(condensed_, 24 * s, ImVec2(x, y), ink, line.c_str());
+    y += 24 * s * 1.5f;
+    float bar_w = wrap, bar_h = 12 * s;
+    float fraction = state == State::kDownloading ? (total ? float(double(done) / double(total)) : 0.0f)
+                                                  : 1.0f;
+    draw_->AddRectFilled(ImVec2(x, y), ImVec2(x + bar_w, y + bar_h), WithAlpha(kInk, 0.18f * t),
+                         bar_h * 0.5f);
+    if (fraction > 0) {
+      draw_->AddRectFilled(ImVec2(x, y), ImVec2(x + bar_w * std::min(fraction, 1.0f), y + bar_h),
+                           WithAlpha(IM_COL32(247, 209, 23, 255), t), bar_h * 0.5f);
+    }
+  }
 }
 
 }  // namespace launcher

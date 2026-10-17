@@ -16,7 +16,11 @@ struct Topic {
 
 const std::vector<Topic>& AboutTopics();
 
-// "Build 1a2b3c4, 16 October 2026" (LAUNCHER_COMMIT / LAUNCHER_DATE from CMake).
+// "Version 0.1.0 · build 1a2b3c4, 17 October 2026" (LAUNCHER_VERSION /
+// LAUNCHER_COMMIT / LAUNCHER_DATE from CMake).
 std::string BuildLine();
+
+// "0.1.0" (from VERSION; empty in a build without it).
+const char* LauncherVersion();
 
 }  // namespace launcher

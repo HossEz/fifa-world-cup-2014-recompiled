@@ -14,7 +14,8 @@ class ImGuiDrawer;
 // The frame rate in the game's top left corner (show_fps, the launcher's
 // Settings, Display, Show FPS): the frames the game makes per second, updated
 // every half second, in the game's own condensed font when the launcher has
-// put it next to the exe, with a soft shadow and no background.
+// copied it into the data folder (data_folder.h), with a soft shadow and no
+// background.
 
 // Adds the counter's font to the overlay's font atlas (call from
 // OnConfigureFonts). Null if the font file isn't there (ImGui's own is used).

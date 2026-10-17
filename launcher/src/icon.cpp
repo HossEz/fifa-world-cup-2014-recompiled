@@ -124,7 +124,7 @@ std::vector<uint8_t> IconBitmap(const Image& image) {
 
 const char* IconSource() { return kPicture; }
 
-fs::path IconPath(const fs::path& game_folder) { return game_folder / "icon.ico"; }
+fs::path IconPath(const fs::path& data_folder) { return data_folder / "icon.ico"; }
 
 bool WriteGameIcon(const GameFiles& files, const fs::path& ico) {
   auto dds = files.Read(kPicture);

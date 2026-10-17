@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <memory>
 #include <regex>
 #include <sstream>
@@ -40,6 +41,8 @@
 #include "log.h"
 #include "watchdog.h"
 #include "settings.h"
+#include "updater.h"
+#include "about.h"
 #include "setup.h"
 #include "ui.h"
 
@@ -99,8 +102,8 @@ bool CreateDevice(HWND window) {
 }
 
 // The game's data folder from fifawc14.toml (game_data_root = "...").
-fs::path GameDataRoot(const fs::path& game_folder) {
-  std::ifstream config(game_folder / "fifawc14.toml");
+fs::path GameDataRoot(const fs::path& data_folder) {
+  std::ifstream config(data_folder / "fifawc14.toml");
   std::string line;
   std::regex pattern(R"(^\s*game_data_root\s*=\s*"([^"]*)\")");
   std::smatch match;
@@ -288,8 +291,8 @@ void PollController(float dt) {
 
 // fifawc14.toml: created if missing, and given the settings the game needs to
 // run correctly if they're absent (the player's own choices are kept).
-void EnsureGameConfig(const fs::path& game_folder) {
-  fs::path path = game_folder / "fifawc14.toml";
+void EnsureGameConfig(const fs::path& data_folder) {
+  fs::path path = data_folder / "fifawc14.toml";
   bool created = !fs::exists(path);
   launcher::GameConfig config(path);
   auto require = [&](const char* key, const char* value) {
@@ -300,6 +303,22 @@ void EnsureGameConfig(const fs::path& game_folder) {
   require("readback_resolve", "\"none\"");
   require("protect_zero", "false");
   require("execute_unclipped_draw_vs_on_cpu", "true");
+  // No FXAA (the SDK's swap_post_effect): measured 2026-10-17, the game already
+  // smooths its 3D edges (MSAA), so FXAA only softened text and HUD edges. The
+  // launcher had it as an option; a config that still has it is set back.
+  if (config.Get("swap_post_effect", "\"none\"") != "\"none\"") {
+    config.Set("swap_post_effect", "\"none\"");
+  }
+  // The window's size moved from the SDK's window_width / window_height, which
+  // also set the video mode the game is told about, to the game's own
+  // windowed_width / windowed_height (pc/src/game_window.h).
+  for (const char* axis : {"width", "height"}) {
+    std::string old = config.Get(std::string("window_") + axis, "0");
+    if (old != "0" && !old.empty()) {
+      config.Set(std::string("windowed_") + axis, old);
+      config.Set(std::string("window_") + axis, "0");
+    }
+  }
   // The keyboard always works next to a controller (the SDK merges them), with
   // the launcher's layout; keybinds already in the file are kept.
   for (const auto& [key, value] : launcher::KeyboardSettings()) {
@@ -354,8 +373,8 @@ fs::path PickLocation(bool iso) {
 }
 
 // The game's folder or .iso, written to fifawc14.toml (game_data_root).
-void SaveGameLocation(const fs::path& game_folder, const fs::path& location) {
-  launcher::GameConfig config(game_folder / "fifawc14.toml");
+void SaveGameLocation(const fs::path& data_folder, const fs::path& location) {
+  launcher::GameConfig config(data_folder / "fifawc14.toml");
   std::u8string utf8 = location.generic_u8string();
   config.Set("game_data_root",
              "\"" + std::string(reinterpret_cast<const char*>(utf8.c_str())) + "\"");
@@ -363,10 +382,10 @@ void SaveGameLocation(const fs::path& game_folder, const fs::path& location) {
 }
 
 // The launcher window's size and position, kept in launcher.toml.
-void SaveWindowPlacement(const fs::path& game_folder) {
+void SaveWindowPlacement(const fs::path& data_folder) {
   WINDOWPLACEMENT placement = {sizeof(placement)};
   if (!GetWindowPlacement(g_window, &placement)) return;
-  launcher::GameConfig config(game_folder / "launcher.toml");
+  launcher::GameConfig config(data_folder / "launcher.toml");
   const RECT& r = placement.rcNormalPosition;
   config.Set("window_x", std::to_string(r.left));
   config.Set("window_y", std::to_string(r.top));
@@ -411,6 +430,23 @@ fs::path UserFolder() {
     }
   }
   CoTaskMemFree(documents);
+  return folder;
+}
+
+// Where the launcher and the game keep their settings, logs, icon and font
+// copy: next to them in the portable version (portable.txt is there) or a
+// developer build (a fifawc14.toml is there), otherwise the user folder above.
+// The game uses the same rule (pc/src/data_folder.h). An installed copy can then
+// sit in Program Files, which programs can't write to. Saves are always in the
+// user folder.
+fs::path DataFolder(const fs::path& game_folder) {
+  std::error_code ec;
+  if (fs::exists(game_folder / "portable.txt", ec) ||
+      fs::exists(game_folder / "fifawc14.toml", ec)) {
+    return game_folder;
+  }
+  fs::path folder = UserFolder();
+  fs::create_directories(folder, ec);
   return folder;
 }
 
@@ -500,6 +536,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   fs::path audio_report;
   fs::path offer;
   fs::path icon_test;
+  // Where to look for updates: the project's releases, or a test feed.
+  std::string update_feed = launcher::kUpdateFeed;
+  bool update_feed_given = false;
   for (int i = 1; i + 1 < argc; ++i) {
     std::wstring arg = argv[i];
     if (arg == L"--game-folder") game_folder = argv[++i];
@@ -508,21 +547,30 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     else if (arg == L"--audio-report") audio_report = argv[++i];
     else if (arg == L"--offer") offer = argv[++i];
     else if (arg == L"--icon") icon_test = argv[++i];
+    else if (arg == L"--update-feed") {
+      std::u8string feed = fs::path(argv[++i]).u8string();
+      update_feed.assign(feed.begin(), feed.end());
+      update_feed_given = true;
+    }
   }
+
+  fs::path data_folder = DataFolder(game_folder);
 
   // COM for XAudio2, the image encoder and the folder / .iso pickers, which
   // need a single-threaded apartment (in a multithreaded one they hang).
   CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-  launcher::OpenLog(game_folder / "launcher.log");
-  launcher::Log("game folder: %s", game_folder.u8string().c_str());
+  launcher::OpenLog(data_folder / "launcher.log");
+  launcher::Log("game folder: %s, data: %s", game_folder.u8string().c_str(),
+                data_folder.u8string().c_str());
+  launcher::CleanUpAfterUpdate(game_folder);  // what a portable update left behind
 
-  EnsureGameConfig(game_folder);
+  EnsureGameConfig(data_folder);
   // The game's folder or .iso from last time, if it's still the right game;
   // otherwise the setup screen finds it. --offer <path> shows the setup
   // screen's answer for that path (with --screenshot, to check its messages).
   std::unique_ptr<launcher::GameSource> source;
   if (offer.empty()) {
-    fs::path data_root = GameDataRoot(game_folder);
+    fs::path data_root = GameDataRoot(data_folder);
     if (!data_root.empty()) source = launcher::OpenGameSource(data_root);
     if (source) {
       launcher::GameCheck check = launcher::CheckGame(*source);
@@ -585,7 +633,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     launcher::GameFiles files(*source);
     launcher::Ui ui;
-    if (!ui.Load(g_device.Get(), files, game_folder, UserFolder())) return 2;
+    if (!ui.Load(g_device.Get(), files, data_folder, UserFolder())) return 2;
     // Play shows what it would say if the game can't start (it never starts
     // here); Settings, Data, Game shows the setup screen it opens.
     bool change_game = false;
@@ -615,7 +663,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   RegisterClassExW(&window_class);
   // 1100x700 (client), or the size and position from last time (launcher.toml)
   // if they're the launcher's shape.
-  launcher::GameConfig placement(game_folder / "launcher.toml");
+  launcher::GameConfig placement(data_folder / "launcher.toml");
   RECT default_rect = {0, 0, 1100, 700};
   AdjustWindowRect(&default_rect, kWindowStyle, FALSE);
   int win_w = default_rect.right - default_rect.left, win_h = default_rect.bottom - default_rect.top;
@@ -648,6 +696,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   std::unique_ptr<launcher::Ui> ui;
   std::unique_ptr<launcher::Audio> audio;
   bool change_game = false;  // Settings, Data, Game pressed: handled after the frame
+  // Updates (updater.h): checked once, in the background, from the start; the
+  // offer shows once the menu is up (the UI holds it back during the first
+  // start's welcome). Not for developer builds unless a test feed is given.
+  launcher::InstallKind install_kind = launcher::DetectInstallKind(game_folder);
+  std::future<std::optional<launcher::Release>> update_check;
+  std::optional<launcher::Release> update_release;
+  std::unique_ptr<launcher::UpdateJob> update_job;
+  {
+    launcher::GameConfig settings(data_folder / "launcher.toml");
+    bool wanted = settings.Get("check_updates", "true") != "false";
+    if (update_feed_given || (wanted && install_kind != launcher::InstallKind::kDeveloper)) {
+      update_check = std::async(std::launch::async, launcher::CheckForUpdate, update_feed,
+                                std::string(launcher::LauncherVersion()));
+    }
+  }
   auto load_menu = [&]() -> bool {
     files = std::make_unique<launcher::GameFiles>(*source);
     launcher::Log("game data: %s, %zu files in its archives",
@@ -656,7 +719,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // the UI reads launcher.toml, which it writes back later.
     bool anthem_first;
     {
-      launcher::GameConfig first_start(game_folder / "launcher.toml");
+      launcher::GameConfig first_start(data_folder / "launcher.toml");
       anthem_first = first_start.Get("anthem_played", "false") != "true";
       if (anthem_first) {
         first_start.Set("anthem_played", "true");
@@ -666,10 +729,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // The icon from the game's art, made once, and again if it's from another
     // picture than the current choice (see icon.h). Noted in launcher.toml
     // before the UI reads it, as above.
-    fs::path icon = launcher::IconPath(game_folder);
+    fs::path icon = launcher::IconPath(data_folder);
     std::error_code ec;
     {
-      launcher::GameConfig made(game_folder / "launcher.toml");
+      launcher::GameConfig made(data_folder / "launcher.toml");
       std::string source = std::string("\"") + launcher::IconSource() + "\"";
       if ((!fs::exists(icon, ec) || made.Get("icon_source", "") != source) &&
           launcher::WriteGameIcon(*files, icon)) {
@@ -679,7 +742,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       }
     }
     ui = std::make_unique<launcher::Ui>();
-    if (!ui->Load(g_device.Get(), *files, game_folder, UserFolder())) {
+    if (!ui->Load(g_device.Get(), *files, data_folder, UserFolder())) {
       MessageBoxW(g_window, L"The menu's art couldn't be read from the game's files.",
                   kAppName, MB_ICONERROR);
       return false;
@@ -699,9 +762,19 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     };
     ui->on_quit = [] { PostQuitMessage(0); };
     ui->on_change_game = [&] { change_game = true; };
+    ui->on_update = [&] {
+      update_job.reset();  // a failed one, if any
+      update_job = std::make_unique<launcher::UpdateJob>(*update_release, install_kind, game_folder);
+      ui->SetUpdateJob(update_job.get());
+    };
+    // A menu made again (another game chosen) shows a running update again.
+    if (update_job) {
+      ui->ShowUpdate(*update_release);
+      ui->SetUpdateJob(update_job.get());
+    }
     g_ui = ui.get();
     // The game's condensed font, for the game's frame-rate display (pc/src/fps_counter.cpp).
-    fs::path font = game_folder / "futurastd-condensed.ttf";
+    fs::path font = data_folder / "futurastd-condensed.ttf";
     if (!fs::exists(font, ec)) {
       if (auto data = files->Read("data/ui/fonts/futurastd-condensed.ttf")) {
         std::ofstream(font, std::ios::binary)
@@ -808,6 +881,26 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     auto t_draw = clock();
     g_swap_chain->Present(1, 0);
     auto t_end = clock();
+    // A portable update's *.old files: the old launcher may still have held
+    // them at start, so once more a few seconds in.
+    static auto started = std::chrono::steady_clock::now();
+    static bool cleaned = false;
+    if (!cleaned && std::chrono::steady_clock::now() - started > std::chrono::seconds(5)) {
+      cleaned = true;
+      launcher::CleanUpAfterUpdate(game_folder);
+    }
+    // The update check's answer, once the menu is there to show it.
+    if (update_check.valid() && ui &&
+        update_check.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+      update_release = update_check.get();
+      if (update_release) ui->ShowUpdate(*update_release);
+    }
+    // Downloaded and checked: start the installer (or the new portable
+    // launcher) and close, so the files can be replaced.
+    if (update_job && update_job->state() == launcher::UpdateJob::State::kReady &&
+        update_job->Finish()) {
+      PostQuitMessage(0);
+    }
     if (change_game) {  // Settings, Data, Game: the setup screen over the menu
       change_game = false;
       if (!open_setup()) return 2;
@@ -836,7 +929,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         ui.reset();
         files.reset();
         source = std::move(chosen);
-        SaveGameLocation(game_folder, source->location());
+        SaveGameLocation(data_folder, source->location());
         launcher::Log("game chosen: %s", source->location().u8string().c_str());
         if (!load_menu()) return 2;
         last = std::chrono::steady_clock::now();
@@ -854,7 +947,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   }
 
   if (!(GetWindowLongW(g_window, GWL_STYLE) & WS_CAPTION)) ToggleFullscreen();
-  SaveWindowPlacement(game_folder);
+  SaveWindowPlacement(data_folder);
   ImGui_ImplDX11_Shutdown();
   ImGui_ImplWin32_Shutdown();
   ImGui::DestroyContext();

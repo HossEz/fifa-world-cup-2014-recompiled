@@ -1,7 +1,10 @@
 #include "about.h"
 
+#ifndef LAUNCHER_VERSION
+#define LAUNCHER_VERSION ""
+#endif
 #ifndef LAUNCHER_COMMIT
-#define LAUNCHER_COMMIT "unknown"
+#define LAUNCHER_COMMIT ""
 #endif
 #ifndef LAUNCHER_DATE
 #define LAUNCHER_DATE ""
@@ -51,9 +54,13 @@ const std::vector<Topic>& AboutTopics() {
   return topics;
 }
 
+const char* LauncherVersion() { return LAUNCHER_VERSION; }
+
 std::string BuildLine() {
-  std::string line = std::string("Build ") + LAUNCHER_COMMIT;
-  if (*LAUNCHER_DATE) line += std::string(", ") + LAUNCHER_DATE;
+  std::string line = *LAUNCHER_VERSION ? std::string("Version ") + LAUNCHER_VERSION : "Version ?";
+  std::string build = LAUNCHER_COMMIT;
+  if (*LAUNCHER_DATE) build += std::string(build.empty() ? "" : ", ") + LAUNCHER_DATE;
+  if (!build.empty()) line += "  \xC2\xB7  build " + build;
   return line;
 }
 
