@@ -53,8 +53,12 @@ std::optional<Release> CheckForUpdate(const std::string& feed_url,
 // "0.10.0" > "0.9.3": numeric, part by part.
 bool IsNewerVersion(const std::string& candidate, const std::string& current);
 
-// Removes the *.old files a portable update left behind.
+// Removes what an update left behind: the *.old files of a portable update,
+// and the download in %TEMP%.
 void CleanUpAfterUpdate(const std::filesystem::path& game_folder);
+
+// %TEMP%/fifa-world-cup-2014-recompiled-update: where an update is downloaded.
+std::filesystem::path UpdateWorkFolder();
 
 // One update, run on its own thread; the UI polls it.
 class UpdateJob {

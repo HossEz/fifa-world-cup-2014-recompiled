@@ -11,5 +11,11 @@ std::filesystem::path UserFolder();
 // next to the exe in the portable version (portable.txt is there) or a
 // developer build (a fifawc14.toml is there), otherwise UserFolder(). The same
 // rule as the launcher's (launcher/src/main.cpp, DataFolder), so an installed
-// game can sit in Program Files. Saves are always in UserFolder().
+// game can sit in Program Files.
 std::filesystem::path DataFolder();
+
+// Where the saves and the shader cache (in its cache folder) are: a "saves"
+// folder next to the exe in the portable version (portable.txt is there), so
+// it keeps everything in its own folder; otherwise UserFolder(). The same rule
+// as the launcher's (launcher/src/main.cpp, SavesFolder).
+std::filesystem::path SavesFolder();

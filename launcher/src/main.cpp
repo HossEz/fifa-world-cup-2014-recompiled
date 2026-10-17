@@ -437,8 +437,7 @@ fs::path UserFolder() {
 // copy: next to them in the portable version (portable.txt is there) or a
 // developer build (a fifawc14.toml is there), otherwise the user folder above.
 // The game uses the same rule (pc/src/data_folder.h). An installed copy can then
-// sit in Program Files, which programs can't write to. Saves are always in the
-// user folder.
+// sit in Program Files, which programs can't write to.
 fs::path DataFolder(const fs::path& game_folder) {
   std::error_code ec;
   if (fs::exists(game_folder / "portable.txt", ec) ||
@@ -448,6 +447,15 @@ fs::path DataFolder(const fs::path& game_folder) {
   fs::path folder = UserFolder();
   fs::create_directories(folder, ec);
   return folder;
+}
+
+// Where the game keeps its saves and shader cache: a "saves" folder in the
+// portable version's own folder (it keeps everything there), otherwise the user
+// folder above. The game uses the same rule (pc/src/data_folder.h, SavesFolder).
+fs::path SavesFolder(const fs::path& game_folder) {
+  std::error_code ec;
+  if (fs::exists(game_folder / "portable.txt", ec)) return game_folder / "saves";
+  return UserFolder();
 }
 
 // "down,accept" -> commands, for screenshots of other screens.
@@ -633,7 +641,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     launcher::GameFiles files(*source);
     launcher::Ui ui;
-    if (!ui.Load(g_device.Get(), files, data_folder, UserFolder())) return 2;
+    if (!ui.Load(g_device.Get(), files, data_folder, SavesFolder(game_folder))) return 2;
     // Play shows what it would say if the game can't start (it never starts
     // here); Settings, Data, Game shows the setup screen it opens.
     bool change_game = false;
@@ -742,7 +750,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       }
     }
     ui = std::make_unique<launcher::Ui>();
-    if (!ui->Load(g_device.Get(), *files, data_folder, UserFolder())) {
+    if (!ui->Load(g_device.Get(), *files, data_folder, SavesFolder(game_folder))) {
       MessageBoxW(g_window, L"The menu's art couldn't be read from the game's files.",
                   kAppName, MB_ICONERROR);
       return false;

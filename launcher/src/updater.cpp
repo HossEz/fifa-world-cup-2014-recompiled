@@ -251,18 +251,25 @@ std::optional<Release> CheckForUpdate(const std::string& feed_url,
   return release;
 }
 
+fs::path UpdateWorkFolder() {
+  wchar_t temp[MAX_PATH];
+  GetTempPathW(MAX_PATH, temp);
+  return fs::path(temp) / "fifa-world-cup-2014-recompiled-update";
+}
+
 void CleanUpAfterUpdate(const fs::path& game_folder) {
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator(game_folder, ec)) {
     if (entry.path().extension() == ".old") fs::remove(entry.path(), ec);
   }
+  // The download and what was unpacked from it (the installer has finished by
+  // the time the launcher runs again).
+  fs::remove_all(UpdateWorkFolder(), ec);
 }
 
 UpdateJob::UpdateJob(Release release, InstallKind kind, fs::path game_folder)
     : release_(std::move(release)), kind_(kind), game_folder_(std::move(game_folder)) {
-  wchar_t temp[MAX_PATH];
-  GetTempPathW(MAX_PATH, temp);
-  work_ = fs::path(temp) / "fifa-world-cup-2014-recompiled-update";
+  work_ = UpdateWorkFolder();
   thread_ = std::thread([this] { Run(); });
 }
 

@@ -83,10 +83,11 @@ class Fifawc14App : public rex::ReXApp {
       rex::cvar::LoadConfig(paths.config_path);
       paths.game_data_root = REXCVAR_GET(game_data_root);
     }
-    // Saves and the shader cache in the user folder (the SDK's default would be
-    // Documents\<app name>). An explicit user_data_root / cache_root is kept.
+    // Saves and the shader cache in the user folder, or the portable copy's
+    // own (data_folder.h; the SDK's default would be Documents\<app name>). An
+    // explicit user_data_root / cache_root is kept.
     if (REXCVAR_GET(user_data_root).empty()) {
-      std::filesystem::path folder = UserFolder();
+      std::filesystem::path folder = SavesFolder();
       paths.user_data_root = folder;
       if (REXCVAR_GET(cache_root).empty()) paths.cache_root = folder / "cache";
     }

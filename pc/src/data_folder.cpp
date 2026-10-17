@@ -13,6 +13,13 @@ std::filesystem::path UserFolder() {
   return folder;
 }
 
+std::filesystem::path SavesFolder() {
+  std::filesystem::path exe_folder = rex::filesystem::GetExecutableFolder();
+  std::error_code ec;
+  if (std::filesystem::exists(exe_folder / "portable.txt", ec)) return exe_folder / "saves";
+  return UserFolder();
+}
+
 std::filesystem::path DataFolder() {
   std::filesystem::path exe_folder = rex::filesystem::GetExecutableFolder();
   std::error_code ec;

@@ -41,7 +41,7 @@ player's own copy (folder or `.iso`) at the first start.
 | `msvcp140*.dll`, `vcruntime140*.dll` | Visual Studio's C++ runtime (redistributable, app-local) |
 | `NOTICE.txt` | `installer/NOTICE.txt`: the unofficial / own-copy note |
 | `LICENSE.txt` | `LICENSE`: this project's licence (BSD 3-Clause) |
-| `portable.txt` (zip only) | `installer/portable.txt`: makes the copy keep its settings, logs and icon next to it (saves stay in Documents) |
+| `portable.txt` (zip only) | `installer/portable.txt`: makes the copy keep everything in its own folder (saves in `saves`) |
 | `THIRD-PARTY-NOTICES.txt` | `licenses/`: every third-party component's licence. After an SDK update, rerun `python tools/collect_licenses.py <sdk checkout>` |
 
 ## The installer
@@ -57,9 +57,11 @@ Nothing is written into the install folder afterwards: the launcher and the
 game keep their settings, logs, icon and font copy in `Documents\2014 FIFA World
 Cup Brazil`, with the saves, so any folder works. Uninstalling removes the
 program and asks whether to delete that folder too (default: keep it). The
-portable zip carries `portable.txt`, which makes them use their own folder
-instead (saves still go to Documents); so does a `fifawc14.toml` next to the
-exe, as in a developer build.
+portable zip carries `portable.txt`, which makes them keep everything in their
+own folder instead (settings and logs next to them, saves and the shader cache
+in its `saves` folder), so nothing goes to Documents. A `fifawc14.toml` next to
+the exe, as in a developer build, keeps the settings and logs there too (its
+saves stay in Documents).
 
 The display name is "2014 FIFA World Cup Brazil: Recompiled"; the install
 folder is "2014 FIFA World Cup Brazil Recompiled" (`InstallFolder`); the

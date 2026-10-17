@@ -88,7 +88,7 @@ std::map<std::string, std::string> KeyboardSettings();
 
 // The launcher's sections. `data_folder`: the settings and logs (see
 // DataFolder in main.cpp); `user_folder`: the game's saves and caches
-// (Documents\2014 FIFA World Cup Brazil).
+// (Documents\2014 FIFA World Cup Brazil, or the portable copy's saves folder).
 std::vector<Section> MakeSections(const std::filesystem::path& data_folder,
                                   const std::filesystem::path& user_folder);
 
