@@ -186,6 +186,9 @@ restored. `D3D12Presenter` times each `Present`: when most of a block of 300
 presents (the ones with the GPU not behind, so GPU-bound frames don't count)
 take over 2 ms, it reports the connection outdated, and the UI thread's
 reconnection creates a new swap chain, as restoring a minimized window does.
-At most 5 in a row that don't help, then it waits until presents stop waiting.
+Most is 80%: in a heavy scene the GPU is behind for nearly all presents and the
+few others are often slow too. If presents are slow again within 10 s of a new
+swap chain, that one didn't help (most likely a scene too heavy for the GPU) and
+none is created for 60 s.
 It logs present times every 10 s. `d3d12_present_stall_recovery = false`
 turns the recovery off.

@@ -1,5 +1,5 @@
 diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
-index 83d09f7..4cdcdad 100644
+index 83d09f7..b999491 100644
 --- a/include/rex/ui/d3d12/d3d12_presenter.h
 +++ b/include/rex/ui/d3d12/d3d12_presenter.h
 @@ -251,6 +251,9 @@ class D3D12Presenter final : public Presenter {
@@ -32,7 +32,7 @@ index 83d09f7..4cdcdad 100644
 +    double max_ms = 0.0;
 +    uint64_t last_log_tick = 0;
 +    uint64_t last_recreate_tick = 0;
-+    uint32_t failed_recreates = 0;
++    uint64_t no_recreate_before_tick = 0;
 +  };
 +  PresentStats present_stats_;
 +
@@ -40,7 +40,7 @@ index 83d09f7..4cdcdad 100644
    void* temporal_upscaler_context_ = nullptr;
    uint32_t temporal_upscaler_max_render_width_ = 0;
 diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
-index 306118e..53451ad 100644
+index 306118e..2cad282 100644
 --- a/src/ui/d3d12/d3d12_presenter.cpp
 +++ b/src/ui/d3d12/d3d12_presenter.cpp
 @@ -16,6 +16,7 @@
@@ -92,7 +92,7 @@ index 306118e..53451ad 100644
    // Even if presentation has failed, work might have been enqueued anyway
    // internally before the failure according to Jesse Natalie from the DirectX
    // Discord server.
-@@ -1168,8 +1186,83 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+@@ -1168,8 +1186,80 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
      case DXGI_ERROR_DEVICE_RESET:
        return PaintResult::kGpuLostResponsible;
      default:
@@ -119,9 +119,11 @@ index 306118e..53451ad 100644
 +  constexpr uint32_t kBlockPresents = 300;
 +  constexpr uint32_t kMinCountedToRecreate = 10;
 +  constexpr uint64_t kLogSeconds = 10;
-+  // A stall again within this time of a recreation: that one didn't help.
++  // A stall again within this time of a recreation: that one didn't help, so
++  // it's most likely the GPU being too slow (a heavy scene), which a new swap
++  // chain can't fix, and no recreation is tried for kRecreateBackoffSeconds.
 +  constexpr uint64_t kRecreateRetrySeconds = 10;
-+  constexpr uint32_t kMaxFailedRecreates = 5;
++  constexpr uint64_t kRecreateBackoffSeconds = 60;
 +
 +  PresentStats& stats = present_stats_;
 +  uint64_t frequency = chrono::Clock::QueryHostTickFrequency();
@@ -130,7 +132,7 @@ index 306118e..53451ad 100644
 +  if (!gpu_behind) {
 +    ++stats.counted;
 +    stats.slow += ms > kSlowMs;
-   }
++  }
 +  stats.sum_ms += ms;
 +  stats.max_ms = std::max(stats.max_ms, ms);
 +  if (stats.count < kBlockPresents) {
@@ -138,7 +140,7 @@ index 306118e..53451ad 100644
 +  }
 +
 +  uint64_t now = chrono::Clock::QueryHostTickCount();
-+  bool stalled = stats.counted >= kMinCountedToRecreate && stats.slow * 2 >= stats.counted;
++  bool stalled = stats.counted >= kMinCountedToRecreate && stats.slow * 5 >= stats.counted * 4;
 +  if (stalled || now - stats.last_log_tick >= kLogSeconds * frequency) {
 +    REXLOG_INFO(
 +        "D3D12Presenter: presents in the last {}: mean {:.2f} ms, max {:.1f}; with the GPU not "
@@ -153,24 +155,19 @@ index 306118e..53451ad 100644
 +  stats.sum_ms = 0.0;
 +  stats.max_ms = 0.0;
 +
-+  if (!stalled) {
-+    stats.failed_recreates = 0;
-+    return false;
-+  }
-+  if (!REXCVAR_GET(d3d12_present_stall_recovery) ||
-+      stats.failed_recreates >= kMaxFailedRecreates) {
++  if (!stalled || !REXCVAR_GET(d3d12_present_stall_recovery) ||
++      now < stats.no_recreate_before_tick) {
 +    return false;
 +  }
 +  if (stats.last_recreate_tick &&
 +      now - stats.last_recreate_tick < kRecreateRetrySeconds * frequency) {
-+    if (++stats.failed_recreates >= kMaxFailedRecreates) {
-+      REXLOG_WARN(
-+          "D3D12Presenter: presents still wait for the display after {} new swap chains, "
-+          "not retrying until they stop waiting",
-+          kMaxFailedRecreates);
-+      return false;
-+    }
-+  }
++    stats.no_recreate_before_tick = now + kRecreateBackoffSeconds * frequency;
++    REXLOG_WARN(
++        "D3D12Presenter: presents still slow after a new swap chain (the GPU is likely too slow "
++        "here), not recreating it for {} s",
++        kRecreateBackoffSeconds);
++    return false;
+   }
 +  stats.last_recreate_tick = now;
 +  REXLOG_WARN("D3D12Presenter: presents wait for the display, recreating the swap chain");
 +  return true;
