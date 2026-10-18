@@ -10,6 +10,15 @@
 # libmspack's LZX decoder); the launcher doesn't link the game runtime.
 
 cmake_minimum_required(VERSION 3.25)
+# LLVM's resource compiler, when it's there. With clang-cl, CMake preprocesses
+# the .rc with clang and hands it on in the form llvm-rc takes (its
+# cmake_llvm_rc step); given Windows' rc.exe instead, that step hangs.
+if(NOT CMAKE_RC_COMPILER)
+  find_program(LLVM_RC llvm-rc HINTS "$ENV{ProgramFiles}/LLVM/bin")
+  if(LLVM_RC)
+    set(CMAKE_RC_COMPILER "${LLVM_RC}")
+  endif()
+endif()
 project(launcher LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 20)

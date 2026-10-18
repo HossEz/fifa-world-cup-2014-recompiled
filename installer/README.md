@@ -34,6 +34,13 @@ player's own copy (folder or `.iso`) at the first start.
    | `SHA256SUMS.txt` | checksums of the setup and the zip: publish it with them, the launcher's updater needs it |
    | `fifa-world-cup-2014-recompiled-<version>/` | the release folder both are made from |
 
+   The release text's first `- ` (or `* `) bullets are what the launcher's
+   update popup shows as what's new: up to four, from the first list up to the
+   next heading. So put the changes first, as `- ` bullets. Later sections'
+   lists (Known issues) are left out from launcher 0.1.2 on; for older
+   launchers, write them with `+ `, which GitHub shows the same and the
+   updater ignores.
+
 ## What's in the release folder
 
 | File | From |
