@@ -32,7 +32,7 @@ player's own copy (folder or `.iso`) at the first start.
    | `fifa-world-cup-2014-recompiled-<version>-portable.zip` | the same, without installing |
    | `fifa-world-cup-2014-recompiled-<version>-symbols.zip` | PDBs for reading crash reports: keep, don't publish |
    | `SHA256SUMS.txt` | checksums of the setup and the zip: publish it with them, the launcher's updater needs it |
-   | `fifa-world-cup-2014-recompiled-<version>/` | the release folder both are made from |
+   | `fifa-world-cup-2014-recompiled/` | the release folder both are made from, and the folder the zip unpacks to (no version in its name: a portable copy updates in place) |
 
    The release text's first `- ` (or `* `) bullets are what the launcher's
    update popup shows as what's new: up to four, from the first list up to the

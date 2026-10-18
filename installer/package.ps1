@@ -19,7 +19,9 @@ Set-Location $root
 $version = (Get-Content "VERSION" -Raw).Trim()
 $name = "fifa-world-cup-2014-recompiled-$version"
 $release = Join-Path $Out $version
-$folder = Join-Path $release $name
+# Without the version: it's the folder the portable zip unpacks to, and a
+# portable copy updates itself in place, where a versioned name would go stale.
+$folder = Join-Path $release "fifa-world-cup-2014-recompiled"
 $symbols = Join-Path $release "$name-symbols"
 
 function Need([string]$path) {
