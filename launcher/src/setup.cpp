@@ -315,7 +315,7 @@ void Setup::Frame(float width, float height, float dt) {
   float card_h = layout(0);
   const char* notice =
       "Ported by hosse (github.com/HossEz/fifa-world-cup-2014-recompiled). Unofficial, and not affiliated with or endorsed by EA, FIFA "
-      "or Microsoft. None of the game is included: it plays your own copy.";
+      "or Microsoft. None of the game is included. It plays your own copy.";
   float notice_h = regular_->CalcTextSizeA(12.5f * s, FLT_MAX, card_w, notice).y;
   float top = std::max(16 * s, (height - card_h - notice_h - 24 * s) * 0.5f) + (1 - a) * 12 * s;
   draw_ = list;

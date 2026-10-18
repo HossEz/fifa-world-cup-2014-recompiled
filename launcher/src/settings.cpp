@@ -238,8 +238,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   {
     Option window;
     window.label = "Window";
-    window.help = "Fullscreen covers your screen as a borderless window (switching apps is "
-                  "quick). Exclusive takes over the screen. Windowed uses Window size.";
+    window.help = "Fullscreen fills your screen and lets you switch apps quickly. Exclusive "
+                  "gives the game the screen to itself. Windowed uses Window size.";
     window.choices = {
         {"Fullscreen", {{"fullscreen", "true"}, {"fullscreen_exclusive", "false"}}, {}},
         {"Exclusive", {{"fullscreen", "true"}, {"fullscreen_exclusive", "true"}}, {}},
@@ -249,8 +249,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option size;
     size.label = "Window size";
-    size.help = "The game's window when Window is Windowed. Automatic: as large as fits your "
-                "screen. A size larger than the screen is fitted to it.";
+    size.help = "The size of the game's window in Windowed mode. Automatic makes it as large "
+                "as fits your screen. A size larger than your screen is shrunk to fit.";
     size.applies = [](const GameConfig& config) { return config.Get("fullscreen", "true") == "false"; };
     size.choices = {{"Automatic", {{"windowed_width", "0"}, {"windowed_height", "0"}}, {}}};
     for (auto [w, h] : {std::pair{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}}) {
@@ -277,8 +277,9 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     display.options.push_back(OnOff(
         "Variable refresh", "d3d12_allow_variable_refresh_rate_and_tearing", "true",
-        "Shows each frame the moment it's ready: smooth on G-Sync / FreeSync screens, and it "
-        "keeps the game at full speed. Leave it on; off, the frame rate can drop to 30-45."));
+        "Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens "
+        "and keeps the game at full speed. Leave it on. With it off, the frame rate can drop "
+        "to 30-45."));
     Option rate;
     rate.label = "Frame rate";
     rate.help = "The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "
@@ -297,9 +298,10 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   {
     Option resolution;
     resolution.label = "Resolution";
-    resolution.help = "What the game draws at, before it's fitted to your screen: the "
-                      "console's 720p, or 2 or 3 times as wide and high. On a 1080p screen "
-                      "1440p is the sharp choice, but for now it costs a lot of speed in cutscenes.";
+    resolution.help = "What the game draws at, before it's fitted to your screen. 720p is the "
+                      "console's own, 1440p and 4K are 2 and 3 times as wide and high. On a "
+                      "1080p screen 1440p is the sharp choice, but for now its frame rate drops "
+                      "in cutscenes.";
     resolution.choices = {{"720p", {{"resolution_scale", "1"}}, {}},
                           {"1440p", {{"resolution_scale", "2"}}, {}},
                           {"4K", {{"resolution_scale", "3"}}, {}}};
@@ -334,7 +336,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
       option.local = true;
       return option;
     };
-    const char* only_here = " Only in this menu: the game's own sound is set in the game.";
+    const char* only_here = " Only in this menu. The game's own sound is set in the game.";
     Option music = OnOff("Music", "menu_music", "true",
                          std::string("The game's EA Trax soundtrack, shuffled, while you're in "
                                      "this menu.") + only_here);
@@ -393,8 +395,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     shortcut.action = "Create";
     shortcut.info = [] { return HasDesktopShortcut() ? std::string("On desktop") : std::string(); };
     shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
-    shortcut.help = "A shortcut to this launcher on your desktop, with the game's icon: for the "
-                    "portable version, or if you deleted the one the installer made.";
+    shortcut.help = "A shortcut to this launcher on your desktop, with the game's icon. Useful for "
+                    "the portable version, or if you deleted the one the installer made.";
     data.options.push_back(shortcut);
   }
   sections.push_back(data);

@@ -863,7 +863,7 @@ void Ui::ControlsScreen(float width, float height) {
   TwoBoards(width, height, "Controls", intro_size * 1.35f * 5, &bx, &by, &bw, &bh, &list_y);
   DrawWrapped(book_, intro_size, 56 * s + 48 * s, list_y, 290 * s, kCreamDim,
               "A controller works as it does on the console. On a keyboard each button has its "
-              "own keys; both work at any time.");
+              "own keys. Both work at any time.");
   float icon_w = 230 * s;
   DrawSplash(home_icons_[2], std::min(bx + bw + 50 * s - icon_w * 0.5f, width - icon_w * 0.55f), by - 70 * s + icon_w * 0.33f,
              icon_w, splash_appear_);
@@ -947,8 +947,8 @@ void Ui::NoticeScreen(float width, float height) {
   const char* paragraphs[] = {
       "An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
       "game. It runs on your own copy of the game; nothing of the game's is included.",
-      "A controller is recommended: Xbox, PlayStation and others work. The keyboard works too: "
-      "its keys are on the Controls page.",
+      "A controller is recommended (Xbox, PlayStation and others work). The keyboard works "
+      "too, and its keys are on the Controls page.",
       "Settings here change how the game looks and runs, from the next Play. Show FPS (Settings, "
       "Display) puts the frame rate in the game's corner."};
   float text_size = 19 * s;

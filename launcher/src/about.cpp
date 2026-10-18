@@ -19,11 +19,11 @@ const std::vector<Topic>& AboutTopics() {
         "unofficial fan project, ported by hosse.",
         "The original, with its source and downloads, is on GitHub:",
         "github.com/HossEz/fifa-world-cup-2014-recompiled",
-        "It is a static recompilation, not an emulator: the game's PowerPC code was translated "
-        "ahead of time into C++ and compiled for your PC, so it runs the game's own logic "
+        "It is a static recompilation, not an emulator. The game's PowerPC code was translated "
+        "into C++ and compiled for your PC, so it runs the game's own logic "
         "directly instead of interpreting Xbox instructions."}},
       {"How it works",
-       {"The recompiled code runs on a runtime that stands in for the console: the Xbox "
+       {"The recompiled code runs on a runtime that stands in for the console, with the Xbox "
         "kernel's functions, its file system and its threads.",
         "Every frame, the Xenos GPU's commands are translated to Direct3D 12, its EDRAM render "
         "targets included. The game's XMA audio is decoded with FFmpeg. A few fixes on top let "
@@ -34,23 +34,24 @@ const std::vector<Topic>& AboutTopics() {
         "and a processor with AVX2.",
         "A controller is recommended; the keyboard works too (its keys are on the Controls "
         "page).",
-        "Your own copy of the game: everything of the game's, including the art and music in "
+        "Your own copy of the game. Everything of the game's, including the art and music in "
         "this menu, is read from it."}},
       {"Credits",
-       {"ReXGlue: the recompiler and runtime that turn the Xbox 360 code into C++ and run it.",
-        "Xenia: the Xbox 360 emulator whose research and GPU and kernel code ReXGlue builds on.",
-        "FFmpeg: decodes the game's XMA audio. Dear ImGui: draws this menu. libmspack and stb: "
-        "read the game's compressed files. SDL: controllers."}},
+       {"Built on ReXGlue, the recompiler and runtime that turn the Xbox 360 code into C++ and "
+        "run it.",
+        "Xenia, the Xbox 360 emulator whose research, GPU and kernel code ReXGlue builds on.",
+        "FFmpeg decodes the game's XMA audio, Dear ImGui draws this menu, libmspack and stb read "
+        "the game's compressed files, and SDL handles controllers."}},
       {"Legal",
        {"Not affiliated with or endorsed by Electronic Arts, EA Sports, FIFA or Microsoft. 2014 "
         "FIFA World Cup Brazil and its art, music and names belong to their owners.",
-        "None of the game's files are included: its art, sound and data come from your own "
-        "copy; its code is included only in recompiled form. If a rights holder raises a valid "
+        "None of the game's files are included. Its art, sound and data come from your own "
+        "copy, and its code is included only in recompiled form. If a rights holder raises a valid "
         "legal concern, it will be addressed.",
         "This project's code is under the BSD 3-Clause licence (LICENSE.txt); the components "
         "it uses keep theirs (THIRD-PARTY-NOTICES.txt, both in the program's folder)."}},
       {"Build",
-       {"Mention this when reporting a problem: it says which version you're running."},
+       {"Mention this when reporting a problem, so it's clear which version you're running."},
        true},
   };
   return topics;

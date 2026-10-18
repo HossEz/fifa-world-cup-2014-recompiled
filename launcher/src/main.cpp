@@ -121,7 +121,7 @@ std::string StartGame(const fs::path& game_folder) {
   if (!fs::exists(exe, ec)) {
     launcher::Log("play: %s is missing", exe.u8string().c_str());
     return "The game (fifawc14.exe) is missing from the launcher's folder. Your antivirus may "
-           "have removed it: restore it there, or download the release again.";
+           "have removed it. Restore it there, or download the release again.";
   }
   std::wstring command = L"\"" + exe.wstring() + L"\"";
   STARTUPINFOW startup = {sizeof(startup)};
