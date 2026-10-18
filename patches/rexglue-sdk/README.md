@@ -43,6 +43,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0008 keyboard: relaxed modifier matching (`mnk_exact_modifiers`) | Shift to sprint while steering |
 | 0009 scaled resolves also written to guest memory | 1440p and 4K |
 | 0010 disc image (.iso) as game data | playing from an `.iso` |
+| 0011 present stall recovery (`d3d12_present_stall_recovery`) | FPS staying low after alt-tab or a screenshot popup |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -175,3 +176,16 @@ no difference. `ConstructRuntime` accepts a file there, and skips its host-side
 `default.xex` check for an image (the XEX load fails with its own message if
 it's missing). The reader also tries XGD1's partition offset (0x18300000), as
 the launcher does.
+
+## 0011-present-stall-recovery
+
+After an overlay (ShareX's screenshot preview) or an alt-tab, Windows can leave
+the swap chain on a path where every present waits for the display. The guest
+then drops to ~48 FPS and stays there until the window is minimized and
+restored. `D3D12Presenter` times each `Present`: when most of a block of 300
+presents (the ones with the GPU not behind, so GPU-bound frames don't count)
+take over 2 ms, it reports the connection outdated, and the UI thread's
+reconnection creates a new swap chain, as restoring a minimized window does.
+At most 5 in a row that don't help, then it waits until presents stop waiting.
+It logs present times every 10 s. `d3d12_present_stall_recovery = false`
+turns the recovery off.

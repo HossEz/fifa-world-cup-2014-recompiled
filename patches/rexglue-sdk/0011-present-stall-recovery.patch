@@ -1,0 +1,179 @@
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index 83d09f7..4cdcdad 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -251,6 +251,9 @@ class D3D12Presenter final : public Presenter {
+     uint32_t swap_chain_width = 0;
+     uint32_t swap_chain_height = 0;
+     bool swap_chain_allows_tearing = false;
++    // Set by painting when presents keep waiting for the display: the next
++    // reconnection creates a new swap chain instead of resizing this one.
++    bool swap_chain_recreate_requested = false;
+     Microsoft::WRL::ComPtr<IDXGISwapChain3> swap_chain;
+     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kSwapChainBufferCount> swap_chain_buffers;
+   };
+@@ -312,6 +315,26 @@ class D3D12Presenter final : public Presenter {
+   // well as by presenter initialization and shutdown.
+   PaintContext paint_context_;
+ 
++  // Present timing, by the thread painting (PaintAndPresentImpl). After an
++  // overlay (a screenshot tool's popup, for one) or a focus change, Windows can
++  // keep the swap chain on a path where every present waits for the display,
++  // which slows the guest down until the swap chain is recreated (as
++  // minimizing and restoring does). Returns whether to recreate it now.
++  bool TrackPresentTime(uint64_t present_ticks, bool gpu_behind);
++  struct PresentStats {
++    // Per block of kBlockPresents presents.
++    uint32_t count = 0;
++    // Presents with the GPU not behind, and of them, the slow ones.
++    uint32_t counted = 0;
++    uint32_t slow = 0;
++    double sum_ms = 0.0;
++    double max_ms = 0.0;
++    uint64_t last_log_tick = 0;
++    uint64_t last_recreate_tick = 0;
++    uint32_t failed_recreates = 0;
++  };
++  PresentStats present_stats_;
++
+ #if defined(REX_HAS_FIDELITYFX_RUNTIME) && REX_HAS_FIDELITYFX_RUNTIME
+   void* temporal_upscaler_context_ = nullptr;
+   uint32_t temporal_upscaler_max_render_width_ = 0;
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index 306118e..53451ad 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -16,6 +16,7 @@
+ #include <utility>
+ 
+ #include <rex/assert.h>
++#include <rex/chrono/clock.h>
+ #include <rex/cvar.h>
+ #include <rex/logging.h>
+ #include <rex/math.h>
+@@ -32,6 +33,9 @@
+ 
+ REXCVAR_DEFINE_BOOL(d3d12_allow_variable_refresh_rate_and_tearing, true, "UI/D3D12",
+                     "Allow variable refresh rate and tearing");
++REXCVAR_DEFINE_BOOL(d3d12_present_stall_recovery, true, "UI/D3D12",
++                    "Recreate the swap chain when presents keep waiting for the display (after an "
++                    "overlay or a focus change)");
+ 
+ namespace rex::ui::d3d12 {
+ 
+@@ -344,6 +348,13 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+   uint32_t new_swap_chain_height =
+       std::min(new_surface_height, uint32_t(D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION));
+ 
++  // Presents were waiting for the display (TrackPresentTime): resizing doesn't
++  // always bring the swap chain back to presenting directly, a new one does.
++  if (paint_context_.swap_chain_recreate_requested) {
++    paint_context_.swap_chain_recreate_requested = false;
++    paint_context_.DestroySwapChain();
++  }
++
+   // ConnectOrReconnectPaintingToSurfaceFromUIThread may be called only for the
+   // surface of the current swap chain or when the old swap chain has already
+   // been destroyed, if the surface is the same, try resizing.
+@@ -1155,9 +1166,16 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   // fullscreen is ever used in, the allow tearing flag must not be passed in
+   // fullscreen, but DXGI fullscreen is largely unneeded with the flip
+   // presentation model used in Direct3D 12).
++  // With an earlier paint still on the GPU, Present may wait for the GPU, which
++  // says nothing about the display.
++  bool gpu_behind = paint_context_.present_submission_tracker.GetCompletedSubmission() + 1 <
++                    paint_context_.present_submission_tracker.GetCurrentSubmission();
++  uint64_t present_start = chrono::Clock::QueryHostTickCount();
+   HRESULT present_result = paint_context_.swap_chain->Present(
+       0, DXGI_PRESENT_RESTART |
+              (paint_context_.swap_chain_allows_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0));
++  bool recreate_swap_chain =
++      TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind);
+   // Even if presentation has failed, work might have been enqueued anyway
+   // internally before the failure according to Jesse Natalie from the DirectX
+   // Discord server.
+@@ -1168,8 +1186,83 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+     case DXGI_ERROR_DEVICE_RESET:
+       return PaintResult::kGpuLostResponsible;
+     default:
+-      return SUCCEEDED(present_result) ? PaintResult::kPresented : PaintResult::kNotPresented;
++      if (!SUCCEEDED(present_result)) {
++        return PaintResult::kNotPresented;
++      }
++      if (recreate_swap_chain) {
++        // Makes the connection outdated, so the UI thread reconnects.
++        paint_context_.swap_chain_recreate_requested = true;
++        return PaintResult::kPresentedSuboptimal;
++      }
++      return PaintResult::kPresented;
++  }
++}
++
++bool D3D12Presenter::TrackPresentTime(uint64_t present_ticks, bool gpu_behind) {
++  // A present that doesn't wait for the display takes well under a
++  // millisecond. Most presents with the GPU not behind waiting longer, over a
++  // block of presents, means they wait for the display. Normally a few percent
++  // do; stuck on the waiting path, almost all of them (and then the GPU is
++  // mostly reported behind too, as the frames queue up, so few are counted).
++  constexpr double kSlowMs = 2.0;
++  constexpr uint32_t kBlockPresents = 300;
++  constexpr uint32_t kMinCountedToRecreate = 10;
++  constexpr uint64_t kLogSeconds = 10;
++  // A stall again within this time of a recreation: that one didn't help.
++  constexpr uint64_t kRecreateRetrySeconds = 10;
++  constexpr uint32_t kMaxFailedRecreates = 5;
++
++  PresentStats& stats = present_stats_;
++  uint64_t frequency = chrono::Clock::QueryHostTickFrequency();
++  double ms = double(present_ticks) * 1000.0 / double(frequency);
++  ++stats.count;
++  if (!gpu_behind) {
++    ++stats.counted;
++    stats.slow += ms > kSlowMs;
+   }
++  stats.sum_ms += ms;
++  stats.max_ms = std::max(stats.max_ms, ms);
++  if (stats.count < kBlockPresents) {
++    return false;
++  }
++
++  uint64_t now = chrono::Clock::QueryHostTickCount();
++  bool stalled = stats.counted >= kMinCountedToRecreate && stats.slow * 2 >= stats.counted;
++  if (stalled || now - stats.last_log_tick >= kLogSeconds * frequency) {
++    REXLOG_INFO(
++        "D3D12Presenter: presents in the last {}: mean {:.2f} ms, max {:.1f}; with the GPU not "
++        "behind {}, of them over {:.0f} ms {}",
++        stats.count, stats.sum_ms / stats.count, stats.max_ms, stats.counted, kSlowMs,
++        stats.slow);
++    stats.last_log_tick = now;
++  }
++  stats.count = 0;
++  stats.counted = 0;
++  stats.slow = 0;
++  stats.sum_ms = 0.0;
++  stats.max_ms = 0.0;
++
++  if (!stalled) {
++    stats.failed_recreates = 0;
++    return false;
++  }
++  if (!REXCVAR_GET(d3d12_present_stall_recovery) ||
++      stats.failed_recreates >= kMaxFailedRecreates) {
++    return false;
++  }
++  if (stats.last_recreate_tick &&
++      now - stats.last_recreate_tick < kRecreateRetrySeconds * frequency) {
++    if (++stats.failed_recreates >= kMaxFailedRecreates) {
++      REXLOG_WARN(
++          "D3D12Presenter: presents still wait for the display after {} new swap chains, "
++          "not retrying until they stop waiting",
++          kMaxFailedRecreates);
++      return false;
++    }
++  }
++  stats.last_recreate_tick = now;
++  REXLOG_WARN("D3D12Presenter: presents wait for the display, recreating the swap chain");
++  return true;
+ }
+ 
+ bool D3D12Presenter::InitializeSurfaceIndependent() {

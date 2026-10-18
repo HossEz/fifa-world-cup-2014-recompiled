@@ -5,6 +5,14 @@
 # generated/rexglue.cmake.
 
 cmake_minimum_required(VERSION 3.25)
+# LLVM's resource compiler, when it's there, as in the launcher: given Windows'
+# rc.exe, CMake's clang preprocessing step for the .rc hangs.
+if(NOT CMAKE_RC_COMPILER)
+  find_program(LLVM_RC llvm-rc HINTS "$ENV{ProgramFiles}/LLVM/bin")
+  if(LLVM_RC)
+    set(CMAKE_RC_COMPILER "${LLVM_RC}")
+  endif()
+endif()
 project(fifawc14 LANGUAGES CXX RC)
 
 set(CMAKE_CXX_STANDARD 23)
