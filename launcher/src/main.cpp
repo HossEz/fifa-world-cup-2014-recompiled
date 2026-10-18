@@ -303,6 +303,10 @@ void EnsureGameConfig(const fs::path& data_folder) {
   require("readback_resolve", "\"none\"");
   require("protect_zero", "false");
   require("execute_unclipped_draw_vs_on_cpu", "true");
+  // A draw whose pipeline is still compiling waits for it instead of being
+  // skipped. Skipped, a texture the game renders once (the ground outside the
+  // stadium) stayed black for the whole first run, before the shader cache had it.
+  require("async_shader_compilation", "false");
   // No FXAA (the SDK's swap_post_effect): measured 2026-10-17, the game already
   // smooths its 3D edges (MSAA), so FXAA only softened text and HUD edges. The
   // launcher had it as an option; a config that still has it is set back.

@@ -8,7 +8,10 @@ player's own copy (folder or `.iso`) at the first start.
 ## Steps
 
 1. Build the game's Release config (in `pc/`: `cmake --preset win-amd64-release`,
-   then `cmake --build out/build/win-amd64-release`) and the launcher, and test them.
+   then `cmake --build out/build/win-amd64-release`) and the launcher, and test them:
+   `powershell -ExecutionPolicy Bypass -File installer\test_copy.ps1 -Run` makes a
+   fresh portable copy from those builds in `out\test\` (nothing kept from the last
+   test: a first run, empty shader cache included) and opens its launcher.
 2. Set the version in `VERSION` (repo root) and commit: the launcher's About
    page shows the version and the commit it was built from, so build the
    release after its commit (CMake picks the new commit up by itself).

@@ -56,6 +56,7 @@ replace them with copies of their targets.
    | `readback_resolve = "none"` | GPU results the game reads on the CPU are handled by `pc/fixes/gpu_memcpy.cpp`; reading back every resolve would stall the GPU. |
    | `protect_zero = false` | The game reads address 0, which the console allows. |
    | `execute_unclipped_draw_vs_on_cpu = true` | Without it, full-screen passes are assumed to cover all render memory, and parts of the menus render black. |
+   | `async_shader_compilation = false` | A draw waits for its pipeline instead of being skipped while it compiles. Skipped, the ground outside the stadium stayed black on the first run (before the shader cache had its shaders). |
    | `present_interval_cap = 1`, `frame_rate_floor = 60` | 60 FPS in the menus and cutscenes the game holds at 30 and 40 (`pc/fixes/present_interval.cpp`, `pc/src/frame_rate.cpp`). |
    | `debug_keys = true` | Optional, for development: the SDK's overlays on F3 (debug), F4 (settings), F7 and the backtick key (console). |
 
