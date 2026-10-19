@@ -58,6 +58,7 @@ bool DecodeSps(const std::vector<uint8_t>& sps, Pcm& out);
 struct Song {
   std::string artist;
   std::string title;
+  int cover = 0;  // its EA Trax art: data/ui/artassets/eatrax_thumbs/et<cover>.big
 };
 
 class Audio {

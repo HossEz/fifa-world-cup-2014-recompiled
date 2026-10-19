@@ -137,6 +137,7 @@ class Ui {
   std::unordered_map<std::string, float> anims_;
 
   Texture backdrop_;  // behind the fluxwaves (BuildBackdrop in ui.cpp)
+  std::array<Texture, 35> covers_;  // EA Trax art by Song::cover (1-34)
   Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_;
   std::array<Texture, 4> home_icons_;
   std::array<Texture, 5> section_icons_;
@@ -152,7 +153,8 @@ class Ui {
   std::unique_ptr<GameConfig> config_;           // the game's fifawc14.toml
   std::unique_ptr<GameConfig> launcher_config_;  // launcher.toml
   Audio* audio_ = nullptr;
-  std::string shown_song_;  // the song on the main menu (fades when it changes)
+  Song shown_song_;  // the song on the main menu (fades when it changes)
+  double shown_song_at_ = 0;  // when it appeared (ImGui time), for scrolling long names
   float skip_pressed_ = 0.0f;  // seconds the skip button still shows pressed
   ControllerStyle controller_style_ = ControllerStyle::kXbox;
   // Option infos (folder sizes) are computed in the background, every few seconds.

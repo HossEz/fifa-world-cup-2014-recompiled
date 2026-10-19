@@ -54,6 +54,11 @@ class GameFiles {
 std::optional<std::vector<uint8_t>> ReadNested(const std::vector<uint8_t>& archive,
                                                const std::string& name);
 
+// The first entry of a BIG archive held in memory whose data starts with a
+// 4-byte magic ("XPR2" for the texture in the game's art archives).
+std::optional<std::vector<uint8_t>> ReadNestedByMagic(const std::vector<uint8_t>& archive,
+                                                      const char* magic);
+
 // "chunkzip" / "chunklzx" contents decompressed; other data is returned as is.
 // Empty on a damaged entry.
 std::vector<uint8_t> DecompressChunked(std::vector<uint8_t> data);

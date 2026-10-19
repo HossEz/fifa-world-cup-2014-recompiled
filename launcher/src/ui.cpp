@@ -122,6 +122,13 @@ Texture BuildBackdrop(ID3D11Device* device, const GameFiles& files) {
 bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesystem::path& data_folder,
               const std::filesystem::path& user_folder) {
   backdrop_ = BuildBackdrop(device, files);
+  for (size_t i = 1; i < covers_.size(); ++i) {
+    auto archive = files.Read("data/ui/artassets/eatrax_thumbs/et" + std::to_string(i) + ".big");
+    auto xpr2 = archive ? ReadNestedByMagic(*archive, "XPR2") : std::nullopt;
+    int width = 0, height = 0;
+    std::vector<uint8_t> rgba = xpr2 ? DecodeXpr2(*xpr2, &width, &height) : std::vector<uint8_t>{};
+    covers_[i] = LoadRgba(device, rgba, width, height);
+  }
   background_ = LoadGameTexture(device, files, kBackground);
   panel_ = LoadGameTexture(device, files, kPanel);
   update_panel_ = LoadGameTexture(device, files, kUpdatePanel);
@@ -508,21 +515,39 @@ void Ui::DrawSplash(const Texture& texture, float cx, float cy, float width, flo
 }
 
 void Ui::DrawNowPlaying(float x, float bottom, float width) {
-  // The song's title over its artist beside a yellow rule; fades out and in
-  // when the song changes.
+  // A yellow rule, the song's cover, its title over its artist, and the
+  // next-song button; the song's part fades out and in when the song changes.
   float s = scale_;
   Song song = audio_ ? audio_->CurrentSong() : Song{};
-  bool changing = song.title != shown_song_;
+  bool changing = song.title != shown_song_.title;
   float appear = Anim("song", changing || song.title.empty() ? 0.0f : 1.0f, 0.4f);
-  if (changing && appear <= 0.0f) shown_song_ = song.title;
-  if (shown_song_.empty() || appear <= 0.0f) return;
+  if (changing && appear <= 0.0f) {
+    shown_song_ = song;
+    shown_song_at_ = ImGui::GetTime();
+  }
+  if (shown_song_.title.empty() || appear <= 0.0f) return;
   float title_size = 18 * s, artist_size = 18 * s;
   float top = bottom - title_size * 1.2f - artist_size * 1.2f;
   float slide = (1.0f - EaseOut(appear)) * -12 * s;
 
+  draw_->AddRectFilled(ImVec2(x + slide, top), ImVec2(x + slide + 4 * s, bottom),
+                       WithAlpha(IM_COL32(247, 209, 23, 255), appear));
+  // The cover beside the rule, as tall as it.
+  float text_x = x + slide + 10 * s;
+  const Texture* cover = shown_song_.cover > 0 && size_t(shown_song_.cover) < covers_.size()
+                             ? &covers_[size_t(shown_song_.cover)]
+                             : nullptr;
+  if (cover && *cover) {
+    float side = bottom - top;
+    Image(draw_, *cover, ImVec2(text_x, top), ImVec2(text_x + side, bottom),
+          WithAlpha(IM_COL32_WHITE, appear));
+    text_x += side + 8 * s;
+  }
+
   // The next-song button at the board's right edge: outlined, filled with the
   // focus yellow when pointed at or pressed.
   float r = 17 * s, cx = x + width - r, cy = (top + bottom) * 0.5f;
+  float text_end = cx - r - 12 * s;
   bool hover = MouseIn(cx - r, cy - r, cx + r, cy + r);
   if (hover) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
   if (hover && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) SkipSong();
@@ -535,14 +560,24 @@ void Ui::DrawNowPlaying(float x, float bottom, float width) {
   draw_->AddTriangleFilled(ImVec2(cx - u, cy - u), ImVec2(cx + u * 0.55f, cy), ImVec2(cx - u, cy + u),
                            icon);
   draw_->AddRectFilled(ImVec2(cx + u * 0.6f, cy - u), ImVec2(cx + u * 0.95f, cy + u), icon);
-  width -= 2 * r + 12 * s;
-  draw_->AddRectFilled(ImVec2(x + slide, top), ImVec2(x + slide + 4 * s, bottom),
-                       WithAlpha(IM_COL32(247, 209, 23, 255), appear));
-  draw_->PushClipRect(ImVec2(x, top - 4 * s), ImVec2(x + width, bottom + 4 * s), true);
-  draw_->AddText(bold_, title_size, ImVec2(x + slide + 14 * s, top), WithAlpha(kCream, appear),
-                 shown_song_.c_str());
-  draw_->AddText(condensed_, artist_size, ImVec2(x + slide + 14 * s, top + title_size * 1.2f),
-                 WithAlpha(kCreamDim, appear), song.artist.c_str());
+  // A line too long for the space scrolls to its end and back: still for 2 s,
+  // then 30 px a second (at 1080p), still at the end for 2 s, then from the start.
+  float since = float(ImGui::GetTime() - shown_song_at_);
+  auto scroll = [&](ImFont* font, float size, const std::string& text) {
+    float overflow = font->CalcTextSizeA(size, FLT_MAX, 0, text.c_str()).x - (text_end - text_x);
+    if (overflow <= 0) return 0.0f;
+    float speed = 30 * s, pause = 2.0f, travel = overflow / speed;
+    float t = std::fmod(since, 2 * pause + travel);
+    return -std::clamp((t - pause) * speed, 0.0f, overflow);
+  };
+  draw_->PushClipRect(ImVec2(text_x, top - 4 * s), ImVec2(text_end, bottom + 4 * s), true);
+  draw_->AddText(bold_, title_size,
+                 ImVec2(text_x + scroll(bold_, title_size, shown_song_.title), top),
+                 WithAlpha(kCream, appear), shown_song_.title.c_str());
+  draw_->AddText(condensed_, artist_size,
+                 ImVec2(text_x + scroll(condensed_, artist_size, shown_song_.artist),
+                        top + title_size * 1.2f),
+                 WithAlpha(kCreamDim, appear), shown_song_.artist.c_str());
   draw_->PopClipRect();
 }
 
