@@ -198,6 +198,30 @@ std::optional<std::vector<uint8_t>> GameFiles::Read(const std::string& path) con
   return data;
 }
 
+std::optional<std::vector<uint8_t>> ReadNested(const std::vector<uint8_t>& archive,
+                                               const std::string& name) {
+  if (archive.size() < 16 ||
+      (std::memcmp(archive.data(), "BIG4", 4) && std::memcmp(archive.data(), "BIGF", 4))) {
+    return std::nullopt;
+  }
+  uint32_t count = ReadBe32(&archive[8]);
+  size_t header_end = std::min(archive.size(), size_t(16) + ReadBe32(&archive[12]));
+  std::string wanted = Lower(name);
+  size_t pos = 16;
+  for (uint32_t i = 0; i < count && pos + 8 < header_end; ++i) {
+    uint32_t offset = ReadBe32(&archive[pos]);
+    uint32_t size = ReadBe32(&archive[pos + 4]);
+    auto name_start = archive.begin() + pos + 8;
+    auto name_end = std::find(name_start, archive.begin() + header_end, uint8_t(0));
+    if (Lower(std::string(name_start, name_end)) == wanted) {
+      if (size_t(offset) + size > archive.size()) return std::nullopt;
+      return std::vector<uint8_t>(archive.begin() + offset, archive.begin() + offset + size);
+    }
+    pos = size_t(name_end - archive.begin()) + 1;
+  }
+  return std::nullopt;
+}
+
 std::vector<uint8_t> GameFiles::ReadRaw(const std::string& path, uint64_t offset,
                                         uint32_t size) const {
   auto found = index_.find(Lower(path));

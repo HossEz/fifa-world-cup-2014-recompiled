@@ -2,7 +2,8 @@
 //
 // The front-end art the launcher uses (data/ui/imgassets/...) is stored as PC
 // .dds files with DXT1/3/5 blocks, which Direct3D 11 samples directly (BC1-3):
-// no decoding, the blocks go to the GPU as they are.
+// no decoding, the blocks go to the GPU as they are. The menu backgrounds are
+// Xbox 360 textures (XPR2) and are decoded on the CPU (DecodeXpr2).
 
 #pragma once
 
@@ -37,6 +38,14 @@ Texture LoadDds(ID3D11Device* device, const std::vector<uint8_t>& dds);
 // A .dds file's top mip level decoded to RGBA (8 bits each, rows top to
 // bottom), for images made on the CPU (the icon). Empty if it isn't DXT1/3/5.
 std::vector<uint8_t> DecodeDds(const std::vector<uint8_t>& dds, int* width, int* height);
+
+// The first texture of an XPR2 package (the Xbox 360's texture resources, as in
+// the game's background archives: tiled, byte-swapped DXT1/3/5), decoded to RGBA
+// like DecodeDds. Empty if it isn't one.
+std::vector<uint8_t> DecodeXpr2(const std::vector<uint8_t>& xpr2, int* width, int* height);
+
+// An RGBA image (8 bits each, rows top to bottom) as a texture.
+Texture LoadRgba(ID3D11Device* device, const std::vector<uint8_t>& rgba, int width, int height);
 
 // A .dds entry of the game's archives.
 Texture LoadGameTexture(ID3D11Device* device, const GameFiles& files, const std::string& path);

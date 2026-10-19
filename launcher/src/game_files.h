@@ -49,6 +49,11 @@ class GameFiles {
   std::unordered_map<std::string, Location> index_;
 };
 
+// An entry of a BIG archive held in memory (the "BIGF" in some entries), as
+// stored. Names are matched case-insensitively.
+std::optional<std::vector<uint8_t>> ReadNested(const std::vector<uint8_t>& archive,
+                                               const std::string& name);
+
 // "chunkzip" / "chunklzx" contents decompressed; other data is returned as is.
 // Empty on a damaged entry.
 std::vector<uint8_t> DecompressChunked(std::vector<uint8_t> data);

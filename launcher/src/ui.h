@@ -136,6 +136,7 @@ class Ui {
   InputDevice device_ = InputDevice::kKeyboard;
   std::unordered_map<std::string, float> anims_;
 
+  Texture backdrop_;  // behind the fluxwaves (BuildBackdrop in ui.cpp)
   Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_;
   std::array<Texture, 4> home_icons_;
   std::array<Texture, 5> section_icons_;

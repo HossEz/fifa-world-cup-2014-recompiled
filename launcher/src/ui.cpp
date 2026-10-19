@@ -21,7 +21,10 @@ constexpr ImU32 kInk = IM_COL32(12, 30, 20, 255);
 constexpr ImU32 kAlarm = IM_COL32(200, 51, 31, 255);  // an armed (confirm) button
 
 // Art in the game's archives.
-constexpr const char* kBackground = "data/ui/imgassets/fluxwaves/fluxwaves_0.dds";
+constexpr const char* kBackground = "data/ui/imgassets/fluxwaves/fluxwaves_1.dds";
+// Menu backgrounds the backdrop is made from (BuildBackdrop).
+constexpr const char* kBackdropLeft = "data/ui/game/background/backgroundonlineposter.big";
+constexpr const char* kBackdropRight = "data/ui/game/background/backgroundonline.big";
 constexpr const char* kPanel = "data/ui/imgassets/custompanels/custompanels_27.dds";
 // The update popup's light painted panel, with leaves at its edges.
 constexpr const char* kUpdatePanel = "data/ui/imgassets/custompanels/custompanels_5.dds";
@@ -69,12 +72,56 @@ void Arrow(ImDrawList* draw, float x, float y, float size, bool right, ImU32 col
                           ImVec2(x - d * size * 0.35f, y + size * 0.5f), color);
 }
 
+// One of the game's 1280x720 menu backgrounds as RGBA. Its archive holds 15
+// tiles of 256x256 (entries "4" to "18", XPR2), laid out 5 by 3 in reverse
+// order: "18" is the top left. The bottom row's last 48 rows are padding.
+constexpr int kBackdropWidth = 1280, kBackdropHeight = 720;
+
+std::vector<uint8_t> LoadMenuBackground(const GameFiles& files, const char* path) {
+  auto archive = files.Read(path);
+  if (!archive) return {};
+  std::vector<uint8_t> rgba(size_t(kBackdropWidth) * kBackdropHeight * 4);
+  for (int k = 0; k < 15; ++k) {
+    auto entry = ReadNested(*archive, std::to_string(18 - k));
+    int width = 0, height = 0;
+    std::vector<uint8_t> tile = entry ? DecodeXpr2(*entry, &width, &height) : std::vector<uint8_t>{};
+    if (width != 256 || height != 256) return {};
+    int x0 = (k % 5) * 256, y0 = (k / 5) * 256;
+    for (int y = 0; y < 256 && y0 + y < kBackdropHeight; ++y) {
+      std::memcpy(&rgba[(size_t(y0 + y) * kBackdropWidth + x0) * 4], &tile[size_t(y) * 256 * 4],
+                  256 * 4);
+    }
+  }
+  return rgba;
+}
+
+// The backdrop: the left half of the online poster background and the right
+// half of the online one (the same artwork, with a footballer added on the
+// left), blended over 240 pixels in the middle so there's no seam.
+Texture BuildBackdrop(ID3D11Device* device, const GameFiles& files) {
+  std::vector<uint8_t> left = LoadMenuBackground(files, kBackdropLeft);
+  std::vector<uint8_t> right = LoadMenuBackground(files, kBackdropRight);
+  if (left.empty() || right.empty()) return {};
+  for (int x = 0; x < kBackdropWidth; ++x) {
+    float t = std::clamp((x - (kBackdropWidth / 2 - 120)) / 240.0f, 0.0f, 1.0f);
+    t = t * t * (3 - 2 * t);
+    for (int y = 0; y < kBackdropHeight; ++y) {
+      uint8_t* l = &left[(size_t(y) * kBackdropWidth + x) * 4];
+      const uint8_t* r = &right[(size_t(y) * kBackdropWidth + x) * 4];
+      for (int c = 0; c < 3; ++c) l[c] = uint8_t(std::lround(l[c] + (r[c] - l[c]) * t));
+      l[3] = 255;
+    }
+  }
+  return LoadRgba(device, left, kBackdropWidth, kBackdropHeight);
+}
+
 }  // namespace
 
 // ------------------------------------------------------------------ setup
 
 bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesystem::path& data_folder,
               const std::filesystem::path& user_folder) {
+  backdrop_ = BuildBackdrop(device, files);
   background_ = LoadGameTexture(device, files, kBackground);
   panel_ = LoadGameTexture(device, files, kPanel);
   update_panel_ = LoadGameTexture(device, files, kUpdatePanel);
@@ -384,7 +431,16 @@ void Ui::DrawMessage(float width, float height) {
 // ------------------------------------------------------------------ drawing
 
 void Ui::DrawBackground(float width, float height) {
-  draw_->AddRectFilled(ImVec2(0, 0), ImVec2(width, height), kAtlantico);
+  if (backdrop_) {
+    // Fills the window, cropped evenly on the sides that don't fit.
+    float fit = std::max(width / backdrop_.width, height / backdrop_.height);
+    float du = (1.0f - width / (backdrop_.width * fit)) / 2;
+    float dv = (1.0f - height / (backdrop_.height * fit)) / 2;
+    draw_->AddImage(ImTextureRef(backdrop_.id()), ImVec2(0, 0), ImVec2(width, height),
+                    ImVec2(du, dv), ImVec2(1 - du, 1 - dv));
+  } else {
+    draw_->AddRectFilled(ImVec2(0, 0), ImVec2(width, height), kAtlantico);
+  }
   // The watercolour covers the window's height, anchored to the right edge.
   float image_width = height * background_.width / std::max(1, background_.height);
   Image(draw_, background_, ImVec2(width - image_width, 0), ImVec2(width, height));
