@@ -44,6 +44,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0009 scaled resolves also written to guest memory | 1440p and 4K |
 | 0010 disc image (.iso) as game data | playing from an `.iso` |
 | 0011 present stall recovery (`d3d12_present_stall_recovery`) | FPS staying low after alt-tab or a screenshot popup |
+| 0012 vpkd3d128 with the same source and destination | mouths stuck shut on one side, eyes not blinking |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -192,3 +193,16 @@ swap chain, that one didn't help (most likely a scene too heavy for the GPU) and
 none is created for 60 s.
 It logs present times every 10 s. `d3d12_present_stall_recovery = false`
 turns the recovery off.
+
+## 0012-vpkd3d128-same-register
+
+`vpkd3d128` packs floats into a D3D vertex format. The generated code writes the
+destination register before it has read all of the source: the FLOAT16 cases
+store each half and then read the sign from the source word. When the
+destination is the source (`vpkd3d128 v63,v63,5,2,2`), the first value's sign
+is read from the half just stored, so it always comes out positive. The game
+does exactly that in its "write floats as half floats" routine
+(`sub_825A3950`), which writes 16-bit float data such as vertex streams. It left
+mouths stuck shut on one side and eyes twitching instead of blinking (players
+and crowd), which Xenia doesn't show. Now, with the same register on both sides, the packing reads from
+a copy. Two tests in `tests/ppc/asm/instr_vpkd3d128.s` fail without it.
