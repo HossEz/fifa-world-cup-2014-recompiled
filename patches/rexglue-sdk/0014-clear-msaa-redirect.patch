@@ -1,0 +1,145 @@
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 4aa663c..582c299 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -13,6 +13,7 @@
+ #include <cstdarg>
+ #include <cstring>
+ #include <filesystem>
++#include <optional>
+ #include <rex/filesystem.h>
+ #include <sstream>
+ #include <utility>
+@@ -51,6 +52,12 @@ REXCVAR_DEFINE_BOOL(d3d12_readback_resolve, false, "GPU/D3D12",
+                     "Read render-to-texture results on the CPU")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
++REXCVAR_DEFINE_BOOL(clear_msaa_redirect, true, "GPU",
++                    "Draw the Direct3D 9 clear rectangles that use 2x / 4x MSAA as a fast clear "
++                    "into the single-sample render target (scaled up) instead, avoiding "
++                    "ownership transfers to and from an MSAA render target")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ REXCVAR_DEFINE_BOOL(d3d12_submit_on_primary_buffer_end, true, "GPU/D3D12",
+                     "Submit command list when PM4 primary buffer ends")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+@@ -2319,6 +2326,104 @@ Shader* D3D12CommandProcessor::LoadShader(xenos::ShaderType shader_type, uint32_
+   return pipeline_cache_->LoadShader(shader_type, host_address, dword_count);
+ }
+ 
++namespace {
++// The Xbox 360 Direct3D 9 clears a render target by drawing a rectangle with
++// its clear shaders, with 4x (or 2x) MSAA set on a half-size surface: the same
++// EDRAM samples, a quarter of the pixels. On the host, that's a different
++// render target, so every clear transferred the whole old contents into an
++// MSAA render target (overwritten right away) and the cleared result back for
++// the next single-sample draw. The clear writes one value everywhere, so the
++// same EDRAM range drawn single-sample with the coordinates scaled up holds the
++// same data. This rewrites the registers for that draw and restores them.
++constexpr uint64_t kD3D9ClearVertexShaderHash = 0x1E6883FCCDE1F688;
++constexpr uint64_t kD3D9ClearColorPixelShaderHash = 0xA4A965C189287B99;
++
++class ClearMsaaRedirect {
++ public:
++  ClearMsaaRedirect(RegisterFile& regs, xenos::PrimitiveType primitive_type,
++                    const Shader& vertex_shader, const Shader* pixel_shader)
++      : regs_(regs) {
++    if (!REXCVAR_GET(clear_msaa_redirect) ||
++        primitive_type != xenos::PrimitiveType::kRectangleList ||
++        vertex_shader.ucode_data_hash() != kD3D9ClearVertexShaderHash ||
++        (pixel_shader && pixel_shader->ucode_data_hash() != kD3D9ClearColorPixelShaderHash)) {
++      return;
++    }
++    auto surface_info = regs.Get<reg::RB_SURFACE_INFO>();
++    if (surface_info.msaa_samples == xenos::MsaaSamples::k1X ||
++        !regs.Get<reg::PA_CL_CLIP_CNTL>().clip_disable ||
++        regs[XE_GPU_REG_PA_SC_WINDOW_OFFSET] != 0) {
++      return;
++    }
++    uint32_t scale_x = surface_info.msaa_samples >= xenos::MsaaSamples::k4X ? 2 : 1;
++    uint32_t scale_y = 2;
++    if (surface_info.surface_pitch * scale_x > xenos::kTexture2DCubeMaxWidthHeight) {
++      return;
++    }
++    for (uint32_t i = 0; i < kSavedCount; ++i) {
++      saved_[i] = regs[kSaved[i]];
++    }
++    active_ = true;
++
++    surface_info.surface_pitch *= scale_x;
++    surface_info.msaa_samples = xenos::MsaaSamples::k1X;
++    regs[XE_GPU_REG_RB_SURFACE_INFO] = surface_info.value;
++
++    // Pixel = NDC * scale + offset (+ 0.5 with the Direct3D half-pixel offset,
++    // which isn't scaled, so the offset makes up for it).
++    auto vte = regs.Get<reg::PA_CL_VTE_CNTL>();
++    bool half_pixel = REXCVAR_GET(half_pixel_offset) &&
++                      regs.Get<reg::PA_SU_VTX_CNTL>().pix_center == xenos::PixelCenter::kD3DZero;
++    auto scale_axis = [&](uint32_t scale_reg, uint32_t offset_reg, bool scale_enabled,
++                          bool offset_enabled, uint32_t factor) {
++      float scale = scale_enabled ? regs.Get<float>(scale_reg) : 1.0f;
++      float offset = offset_enabled ? regs.Get<float>(offset_reg) : 0.0f;
++      offset = offset * float(factor) + (half_pixel ? 0.5f * float(factor - 1) : 0.0f);
++      regs[scale_reg] = rex::memory::Reinterpret<uint32_t>(scale * float(factor));
++      regs[offset_reg] = rex::memory::Reinterpret<uint32_t>(offset);
++    };
++    scale_axis(XE_GPU_REG_PA_CL_VPORT_XSCALE, XE_GPU_REG_PA_CL_VPORT_XOFFSET,
++               vte.vport_x_scale_ena, vte.vport_x_offset_ena, scale_x);
++    scale_axis(XE_GPU_REG_PA_CL_VPORT_YSCALE, XE_GPU_REG_PA_CL_VPORT_YOFFSET,
++               vte.vport_y_scale_ena, vte.vport_y_offset_ena, scale_y);
++    vte.vport_x_scale_ena = 1;
++    vte.vport_x_offset_ena = 1;
++    vte.vport_y_scale_ena = 1;
++    vte.vport_y_offset_ena = 1;
++    regs[XE_GPU_REG_PA_CL_VTE_CNTL] = vte.value;
++
++    auto scissor_tl = regs.Get<reg::PA_SC_WINDOW_SCISSOR_TL>();
++    auto scissor_br = regs.Get<reg::PA_SC_WINDOW_SCISSOR_BR>();
++    constexpr uint32_t kMax = xenos::kTexture2DCubeMaxWidthHeight;
++    scissor_tl.tl_x = std::min(uint32_t(scissor_tl.tl_x) * scale_x, kMax);
++    scissor_tl.tl_y = std::min(uint32_t(scissor_tl.tl_y) * scale_y, kMax);
++    scissor_br.br_x = std::min(uint32_t(scissor_br.br_x) * scale_x, kMax);
++    scissor_br.br_y = std::min(uint32_t(scissor_br.br_y) * scale_y, kMax);
++    regs[XE_GPU_REG_PA_SC_WINDOW_SCISSOR_TL] = scissor_tl.value;
++    regs[XE_GPU_REG_PA_SC_WINDOW_SCISSOR_BR] = scissor_br.value;
++  }
++  ~ClearMsaaRedirect() {
++    if (active_) {
++      for (uint32_t i = 0; i < kSavedCount; ++i) {
++        regs_[kSaved[i]] = saved_[i];
++      }
++    }
++  }
++
++ private:
++  static constexpr uint32_t kSaved[] = {
++      XE_GPU_REG_RB_SURFACE_INFO,         XE_GPU_REG_PA_CL_VTE_CNTL,
++      XE_GPU_REG_PA_CL_VPORT_XSCALE,      XE_GPU_REG_PA_CL_VPORT_XOFFSET,
++      XE_GPU_REG_PA_CL_VPORT_YSCALE,      XE_GPU_REG_PA_CL_VPORT_YOFFSET,
++      XE_GPU_REG_PA_SC_WINDOW_SCISSOR_TL, XE_GPU_REG_PA_SC_WINDOW_SCISSOR_BR,
++  };
++  static constexpr uint32_t kSavedCount = uint32_t(sizeof(kSaved) / sizeof(kSaved[0]));
++  RegisterFile& regs_;
++  uint32_t saved_[kSavedCount];
++  bool active_ = false;
++};
++}  // namespace
++
+ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint32_t index_count,
+                                       IndexBufferInfo* index_buffer_info,
+                                       bool major_mode_explicit) {
+@@ -2378,6 +2483,14 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint3
+   bool memexport_used_pixel = pixel_shader && (pixel_shader->memexport_eM_written() != 0);
+   bool memexport_used = memexport_used_vertex || memexport_used_pixel;
+ 
++  // Only for host render targets: with pixel shader interlock, there are no
++  // transfers to avoid.
++  std::optional<ClearMsaaRedirect> clear_msaa_redirect;
++  if (is_rasterization_done && !memexport_used &&
++      render_target_cache_->GetPath() == RenderTargetCache::Path::kHostRenderTargets) {
++    clear_msaa_redirect.emplace(*register_file_, primitive_type, *vertex_shader, pixel_shader);
++  }
++
+   if (!BeginSubmission(true)) {
+     return false;
+   }

@@ -277,9 +277,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     display.options.push_back(OnOff(
         "Variable refresh", "d3d12_allow_variable_refresh_rate_and_tearing", "true",
-        "Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens "
-        "and keeps the game at full speed. Leave it on. With it off, the frame rate can drop "
-        "to 30-45."));
+        "Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens. "
+        "Off waits for the screen's refresh: no tearing on screens without variable refresh."));
     Option rate;
     rate.label = "Frame rate";
     rate.help = "The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "

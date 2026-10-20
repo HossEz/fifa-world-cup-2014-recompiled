@@ -1,0 +1,90 @@
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index b999491..77f0d75 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -251,6 +251,10 @@ class D3D12Presenter final : public Presenter {
+     uint32_t swap_chain_width = 0;
+     uint32_t swap_chain_height = 0;
+     bool swap_chain_allows_tearing = false;
++    // With DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT: signaled when a
++    // new frame can be presented without Present blocking (see
++    // PaintAndPresentImpl), or null.
++    HANDLE swap_chain_waitable = nullptr;
+     // Set by painting when presents keep waiting for the display: the next
+     // reconnection creates a new swap chain instead of resizing this one.
+     bool swap_chain_recreate_requested = false;
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index 2cad282..d731c3f 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -31,6 +31,11 @@
+ #include <ffx_api/ffx_upscale.h>
+ #endif
+ 
++REXCVAR_DEFINE_BOOL(d3d12_present_waitable, true, "UI/D3D12",
++                    "Wait for the swap chain to accept a frame before painting, so Present "
++                    "doesn't block the command queue the emulation also submits to")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
+ REXCVAR_DEFINE_BOOL(d3d12_allow_variable_refresh_rate_and_tearing, true, "UI/D3D12",
+                     "Allow variable refresh rate and tearing");
+ REXCVAR_DEFINE_BOOL(d3d12_present_stall_recovery, true, "UI/D3D12",
+@@ -374,7 +379,9 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+     }
+     bool swap_chain_resized = SUCCEEDED(paint_context_.swap_chain->ResizeBuffers(
+         0, UINT(new_swap_chain_width), UINT(new_swap_chain_height), DXGI_FORMAT_UNKNOWN,
+-        paint_context_.swap_chain_allows_tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0));
++        (paint_context_.swap_chain_allows_tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0) |
++            (paint_context_.swap_chain_waitable ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT
++                                                : 0)));
+     if (swap_chain_resized) {
+       for (uint32_t i = 0; i < PaintContext::kSwapChainBufferCount; ++i) {
+         if (FAILED(paint_context_.swap_chain->GetBuffer(
+@@ -424,6 +431,14 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+       // rate.
+       swap_chain_desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+     }
++    // Without tearing, Present with a full frame queue waits for the display,
++    // and while it does, the emulation's ExecuteCommandLists on the same queue
++    // wait too (measured: 5-13 ms per guest frame, the GPU idle meanwhile, at
++    // every resolution). Waiting on the frame latency object instead happens
++    // outside the queue.
++    if (REXCVAR_GET(d3d12_present_waitable)) {
++      swap_chain_desc.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
++    }
+     IDXGIFactory2* dxgi_factory = provider_.GetDXGIFactory();
+     ID3D12CommandQueue* direct_queue = provider_.GetDirectQueue();
+     Microsoft::WRL::ComPtr<IDXGISwapChain1> swap_chain_1;
+@@ -461,6 +476,11 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
+     paint_context_.swap_chain_height = new_swap_chain_height;
+     paint_context_.swap_chain_allows_tearing =
+         (swap_chain_desc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0;
++    if (swap_chain_desc.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) {
++      paint_context_.swap_chain->SetMaximumFrameLatency(2);
++      paint_context_.swap_chain_waitable =
++          paint_context_.swap_chain->GetFrameLatencyWaitableObject();
++    }
+     for (uint32_t i = 0; i < PaintContext::kSwapChainBufferCount; ++i) {
+       if (FAILED(paint_context_.swap_chain->GetBuffer(
+               i, IID_PPV_ARGS(&paint_context_.swap_chain_buffers[i])))) {
+@@ -560,12 +580,20 @@ void D3D12Presenter::PaintContext::DestroySwapChain() {
+     swap_chain_buffer_ref.Reset();
+   }
+   swap_chain.Reset();
++  if (swap_chain_waitable) {
++    CloseHandle(swap_chain_waitable);
++    swap_chain_waitable = nullptr;
++  }
+   swap_chain_allows_tearing = false;
+   swap_chain_height = 0;
+   swap_chain_width = 0;
+ }
+ 
+ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawers) {
++  if (paint_context_.swap_chain_waitable) {
++    // A timeout only means Present may block this once.
++    WaitForSingleObjectEx(paint_context_.swap_chain_waitable, 100, TRUE);
++  }
+   // Begin the command list with the command allocator not currently potentially
+   // used on the GPU.
+   UINT64 current_paint_submission = paint_context_.paint_submission_tracker.GetCurrentSubmission();

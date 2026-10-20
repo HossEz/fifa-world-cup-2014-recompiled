@@ -45,6 +45,9 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0010 disc image (.iso) as game data | playing from an `.iso` |
 | 0011 present stall recovery (`d3d12_present_stall_recovery`) | FPS staying low after alt-tab or a screenshot popup |
 | 0012 vpkd3d128 with the same source and destination | mouths stuck shut on one side, eyes not blinking |
+| 0013 waitable swap chain (`d3d12_present_waitable`) | cutscene and pre-match frame drops at every resolution |
+| 0014 MSAA clears drawn single-sample (`clear_msaa_redirect`) | fewer render target copies (1440p, 4K) |
+| 0015 FSR 1 / CAS without the FidelityFX SDK | `present_effect = "fsr"` / `"cas"` |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -206,3 +209,42 @@ does exactly that in its "write floats as half floats" routine
 mouths stuck shut on one side and eyes twitching instead of blinking (players
 and crowd), which Xenia doesn't show. Now, with the same register on both sides, the packing reads from
 a copy. Two tests in `tests/ppc/asm/instr_vpkd3d128.s` fail without it.
+
+## 0013-present-waitable
+
+The presenter presents at the host refresh rate with `Present(0)`. Without
+`DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING` (variable refresh off, or not supported),
+a Present with the frame queue full waits for the display, about 5 ms each at
+144 Hz, and while it waits, the emulation's `ExecuteCommandLists` on the same
+direct queue waits as well. Measured at 720p in the pre-match scenes: 5-13 ms
+per guest frame in `ExecuteCommandLists`, the GPU idle 12-14 ms of a ~30 ms
+frame, 28-36 FPS; at 4K 15-27 ms. The swap chain is now created with
+`DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` (maximum frame latency 2),
+and `PaintAndPresentImpl` waits on that object before painting, outside the
+queue, so Present doesn't block. Same scenes with variable refresh off: 0.1-1
+ms in `ExecuteCommandLists`, lowest second 52 FPS. `d3d12_present_waitable =
+false` turns it off.
+
+## 0014-clear-msaa-redirect
+
+Direct3D 9 on the Xbox 360 clears a render target by drawing a rectangle with
+its clear shaders, with 4x (or 2x) MSAA set on a half-size surface, which
+covers the same EDRAM with a quarter of the pixels. On the host that is a
+different render target, so each clear transferred the old contents into an
+MSAA render target (overwritten at once) and the cleared result back for the
+next single-sample draw: in this game 60-75% of all transferred data. Such a
+draw (the clear vertex shader, the clear color pixel shader or none, a
+rectangle list without clipping or window offset) is now drawn single-sample:
+`ClearMsaaRedirect` doubles the surface pitch (4x), sets 1x MSAA and scales the
+viewport and scissor for that draw, then restores the registers. A clear writes
+one value everywhere, so the EDRAM ends up the same. At 4K: transfers per frame
+23-37 -> 13, 4-6.5 -> 2-2.7 ms. `clear_msaa_redirect = false` turns it off.
+
+## 0015-fsr-without-fidelityfx-sdk
+
+The presenters' FSR 1 (EASU / RCAS) and CAS use shaders that are already built
+into the tree, but `REX_HAS_FIDELITYFX_SDK`, which is only defined with the
+FidelityFX SDK, turned them off along with FSR 2 / 3. The define is now always
+set, publicly on `rexui` and `rexruntime`, as it changes the presenter classes'
+layout for everything that includes them (rebuild the game after this one).
+FSR 2 / 3 still need the SDK runtime (`REX_HAS_FIDELITYFX_RUNTIME`).

@@ -1,0 +1,36 @@
+diff --git a/src/system/CMakeLists.txt b/src/system/CMakeLists.txt
+index 05979a3..bfb46aa 100644
+--- a/src/system/CMakeLists.txt
++++ b/src/system/CMakeLists.txt
+@@ -114,6 +114,10 @@ if(WIN32)
+     target_compile_definitions(rexruntime PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+ endif()
+ 
++# FSR 1 / CAS in the presenters (see src/ui/CMakeLists.txt): public, as it
++# changes the presenter classes' layout for everything including them.
++target_compile_definitions(rexruntime PUBLIC REX_HAS_FIDELITYFX_SDK=1)
++
+ if(REXGLUE_USE_D3D12)
+     target_link_libraries(rexruntime PUBLIC dxc-headers)
+     target_compile_definitions(rexruntime PUBLIC REX_HAS_D3D12=1)
+diff --git a/src/ui/CMakeLists.txt b/src/ui/CMakeLists.txt
+index 5bd3dc5..f23562b 100644
+--- a/src/ui/CMakeLists.txt
++++ b/src/ui/CMakeLists.txt
+@@ -116,12 +116,15 @@ target_link_libraries(rexui PUBLIC
+ )
+ target_link_libraries(rexui PRIVATE utf8cpp)
+ 
++# FSR 1 (EASU / RCAS) and CAS in the presenters only need the shaders built
++# into the tree, not the FidelityFX SDK, so they're always available. Public, as
++# the define changes the layout of the presenter classes.
++target_compile_definitions(rexui PUBLIC REX_HAS_FIDELITYFX_SDK=1)
+ if(REXGLUE_FIDELITYFX_SOURCE_DIR AND EXISTS "${REXGLUE_FIDELITYFX_SOURCE_DIR}/sdk/include")
+     target_include_directories(rexui PRIVATE
+         "${REXGLUE_FIDELITYFX_SOURCE_DIR}/sdk/include"
+         "${REXGLUE_FIDELITYFX_SOURCE_DIR}/ffx-api/include"
+     )
+-    target_compile_definitions(rexui PRIVATE REX_HAS_FIDELITYFX_SDK=1)
+ endif()
+ 
+ set(REXUI_HAS_FIDELITYFX_RUNTIME OFF)
