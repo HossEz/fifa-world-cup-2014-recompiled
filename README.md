@@ -10,8 +10,8 @@
   **You need your own copy of the game.** No game files are included in this repository or its releases.
 
   </div>
-
-  <img width="1100" height="700" alt="Launcher_MKPVs8uOWV" src="https://github.com/user-attachments/assets/3af53c69-0882-41d6-8bff-ccf03006d638" />
+  
+  <img width="1142" height="727" alt="Launcher_Xh9JRHRipp" src="https://github.com/user-attachments/assets/ea45720f-cf50-472e-a0f8-e556ca29a282" />
   <sub>Launcher preview · 2014 FIFA World Cup Brazil: Recompiled</sub>
 
   ## Playing
