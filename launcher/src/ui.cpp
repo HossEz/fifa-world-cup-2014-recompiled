@@ -369,6 +369,10 @@ void Ui::SettingsCommand(Command command) {
         armed_option_ = -1;
         Sound(Audio::Effect::kSelect);
         if (option.run) option.run();
+        if (option.outcome) {
+          auto [text, ok] = option.outcome();
+          if (!text.empty()) ShowMessage(text, ok);
+        }
       }
       break;
     case Command::kBack:
@@ -433,8 +437,9 @@ void Ui::Frame(float width, float height, float dt) {
   if (quit_asked_) QuitPopup(width, height);
 }
 
-void Ui::ShowMessage(std::string text) {
+void Ui::ShowMessage(std::string text, bool ok) {
   message_ = std::move(text);
+  message_ok_ = ok;
   message_left_ = 8.0f;
 }
 
@@ -450,7 +455,7 @@ void Ui::DrawMessage(float width, float height) {
   draw_->AddRectFilled(ImVec2(x - pad, y - pad * 0.6f), ImVec2(x + text.x + pad, y + text.y + pad * 0.6f),
                        WithAlpha(IM_COL32(8, 20, 50, 230), alpha), 8 * s);
   draw_->AddRectFilled(ImVec2(x - pad, y - pad * 0.6f), ImVec2(x - pad + 4 * s, y + text.y + pad * 0.6f),
-                       WithAlpha(kAlarm, alpha), 2 * s);
+                       WithAlpha(message_ok_ ? IM_COL32(93, 184, 47, 255) : kAlarm, alpha), 2 * s);
   draw_->AddText(condensed_, size, ImVec2(x, y), WithAlpha(kCream, alpha), message_.c_str(),
                  nullptr, wrap);
 }

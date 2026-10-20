@@ -29,6 +29,8 @@
 #include <string>
 
 #include <imgui.h>
+#include <intrin.h>
+
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 
@@ -138,6 +140,35 @@ std::string StartGame(const fs::path& game_folder) {
   g_game_process = process.hProcess;
   ShowWindow(g_window, SW_HIDE);
   return {};
+}
+
+// The game is built for processors with AVX2 (-march=x86-64-v3, pc/CMakeLists.txt):
+// without it, it stops at its first AVX2 instruction.
+bool ProcessorHasAvx2() {
+  int info[4];
+  __cpuid(info, 0);
+  if (info[0] < 7) return false;
+  __cpuid(info, 1);
+  bool osxsave = (info[2] >> 27) & 1, avx = (info[2] >> 28) & 1;
+  if (!osxsave || !avx || (_xgetbv(0) & 6) != 6) return false;  // the OS saves YMM state
+  __cpuidex(info, 7, 0);
+  return (info[1] >> 5) & 1;
+}
+
+// What to tell the player when the game ended with `code` (0 is a normal
+// quit): why, if it's known, or the code and where its log is.
+std::string GameExitMessage(DWORD code) {
+  if (code == 0) return {};
+  if (code == 0xC000001D && !ProcessorHasAvx2()) {
+    return "The game stopped: your processor doesn't support AVX2, which the game needs "
+           "(Intel from 2013 on, AMD Ryzen).";
+  }
+  char text[256];
+  std::snprintf(text, sizeof(text),
+                "The game closed unexpectedly (error 0x%08lX). Please report it with "
+                "fifawc14.log (Settings, Data, Logs opens its folder).",
+                static_cast<unsigned long>(code));
+  return text;
 }
 
 void ToggleFullscreen();
@@ -808,6 +839,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       ui->SetUpdateJob(update_job.get());
     }
     g_ui = ui.get();
+    if (!ProcessorHasAvx2()) {
+      launcher::Log("processor without AVX2");
+      ui->ShowMessage("Your processor doesn't support AVX2, which the game needs (Intel from "
+                      "2013 on, AMD Ryzen). The game won't start on this computer.");
+    }
     // The game's condensed font, for the game's frame-rate display (pc/src/fps_counter.cpp).
     fs::path font = data_folder / "futurastd-condensed.ttf";
     if (!fs::exists(font, ec)) {
@@ -884,11 +920,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // While the game runs the launcher stays hidden, and comes back when it exits.
     if (g_game_process) {
       if (WaitForSingleObject(g_game_process, 100) == WAIT_OBJECT_0) {
+        DWORD exit_code = 0;
+        GetExitCodeProcess(g_game_process, &exit_code);
         CloseHandle(g_game_process);
         g_game_process = nullptr;
         ShowWindow(g_window, SW_SHOW);
         SetForegroundWindow(g_window);
         ui->ApplySoundSettings();
+        // A crash looks like the menu coming back by itself: say what happened.
+        launcher::Log("game exited with code 0x%08lX", static_cast<unsigned long>(exit_code));
+        if (std::string message = GameExitMessage(exit_code); !message.empty()) {
+          ui->ShowMessage(message);
+        }
       }
       continue;
     }

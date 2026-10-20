@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace launcher {
@@ -50,6 +51,9 @@ struct Option {
   bool confirm = false;                // needs a second press
   std::function<std::string()> info;   // shown before the button (e.g. a size)
   std::function<void()> run;
+  // After run: a message for the player (bottom left) and whether it went well
+  // (green) or not (red). None if empty.
+  std::function<std::pair<std::string, bool>()> outcome;
 
   // Kept in the launcher's own launcher.toml (not a game setting).
   bool local = false;

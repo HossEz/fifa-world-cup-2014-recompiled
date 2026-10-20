@@ -408,6 +408,11 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     shortcut.action = "Create";
     shortcut.info = [] { return HasDesktopShortcut() ? std::string("On desktop") : std::string(); };
     shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
+    shortcut.outcome = [] {
+      return HasDesktopShortcut()
+                 ? std::make_pair(std::string("The shortcut is on your desktop."), true)
+                 : std::make_pair(std::string("The shortcut couldn't be created."), false);
+    };
     shortcut.help = "A shortcut to this launcher on your desktop, with the game's icon. Useful for "
                     "the portable version, or if you deleted the one the installer made.";
     data.options.push_back(shortcut);
