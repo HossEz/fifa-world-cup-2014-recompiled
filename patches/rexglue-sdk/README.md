@@ -48,6 +48,9 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0013 waitable swap chain (`d3d12_present_waitable`) | cutscene and pre-match frame drops at every resolution |
 | 0014 MSAA clears drawn single-sample (`clear_msaa_redirect`) | fewer render target copies (1440p, 4K) |
 | 0015 FSR 1 / CAS without the FidelityFX SDK | `present_effect = "fsr"` / `"cas"` |
+| 0016 scaled resolves downscaled only when read (`defer_resolve_downscale`) | less GPU work at 1440p and 4K |
+| 0017 new swap chain when the window is in front again | low frame rate for a while after alt-tab |
+| 0018 the buttons the game last read (`InputSystem::GetLastGuestButtons`) | the game's quit shortcut |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -248,3 +251,36 @@ FidelityFX SDK, turned them off along with FSR 2 / 3. The define is now always
 set, publicly on `rexui` and `rexruntime`, as it changes the presenter classes'
 layout for everything that includes them (rebuild the game after this one).
 FSR 2 / 3 still need the SDK runtime (`REX_HAS_FIDELITYFX_RUNTIME`).
+
+## 0016-defer-resolve-downscale
+
+Patch 0009 downscaled every scaled resolve into shared memory right away, but
+most are only ever sampled as scaled textures. Now they're queued
+(`pending_downscales_`) and done when something reads the range from shared
+memory: `SharedMemory::RequestRanges` calls a new `BeforeGpuRead` callback for
+each range (index buffers, unscaled texture loads, GPU memory copies,
+readbacks), textures loaded from the scaled resolve buffer suppress it, and a
+draw's vertex buffers are checked before any of its state is bound (they're
+requested after the bindings, where nothing may change the descriptor heap).
+A newer resolve covering an older one's range replaces it; a CPU write to the
+range drops it (the CPU's data replaces the resolve's there). At 4K about 1 ms
+less GPU time per frame in play, with no visual change.
+`defer_resolve_downscale = false` downscales right away again.
+
+## 0017-present-recovery-on-refocus
+
+0011's recovery also counted presents while the window was in the background,
+where Windows throttles them and a new swap chain can't help; the failed
+attempts then set its 60-second back-off, and coming back during it the frame
+rate stayed low until it ran out (measured: ~30 s at 17-37 FPS after an
+alt-tab at 4K). Presents with the window not in the foreground are no longer
+counted, and when it's in front again a new swap chain is created right away,
+as minimizing and restoring did.
+
+## 0018-last-guest-buttons
+
+`InputSystem::GetState` keeps the buttons of each user's last state (what the
+game last read) in an atomic, and `GetLastGuestButtons` reads them from any
+thread. The game's quit shortcut (`pc/src/quit_shortcut.cpp`: hold Back +
+Start) uses it from the overlay; `GetStateForUI` isn't safe to call there, as
+it isn't synchronised with the game's own polling.

@@ -1,0 +1,40 @@
+diff --git a/include/rex/input/input_system.h b/include/rex/input/input_system.h
+index 0c27eed..f0b5de5 100644
+--- a/include/rex/input/input_system.h
++++ b/include/rex/input/input_system.h
+@@ -63,6 +63,11 @@ class InputSystem : public system::IInputSystem {
+   void ToggleVibration();
+ 
+   std::bitset<kMaxGuestUsers> GetConnectedUsers() const { return connected_users_; }
++  /// The buttons of the user's last GetState (what the game last read), for
++  /// the app's own shortcuts. Readable from any thread.
++  uint16_t GetLastGuestButtons(uint32_t user_index) const {
++    return user_index < kMaxGuestUsers ? last_guest_buttons_[user_index].load() : 0;
++  }
+   /// Guest user whose device most recently produced a button press.
+   uint32_t GetLastUsedUser() const { return last_used_user_; }
+ 
+@@ -101,6 +106,7 @@ class InputSystem : public system::IInputSystem {
+   std::atomic<int> ui_input_blockers_{0};
+   // Masked out per user until the guest sees them released.
+   std::array<uint16_t, kMaxGuestUsers> consumed_buttons_ = {};
++  std::array<std::atomic<uint16_t>, kMaxGuestUsers> last_guest_buttons_ = {};
+ };
+ 
+ /// Create a default InputSystem with SDL + MnK + NOP drivers.
+diff --git a/src/input/input_system.cpp b/src/input/input_system.cpp
+index 40740ee..e3d42a7 100644
+--- a/src/input/input_system.cpp
++++ b/src/input/input_system.cpp
+@@ -282,6 +282,11 @@ X_RESULT InputSystem::GetState(uint32_t user_index, X_INPUT_STATE* out_state) {
+ 
+   X_RESULT result = GetStateForUI(user_index, out_state);
+ 
++  if (user_index < kMaxGuestUsers) {
++    last_guest_buttons_[user_index] =
++        (result == X_ERROR_SUCCESS && out_state) ? uint16_t(out_state->gamepad.buttons) : 0;
++  }
++
+   if (result == X_ERROR_SUCCESS && out_state && user_index < kMaxGuestUsers &&
+       consumed_buttons_[user_index] != 0) {
+     const uint16_t buttons = out_state->gamepad.buttons;

@@ -1,0 +1,312 @@
+diff --git a/include/rex/graphics/d3d12/command_processor.h b/include/rex/graphics/d3d12/command_processor.h
+index 22fd286..c3e05cd 100644
+--- a/include/rex/graphics/d3d12/command_processor.h
++++ b/include/rex/graphics/d3d12/command_processor.h
+@@ -20,6 +20,7 @@
+ #include <string>
+ #include <unordered_map>
+ #include <utility>
++#include <mutex>
+ #include <vector>
+ 
+ #include <rex/assert.h>
+@@ -371,8 +372,23 @@ class D3D12CommandProcessor : public CommandProcessor {
+   // result at the guest's resolution: CPU readbacks and GPU-side copies of
+   // resolved data (the game's untile / memcpy hooks). This writes the resolve's
+   // downscaled result (resolve_downscale shader, the one the readback path
+-  // uses) into shared memory as well. Call right after the resolve.
+-  void DownscaleResolveToSharedMemory(uint32_t written_address, uint32_t written_length);
++  // uses) into shared memory as well. Most resolves are only ever sampled as
++  // scaled textures, so this is deferred (pending_downscales_) until something
++  // reads the range from shared memory (SharedMemory::BeforeGpuRead, and the
++  // vertex buffers before a draw binds its state).
++  void DownscaleResolveToSharedMemory(uint32_t written_address, uint32_t written_length,
++                                      uint32_t pixel_size_log2);
++  struct PendingDownscale {
++    uint32_t address;
++    uint32_t length;
++    uint32_t pixel_size_log2;
++  };
++  // Guarded by pending_downscales_mutex_: CPU writes drop entries from other
++  // threads (GpuNewerGlobalWatchCallback).
++  std::vector<PendingDownscale> pending_downscales_;
++  std::mutex pending_downscales_mutex_;
++  static void BeforeGpuReadCallback(void* context, uint32_t start, uint32_t length);
++  void FlushPendingDownscales(uint32_t start, uint32_t length);
+ 
+   // GPU-side guest memory copies (see CommandProcessor::QueueGpuMemoryCopy).
+   bool SupportsGpuMemoryCopy() const override { return true; }
+diff --git a/include/rex/graphics/pipeline/texture/cache.h b/include/rex/graphics/pipeline/texture/cache.h
+index 622cb35..99524b9 100644
+--- a/include/rex/graphics/pipeline/texture/cache.h
++++ b/include/rex/graphics/pipeline/texture/cache.h
+@@ -556,6 +556,8 @@ class TextureCache {
+   struct PendingSharedMemoryRange {
+     uint32_t start = 0;
+     uint32_t length = 0;
++    // Loaded from the scaled resolve buffer, not from shared memory.
++    bool scaled_resolve = false;
+   };
+   bool PrepareTextureLoad(Texture& texture, PendingTextureLoad& pending_load_out,
+                           PendingSharedMemoryRange* pending_ranges_out,
+diff --git a/include/rex/graphics/shared_memory.h b/include/rex/graphics/shared_memory.h
+index 6504a44..d5de2d5 100644
+--- a/include/rex/graphics/shared_memory.h
++++ b/include/rex/graphics/shared_memory.h
+@@ -79,6 +79,22 @@ class SharedMemory {
+   bool RequestRanges(const std::pair<uint32_t, uint32_t>* ranges, size_t count);
+   bool RequestRange(uint32_t start, uint32_t length);
+ 
++  // Called by RequestRanges for each range before the GPU reads it, so writes
++  // into GPU memory that were deferred (scaled resolves downscaled into guest
++  // memory) can be done first. Callers reading a range without needing that
++  // (textures loaded from the scaled resolve buffer) suppress it.
++  typedef void (*BeforeGpuReadCallback)(void* context, uint32_t start, uint32_t length);
++  void SetBeforeGpuReadCallback(BeforeGpuReadCallback callback, void* context) {
++    before_gpu_read_callback_ = callback;
++    before_gpu_read_context_ = context;
++  }
++  void BeforeGpuRead(uint32_t start, uint32_t length) {
++    if (before_gpu_read_callback_) {
++      before_gpu_read_callback_(before_gpu_read_context_, start, length);
++    }
++  }
++  void SetBeforeGpuReadSuppressed(bool suppressed) { before_gpu_read_suppressed_ = suppressed; }
++
+   // Marks the range and, if not exact_range, potentially its surroundings
+   // (to up to the first GPU-written page, as an access violation exception
+   // count optimization) as modified by the CPU, also invalidating GPU-written
+@@ -148,6 +164,9 @@ class SharedMemory {
+       const std::vector<std::pair<uint32_t, uint32_t>>& upload_page_ranges) = 0;
+ 
+  private:
++  BeforeGpuReadCallback before_gpu_read_callback_ = nullptr;
++  void* before_gpu_read_context_ = nullptr;
++  bool before_gpu_read_suppressed_ = false;
+   memory::Memory& memory_;
+ 
+   // Log2 of invalidation granularity (the system page size, but the dependency
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 582c299..8d6c816 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -52,6 +52,11 @@ REXCVAR_DEFINE_BOOL(d3d12_readback_resolve, false, "GPU/D3D12",
+                     "Read render-to-texture results on the CPU")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+ 
++REXCVAR_DEFINE_BOOL(defer_resolve_downscale, true, "GPU",
++                    "With a resolution scale, write a resolve's downscaled result to guest memory "
++                    "only when something reads that memory, not after every resolve")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ REXCVAR_DEFINE_BOOL(clear_msaa_redirect, true, "GPU",
+                     "Draw the Direct3D 9 clear rectangles that use 2x / 4x MSAA as a fast clear "
+                     "into the single-sample render target (scaled up) instead, avoiding "
+@@ -947,6 +952,7 @@ bool D3D12CommandProcessor::SetupContext() {
+   }
+   // CPU writes make guest memory authoritative again for those pages.
+   gpu_newer_watch_ = shared_memory_->RegisterGlobalWatch(GpuNewerGlobalWatchCallback, this);
++  shared_memory_->SetBeforeGpuReadCallback(BeforeGpuReadCallback, this);
+ 
+   // Initialize the render target cache before configuring binding - need to
+   // know if using rasterizer-ordered views for the bindless root signature.
+@@ -2491,6 +2497,28 @@ bool D3D12CommandProcessor::IssueDraw(xenos::PrimitiveType primitive_type, uint3
+     clear_msaa_redirect.emplace(*register_file_, primitive_type, *vertex_shader, pixel_shader);
+   }
+ 
++  // Deferred downscales into what this draw reads from shared memory, done
++  // before any of its state is bound (vertex buffers are requested after the
++  // bindings, where nothing may change the descriptor heap anymore).
++  if (memexport_used) {
++    FlushPendingDownscales(0, UINT32_MAX);
++  } else {
++    const Shader::ConstantRegisterMap& constant_map_vertex =
++        vertex_shader->constant_register_map();
++    for (uint32_t i = 0; i < rex::countof(constant_map_vertex.vertex_fetch_bitmap); ++i) {
++      uint32_t vfetch_bits_remaining = constant_map_vertex.vertex_fetch_bitmap[i];
++      uint32_t j;
++      while (rex::bit_scan_forward(vfetch_bits_remaining, &j)) {
++        vfetch_bits_remaining &= ~(uint32_t(1) << j);
++        xenos::xe_gpu_vertex_fetch_t vfetch_constant = regs.GetVertexFetch(i * 32 + j);
++        if (vfetch_constant.type == xenos::FetchConstantType::kVertex ||
++            vfetch_constant.type == xenos::FetchConstantType::kInvalidVertex) {
++          FlushPendingDownscales(vfetch_constant.address << 2, vfetch_constant.size << 2);
++        }
++      }
++    }
++  }
++
+   if (!BeginSubmission(true)) {
+     return false;
+   }
+@@ -3157,7 +3185,24 @@ bool D3D12CommandProcessor::IssueCopy() {
+     bool result = render_target_cache_->Resolve(*memory_, *shared_memory_, *texture_cache_,
+                                                 written_address, written_length);
+     if (result && written_length && texture_cache_->IsDrawResolutionScaled()) {
+-      DownscaleResolveToSharedMemory(written_address, written_length);
++      const FormatInfo* format_info = FormatInfo::Get(
++          uint32_t(register_file_->Get<reg::RB_COPY_DEST_INFO>().copy_dest_format));
++      uint32_t pixel_size_log2;
++      if (rex::bit_scan_forward(format_info->bits_per_pixel >> 3, &pixel_size_log2) &&
++          pixel_size_log2 <= 3) {
++        if (REXCVAR_GET(defer_resolve_downscale)) {
++          std::lock_guard<std::mutex> lock(pending_downscales_mutex_);
++          // A newer resolve covering an older one's range replaces it.
++          std::erase_if(pending_downscales_, [&](const PendingDownscale& pending) {
++            return pending.address >= written_address &&
++                   uint64_t(pending.address) + pending.length <=
++                       uint64_t(written_address) + written_length;
++          });
++          pending_downscales_.push_back({written_address, written_length, pixel_size_log2});
++        } else {
++          DownscaleResolveToSharedMemory(written_address, written_length, pixel_size_log2);
++        }
++      }
+     }
+     ProbeResolve(written_address, written_length, false);
+     if (g_capture_frame && written_length) {
+@@ -3186,15 +3231,10 @@ bool D3D12CommandProcessor::IssueCopy() {
+ }
+ 
+ void D3D12CommandProcessor::DownscaleResolveToSharedMemory(uint32_t written_address,
+-                                                           uint32_t written_length) {
+-  if (!resolve_downscale_pipeline_ || !resolve_downscale_root_signature_) {
+-    return;
+-  }
+-  const FormatInfo* format_info = FormatInfo::Get(
+-      uint32_t(register_file_->Get<reg::RB_COPY_DEST_INFO>().copy_dest_format));
+-  uint32_t pixel_size_log2;
+-  if (!rex::bit_scan_forward(format_info->bits_per_pixel >> 3, &pixel_size_log2) ||
+-      pixel_size_log2 > 3) {
++                                                           uint32_t written_length,
++                                                           uint32_t pixel_size_log2) {
++  if (!resolve_downscale_pipeline_ || !resolve_downscale_root_signature_ ||
++      !texture_cache_->MakeScaledResolveRangeCurrent(written_address, written_length)) {
+     return;
+   }
+   uint32_t tile_count = written_length / (32 * 32 * (uint32_t(1) << pixel_size_log2));
+@@ -3283,8 +3323,54 @@ void D3D12CommandProcessor::GpuNewerGlobalWatchCallback(
+   if (invalidated_by_gpu) {
+     return;
+   }
+-  static_cast<D3D12CommandProcessor*>(context)->MarkGpuMemoryNewer(
+-      address_first, address_last - address_first + 1, false);
++  auto& processor = *static_cast<D3D12CommandProcessor*>(context);
++  processor.MarkGpuMemoryNewer(address_first, address_last - address_first + 1, false);
++  // The CPU has written there: its data replaces the resolve's in those pages,
++  // so a deferred downscale must not overwrite it.
++  std::lock_guard<std::mutex> lock(processor.pending_downscales_mutex_);
++  std::erase_if(processor.pending_downscales_, [&](const PendingDownscale& pending) {
++    return pending.address <= address_last &&
++           address_first < uint64_t(pending.address) + pending.length;
++  });
++}
++
++void D3D12CommandProcessor::BeforeGpuReadCallback(void* context, uint32_t start,
++                                                  uint32_t length) {
++  static_cast<D3D12CommandProcessor*>(context)->FlushPendingDownscales(start, length);
++}
++
++void D3D12CommandProcessor::FlushPendingDownscales(uint32_t start, uint32_t length) {
++  uint64_t end = uint64_t(start) + length;
++  for (;;) {
++    PendingDownscale flush[16];
++    uint32_t flush_count = 0;
++    {
++      std::lock_guard<std::mutex> lock(pending_downscales_mutex_);
++      for (auto it = pending_downscales_.begin();
++           it != pending_downscales_.end() && flush_count < uint32_t(rex::countof(flush));) {
++        if (it->address < end && start < uint64_t(it->address) + it->length) {
++          flush[flush_count++] = *it;
++          it = pending_downscales_.erase(it);
++        } else {
++          ++it;
++        }
++      }
++    }
++    if (!flush_count || !BeginSubmission(true)) {
++      return;
++    }
++    // A draw may have bound its pipeline already (index buffers are requested
++    // after that): rebind it after the downscale's compute pipeline.
++    void* guest_pipeline = current_guest_pipeline_;
++    for (uint32_t i = 0; i < flush_count; ++i) {
++      DownscaleResolveToSharedMemory(flush[i].address, flush[i].length, flush[i].pixel_size_log2);
++    }
++    if (guest_pipeline && current_guest_pipeline_ != guest_pipeline) {
++      deferred_command_list_.SetPipelineStateHandle(guest_pipeline);
++      current_guest_pipeline_ = guest_pipeline;
++      current_external_pipeline_ = nullptr;
++    }
++  }
+ }
+ 
+ void D3D12CommandProcessor::ExecuteGpuMemoryCopy(uint32_t dst_physical, uint32_t src_physical,
+diff --git a/src/graphics/pipeline/texture/cache.cpp b/src/graphics/pipeline/texture/cache.cpp
+index 83923c0..10c3f67 100644
+--- a/src/graphics/pipeline/texture/cache.cpp
++++ b/src/graphics/pipeline/texture/cache.cpp
+@@ -398,6 +398,7 @@ bool TextureCache::PrepareTextureLoad(Texture& texture, PendingTextureLoad& pend
+   if (base_outdated) {
+     PendingSharedMemoryRange pending_range;
+     pending_range.start = texture_key.base_page << 12;
++    pending_range.scaled_resolve = texture_key.scaled_resolve;
+     pending_range.length =
+         static_cast<uint32_t>(rex::align(texture.GetGuestBaseSize(), UINT32_C(16)));
+     pending_ranges_out[pending_range_count_out++] = pending_range;
+@@ -405,6 +406,7 @@ bool TextureCache::PrepareTextureLoad(Texture& texture, PendingTextureLoad& pend
+   if (mips_outdated) {
+     PendingSharedMemoryRange pending_range;
+     pending_range.start = texture_key.mip_page << 12;
++    pending_range.scaled_resolve = texture_key.scaled_resolve;
+     pending_range.length =
+         static_cast<uint32_t>(rex::align(texture.GetGuestMipsSize(), UINT32_C(16)));
+     pending_ranges_out[pending_range_count_out++] = pending_range;
+@@ -572,9 +574,14 @@ void TextureCache::RequestTextures(uint32_t used_texture_mask) {
+     pending_shared_memory_range_pairs.reserve(pending_shared_memory_ranges.size());
+     for (const PendingSharedMemoryRange& pending_range : pending_shared_memory_ranges) {
+       pending_shared_memory_range_pairs.emplace_back(pending_range.start, pending_range.length);
++      if (!pending_range.scaled_resolve) {
++        shared_memory().BeforeGpuRead(pending_range.start, pending_range.length);
++      }
+     }
++    shared_memory().SetBeforeGpuReadSuppressed(true);
+     batched_shared_memory_request_succeeded = shared_memory().RequestRanges(
+         pending_shared_memory_range_pairs.data(), pending_shared_memory_range_pairs.size());
++    shared_memory().SetBeforeGpuReadSuppressed(false);
+   }
+ 
+   if (batched_shared_memory_request_succeeded) {
+@@ -914,8 +921,14 @@ bool TextureCache::LoadTextureData(Texture& texture) {
+   std::pair<uint32_t, uint32_t> pending_range_pairs[2];
+   for (size_t i = 0; i < pending_range_count; ++i) {
+     pending_range_pairs[i] = std::make_pair(pending_ranges[i].start, pending_ranges[i].length);
++    if (!pending_ranges[i].scaled_resolve) {
++      shared_memory().BeforeGpuRead(pending_ranges[i].start, pending_ranges[i].length);
++    }
+   }
+-  if (!shared_memory().RequestRanges(pending_range_pairs, pending_range_count)) {
++  shared_memory().SetBeforeGpuReadSuppressed(true);
++  bool requested = shared_memory().RequestRanges(pending_range_pairs, pending_range_count);
++  shared_memory().SetBeforeGpuReadSuppressed(false);
++  if (!requested) {
+     return false;
+   }
+ 
+diff --git a/src/graphics/shared_memory.cpp b/src/graphics/shared_memory.cpp
+index 978795d..f474880 100644
+--- a/src/graphics/shared_memory.cpp
++++ b/src/graphics/shared_memory.cpp
+@@ -368,6 +368,12 @@ bool SharedMemory::RequestRanges(const std::pair<uint32_t, uint32_t>* ranges, si
+     return true;
+   }
+ 
++  if (!before_gpu_read_suppressed_) {
++    for (size_t i = 0; i < count; ++i) {
++      BeforeGpuRead(ranges[i].first, ranges[i].second);
++    }
++  }
++
+   // Some texture or buffer is empty, for example - safe to draw in this case.
+   std::vector<std::pair<uint32_t, uint32_t>> merged_ranges;
+   merged_ranges.reserve(count);

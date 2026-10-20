@@ -1,0 +1,53 @@
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index 77f0d75..7a06456 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -336,6 +336,8 @@ class D3D12Presenter final : public Presenter {
+     uint64_t last_log_tick = 0;
+     uint64_t last_recreate_tick = 0;
+     uint64_t no_recreate_before_tick = 0;
++    // The window wasn't the foreground window at the last present.
++    bool in_background = false;
+   };
+   PresentStats present_stats_;
+ 
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index d731c3f..fa663a4 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -1244,6 +1244,35 @@ bool D3D12Presenter::TrackPresentTime(uint64_t present_ticks, bool gpu_behind) {
+ 
+   PresentStats& stats = present_stats_;
+   uint64_t frequency = chrono::Clock::QueryHostTickFrequency();
++
++  // In the background (alt-tab), Windows throttles the window's presents, and
++  // a new swap chain doesn't change that, so they're not counted. Back in the
++  // foreground, the swap chain is often left on the slow path, which only a new
++  // one fixes: recreate it right away, instead of after a block of slow
++  // presents, or after the back-off if the background presents had set it.
++  HWND hwnd = nullptr;
++  bool foreground = SUCCEEDED(paint_context_.swap_chain->GetHwnd(&hwnd)) && hwnd &&
++                    GetForegroundWindow() == hwnd;
++  if (!foreground) {
++    stats.in_background = true;
++    return false;
++  }
++  if (stats.in_background) {
++    stats.in_background = false;
++    stats.count = 0;
++    stats.counted = 0;
++    stats.slow = 0;
++    stats.sum_ms = 0.0;
++    stats.max_ms = 0.0;
++    stats.no_recreate_before_tick = 0;
++    if (!REXCVAR_GET(d3d12_present_stall_recovery)) {
++      return false;
++    }
++    stats.last_recreate_tick = chrono::Clock::QueryHostTickCount();
++    REXLOG_INFO("D3D12Presenter: back in the foreground, recreating the swap chain");
++    return true;
++  }
++
+   double ms = double(present_ticks) * 1000.0 / double(frequency);
+   ++stats.count;
+   if (!gpu_behind) {
