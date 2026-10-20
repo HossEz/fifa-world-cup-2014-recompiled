@@ -66,7 +66,7 @@
 
   ### Known issues
 
-  - 1440p and 4K have performance issues, especially 4K. 720p, the default, runs smoothly.
+  - 1440p and 4K have performance issues, especially 4K.
 
   ## Building from source
 
