@@ -3,7 +3,7 @@
   # 2014 FIFA World Cup Brazil: Recompiled
 
   [![Download](https://img.shields.io/badge/Download-latest%20release-2ea44f?style=for-the-badge)](https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases/latest)
-  ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4?style=for-the-badge)
+  [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4?style=for-the-badge)](#requirements)
 
   An *unofficial* PC port of the Xbox 360 game ***2014 FIFA World Cup Brazil***, by **hosse**. The game's code was translated into C++ with
   [ReXGlue](https://github.com/rexglue/rexglue-sdk) and compiled for Windows, so it runs natively.
