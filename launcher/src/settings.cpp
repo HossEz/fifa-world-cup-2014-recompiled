@@ -297,15 +297,22 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   {
     Option resolution;
     resolution.label = "Resolution";
-    resolution.help = "What the game draws at, before it's fitted to your screen. 720p is the "
-                      "console's own, 1440p and 4K are 2 and 3 times as wide and high. On a "
-                      "1080p screen 1440p is the sharp choice, but for now its frame rate drops "
-                      "in cutscenes.";
+    resolution.help = "What the game draws at. 720p is the console's own. 1440p is sharp on a "
+                      "1080p screen. 4K needs a fast graphics card.";
     resolution.choices = {{"720p", {{"resolution_scale", "1"}}, {}},
                           {"1440p", {{"resolution_scale", "2"}}, {}},
                           {"4K", {{"resolution_scale", "3"}}, {}}};
     resolution.defaults = {{"resolution_scale", "1"}};
     graphics.options.push_back(resolution);
+
+    Option upscaling;
+    upscaling.label = "Upscaling";
+    upscaling.help = "FSR sharpens the picture as it's fitted to your screen, most of all at "
+                     "720p on a 1080p screen. It can look a bit artificial.";
+    upscaling.choices = {{"Off", {{"present_effect", "\"bilinear\""}}, {}},
+                         {"FSR", {{"present_effect", "\"fsr\""}}, {}}};
+    upscaling.defaults = {{"present_effect", "\"bilinear\""}};
+    graphics.options.push_back(upscaling);
 
     Option filtering;
     filtering.label = "Texture filtering";
