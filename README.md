@@ -11,7 +11,7 @@
 
   </div>
   
-  <img width="1142" height="727" alt="Launcher_Xh9JRHRipp" src="https://github.com/user-attachments/assets/ea45720f-cf50-472e-a0f8-e556ca29a282" />
+  <img width="1142" height="727" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/a6d5888c-c714-4fbb-8abd-91517fe4a54b" />
   <sub>Launcher preview · 2014 FIFA World Cup Brazil: Recompiled</sub>
 
   ## Playing
@@ -28,6 +28,8 @@
      `default.xex`) or its disc image (`.iso`). Choose it or drop it on the
      window, and it checks that it's the right game.
   3. Press **Play**.
+
+  To quit the game, hold **Back + Start** (**Create + Options** on PlayStation) for 2 seconds, or press **Alt+F4**.
 
   The launcher's Settings set how the game runs (window, resolution, frame
   rate, Show FPS, ...) and where it's read from. A controller is recommended
@@ -47,11 +49,13 @@
 
   ### Requirements
 
+  Older or low-end computers will lag.
+
   | Requirement | Details |
   |---|---|
   | Windows | 10 or 11, 64-bit |
-  | Graphics | A graphics card with Direct3D 12 and up-to-date drivers. Integrated graphics (such as Intel Iris Xe or UHD) are too slow for matches |
-  | Processor | with AVX2 |
+  | Graphics | Direct3D 12, with up-to-date drivers |
+  | Processor | With AVX2 |
   | The game | Not included: your own copy of *2014 FIFA World Cup Brazil* for Xbox 360, as a disc image (`.iso`) or its folder with `default.xex` (the launcher checks if your copy is playable) |
 
   ### Where things are (by default)
@@ -66,7 +70,7 @@
 
   ### Known issues
 
-  - 1440p and 4K have performance issues, especially 4K.
+  - 4K: pre-match scenes, replays and celebrations drop framrate, and can stutter at times.
 
   ## Building from source
 
