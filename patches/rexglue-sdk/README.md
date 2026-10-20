@@ -51,6 +51,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0016 scaled resolves downscaled only when read (`defer_resolve_downscale`) | less GPU work at 1440p and 4K |
 | 0017 new swap chain when the window is in front again | low frame rate for a while after alt-tab |
 | 0018 the buttons the game last read (`InputSystem::GetLastGuestButtons`) | the game's quit shortcut |
+| 0019 UTF-8 path settings read as UTF-8 | game data (or saves, cache) under a path with letters like é, ö, Cyrillic |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -284,3 +285,14 @@ game last read) in an atomic, and `GetLastGuestButtons` reads them from any
 thread. The game's quit shortcut (`pc/src/quit_shortcut.cpp`: hold Back +
 Start) uses it from the overlay; `GetStateForUI` isn't safe to call there, as
 it isn't synchronised with the game's own polling.
+
+## 0019-utf8-path-cvars
+
+`ReXApp::SetupEnvironment` made the path cvars (`game_data_root`,
+`user_data_root`, `update_data_root`, `cache_root`, `metadata_root`) into
+paths with a plain `std::filesystem::path` from their UTF-8 text, which on
+Windows reads it in the system's code page: a path with letters outside it
+(é, ö, ç, Cyrillic, ...) then didn't exist. They go through `rex::to_path`
+(UTF-8 to UTF-16) now. The game's own early read of `game_data_root`
+(`pc/src/fifawc14_app.h`) does the same; that one sent players whose `.iso`
+was under such a path straight back to the launcher on Play.

@@ -151,8 +151,9 @@ void Setup::Frame(float width, float height, float dt) {
            "or disc image (.iso); Back keeps this one.";
   } else if (!offered_) {
     heading = "Find your copy of the game";
-    body = "This plays your own copy of 2014 FIFA World Cup Brazil for Xbox 360. Choose the "
-           "game's folder (the one with default.xex) or its disc image (.iso).";
+    body = "The game isn't included: this plays your own copy of 2014 FIFA World Cup Brazil for "
+           "Xbox 360. Choose its disc image (.iso, made from your disc) or the game's folder "
+           "(the one with default.xex).";
   } else {
     details = Utf8(location_);
     if (check_.title_id) {

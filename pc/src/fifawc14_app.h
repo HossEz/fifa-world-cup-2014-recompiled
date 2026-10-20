@@ -90,7 +90,10 @@ class Fifawc14App : public rex::ReXApp {
     // the config file would be ignored. Load the config early when no path was given.
     if (paths.game_data_root.empty() && std::filesystem::exists(paths.config_path, ec)) {
       rex::cvar::LoadConfig(paths.config_path);
-      paths.game_data_root = REXCVAR_GET(game_data_root);
+      // UTF-8 in the config: a plain path from it would read it in the system's
+      // code page, and a path with letters outside it (é, ö, Cyrillic...) would
+      // seem not to exist (the game then went back to the launcher).
+      paths.game_data_root = rex::to_path(REXCVAR_GET(game_data_root));
     }
     // Saves and the shader cache in the user folder, or the portable copy's
     // own (data_folder.h; the SDK's default would be Documents\<app name>). An

@@ -50,9 +50,9 @@
   | Requirement | Details |
   |---|---|
   | Windows | 10 or 11, 64-bit |
-  | Graphics | Direct3D 12, with up-to-date drivers |
+  | Graphics | A graphics card with Direct3D 12 and up-to-date drivers. Integrated graphics (such as Intel Iris Xe or UHD) are too slow for matches |
   | Processor | with AVX2 |
-  | The game | *2014 FIFA World Cup Brazil* for Xbox 360, as a folder or `.iso` (the launcher checks if your copy is playable) |
+  | The game | Not included: your own copy of *2014 FIFA World Cup Brazil* for Xbox 360, as a disc image (`.iso`) or its folder with `default.xex` (the launcher checks if your copy is playable) |
 
   ### Where things are (by default)
 
