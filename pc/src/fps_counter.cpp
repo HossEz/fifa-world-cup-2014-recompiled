@@ -62,7 +62,7 @@ class FpsCounter : public rex::ui::ImGuiDialog {
 ImFont* AddFpsFont(ImFontAtlas* atlas, const std::filesystem::path& folder) {
   std::filesystem::path path = folder / kFontFile;
   std::error_code ec;
-  if (!REXCVAR_GET(show_fps) || !std::filesystem::exists(path, ec)) return nullptr;
+  if (!std::filesystem::exists(path, ec)) return nullptr;
   return atlas->AddFontFromFileTTF(path.string().c_str(), 32.0f);
 }
 

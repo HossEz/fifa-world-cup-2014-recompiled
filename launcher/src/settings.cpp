@@ -90,27 +90,34 @@ void Option::Step(GameConfig& config, int delta) const {
 
 const std::vector<ControlRow>& KeyboardLayout() {
   // Sticks: one setting per direction (up, down, left, right), keys in the same order.
+  // The game's Controller Settings screen lists neither the right stick nor
+  // L3 / R3, Start and Back; Skill moves and Pause are FIFA's usual ones.
   static const std::vector<ControlRow> layout = {
-      {"A", Glyph::kFace, "keybind_a", "Space,Z", "Space  Z", "Short pass"},
-      {"B", Glyph::kFace, "keybind_b", "X,Backspace", "X  Backspace", "Shoot"},
-      {"X", Glyph::kFace, "keybind_x", "C", "C", "Lob pass, cross"},
-      {"Y", Glyph::kFace, "keybind_y", "V", "V", "Through ball"},
-      {"LB", Glyph::kBumper, "keybind_left_shoulder", "Q", "Q", ""},
-      {"RB", Glyph::kBumper, "keybind_right_shoulder", "E", "E", ""},
-      {"LT", Glyph::kTrigger, "keybind_left_trigger", "1,Control", "1  Ctrl", ""},
-      {"RT", Glyph::kTrigger, "keybind_right_trigger", "Shift,3", "Shift  3", "Sprint"},
+      {"A", Glyph::kFace, "keybind_a", "Space,Z", "Space  Z", "Short Pass/Header", "Contain"},
+      {"B", Glyph::kFace, "keybind_b", "X,Backspace", "X  Backspace", "Shoot/Volley/Header",
+       "Tackle/Push or Pull (when chasing)"},
+      {"X", Glyph::kFace, "keybind_x", "C", "C", "Lob Pass/Cross/Header", ""},
+      {"Y", Glyph::kFace, "keybind_y", "V", "V", "Through Ball", ""},
+      {"LB", Glyph::kBumper, "keybind_left_shoulder", "Q", "Q", "Player Run/Modifier",
+       "Change Player"},
+      {"RB", Glyph::kBumper, "keybind_right_shoulder", "E", "E", "Finesse Shot Modifier",
+       "Teammate Contain"},
+      {"LT", Glyph::kTrigger, "keybind_left_trigger", "1,Control", "1  Ctrl", "Pace Control",
+       "Jockey"},
+      {"RT", Glyph::kTrigger, "keybind_right_trigger", "Shift,3", "Shift  3", "Sprint", "Sprint"},
       {"L", Glyph::kStick,
        "keybind_lstick_up,keybind_lstick_down,keybind_lstick_left,keybind_lstick_right",
-       "W,S,A,D", "W  A  S  D", "Move"},
+       "W,S,A,D", "W  A  S  D", "Move Player", "Move Player"},
       {"R", Glyph::kStick,
        "keybind_rstick_up,keybind_rstick_down,keybind_rstick_left,keybind_rstick_right",
-       "I,K,J,L", "I  J  K  L", "Skill moves"},
-      {"L3", Glyph::kStick, "keybind_lstick_press", "F", "F", ""},
-      {"R3", Glyph::kStick, "keybind_rstick_press", "G", "G", ""},
+       "I,K,J,L", "I  J  K  L", "Skill moves", ""},
+      {"L3", Glyph::kStick, "keybind_lstick_press", "F", "F", "", ""},
+      {"R3", Glyph::kStick, "keybind_rstick_press", "G", "G", "", ""},
       {"D-pad", Glyph::kPad, "keybind_dpad_up,keybind_dpad_down,keybind_dpad_left,keybind_dpad_right",
-       "Up,Down,Left,Right", "Arrow keys", "Tactics"},
-      {"Start", Glyph::kSmall, "keybind_start", "Return", "Enter", "Pause"},
-      {"Back", Glyph::kSmall, "keybind_back", "Tab", "Tab", ""},
+       "Up,Down,Left,Right", "Arrow keys", "Tactics & Mentality",
+       "Tactics & Mentality"},
+      {"Start", Glyph::kSmall, "keybind_start", "Return", "Enter", "Pause", "Pause"},
+      {"Back", Glyph::kSmall, "keybind_back", "Tab", "Tab", "", ""},
   };
   return layout;
 }

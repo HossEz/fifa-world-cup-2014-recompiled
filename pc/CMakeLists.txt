@@ -42,6 +42,7 @@ set(FIFAWC14_SOURCES
     src/main.cpp
     src/data_folder.cpp
     src/fps_counter.cpp
+    src/quit_shortcut.cpp
     src/frame_rate.cpp
     src/launcher_redirect.cpp
     src/thread_stats.cpp

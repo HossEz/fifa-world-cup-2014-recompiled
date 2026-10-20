@@ -17,6 +17,7 @@
 #include "data_folder.h"
 #include "fps_counter.h"
 #include "launcher_redirect.h"
+#include "quit_shortcut.h"
 #include "thread_stats.h"
 #include "game_window.h"
 
@@ -57,18 +58,26 @@ class Fifawc14App : public rex::ReXApp {
       return stats;
     });
   }
-  // The players' overlay: the frame rate if it's on, and no developer keys.
+  // The players' overlay: the frame rate if it's on, the quit shortcut, and no
+  // developer keys.
   void OnConfigureFonts(ImFontAtlas* atlas) override {
     fps_font_ = AddFpsFont(atlas, DataFolder());
   }
   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
     RemoveDebugKeys();
     fps_counter_ = CreateFpsCounter(drawer, fps_font_);
+    quit_shortcut_ = CreateQuitShortcut(drawer, fps_font_, [this] { return runtime(); }, window(),
+                                        immediate_drawer(), DataFolder());
   }
   // std::unique_ptr<rex::ui::ImGuiDialog> CreateAchievementsOverlay() override;
   // std::unique_ptr<rex::ui::AchievementNotificationDialog>
   // CreateAchievementNotificationDialog() override;
-  // void OnShutdown() override {}
+  // The overlays (and the quit shortcut's texture) go before the SDK tears
+  // down the drawers.
+  void OnShutdown() override {
+    quit_shortcut_.reset();
+    fps_counter_.reset();
+  }
   void OnConfigurePaths(rex::PathConfig& paths) override {
     // fifawc14.toml in the data folder (data_folder.h), not necessarily next to
     // the exe. It's also the working folder, so the config's relative paths (the
@@ -97,4 +106,5 @@ class Fifawc14App : public rex::ReXApp {
  private:
   ImFont* fps_font_ = nullptr;
   std::unique_ptr<rex::ui::ImGuiDialog> fps_counter_;
+  std::unique_ptr<rex::ui::ImGuiDialog> quit_shortcut_;
 };

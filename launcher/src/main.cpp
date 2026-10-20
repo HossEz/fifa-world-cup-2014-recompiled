@@ -38,6 +38,7 @@
 #include "game_files.h"
 #include "game_source.h"
 #include "icon.h"
+#include "textures.h"
 #include "log.h"
 #include "watchdog.h"
 #include "settings.h"
@@ -307,6 +308,12 @@ void EnsureGameConfig(const fs::path& data_folder) {
   // skipped. Skipped, a texture the game renders once (the ground outside the
   // stadium) stayed black for the whole first run, before the shader cache had it.
   require("async_shader_compilation", "false");
+  // One submission to the GPU per frame instead of one per command buffer:
+  // each ExecuteCommandLists waits while the GPU is busy, and the game waits on
+  // the emulation meanwhile, so at 4K frames that fit missed the refresh.
+  // Measured 2026-10-20: 4K play 3-5 -> 0-1 ms in ExecuteCommandLists, the
+  // stutters during play mostly gone.
+  require("d3d12_submit_on_primary_buffer_end", "false");
   // No FXAA (the SDK's swap_post_effect): measured 2026-10-17, the game already
   // smooths its 3D edges (MSAA), so FXAA only softened text and HUD edges. The
   // launcher had it as an option; a config that still has it is set back.
@@ -479,6 +486,34 @@ void RunCommands(const std::function<void(launcher::Command)>& send, const std::
 }
 
 // Renders one frame offscreen at 1100x700 (the default window) and writes it as a PNG.
+// 32-bit BGRA rows (top to bottom, `stride` bytes apart) as a PNG, with WIC.
+bool WritePng(const fs::path& png, UINT width, UINT height, UINT stride, const BYTE* bgra) {
+  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  ComPtr<IWICImagingFactory> wic;
+  ComPtr<IWICStream> stream;
+  ComPtr<IWICBitmapEncoder> encoder;
+  ComPtr<IWICBitmapFrameEncode> frame;
+  bool ok = SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                       IID_PPV_ARGS(&wic))) &&
+            SUCCEEDED(wic->CreateStream(&stream)) &&
+            SUCCEEDED(stream->InitializeFromFilename(png.c_str(), GENERIC_WRITE)) &&
+            SUCCEEDED(wic->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder)) &&
+            SUCCEEDED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache)) &&
+            SUCCEEDED(encoder->CreateNewFrame(&frame, nullptr)) &&
+            SUCCEEDED(frame->Initialize(nullptr)) && SUCCEEDED(frame->SetSize(width, height));
+  WICPixelFormatGUID format = GUID_WICPixelFormat32bppBGRA;
+  return ok && SUCCEEDED(frame->SetPixelFormat(&format)) &&
+         SUCCEEDED(frame->WritePixels(height, stride, stride * height, const_cast<BYTE*>(bgra))) &&
+         SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit());
+}
+
+// An RGBA image (rows top to bottom, as DecodeDds gives) as a PNG.
+bool WriteRgbaPng(const fs::path& png, const std::vector<uint8_t>& rgba, int width, int height) {
+  std::vector<uint8_t> bgra(rgba);
+  for (size_t i = 0; i + 3 < bgra.size(); i += 4) std::swap(bgra[i], bgra[i + 2]);
+  return WritePng(png, UINT(width), UINT(height), UINT(width) * 4, bgra.data());
+}
+
 bool Screenshot(const std::function<void(float, float, float)>& frame_ui, const fs::path& png) {
   const UINT width = 1100, height = 700;
   D3D11_TEXTURE2D_DESC desc = {};
@@ -513,24 +548,7 @@ bool Screenshot(const std::function<void(float, float, float)>& frame_ui, const 
   D3D11_MAPPED_SUBRESOURCE mapped;
   if (FAILED(g_context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped))) return false;
 
-  CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  ComPtr<IWICImagingFactory> wic;
-  ComPtr<IWICStream> stream;
-  ComPtr<IWICBitmapEncoder> encoder;
-  ComPtr<IWICBitmapFrameEncode> frame;
-  bool ok = SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
-                                       IID_PPV_ARGS(&wic))) &&
-            SUCCEEDED(wic->CreateStream(&stream)) &&
-            SUCCEEDED(stream->InitializeFromFilename(png.c_str(), GENERIC_WRITE)) &&
-            SUCCEEDED(wic->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder)) &&
-            SUCCEEDED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache)) &&
-            SUCCEEDED(encoder->CreateNewFrame(&frame, nullptr)) &&
-            SUCCEEDED(frame->Initialize(nullptr)) && SUCCEEDED(frame->SetSize(width, height));
-  WICPixelFormatGUID format = GUID_WICPixelFormat32bppBGRA;
-  ok = ok && SUCCEEDED(frame->SetPixelFormat(&format)) &&
-       SUCCEEDED(frame->WritePixels(height, mapped.RowPitch, mapped.RowPitch * height,
-                                    static_cast<BYTE*>(mapped.pData))) &&
-       SUCCEEDED(frame->Commit()) && SUCCEEDED(encoder->Commit());
+  bool ok = WritePng(png, width, height, mapped.RowPitch, static_cast<const BYTE*>(mapped.pData));
   g_context->Unmap(staging.Get(), 0);
   return ok;
 }
@@ -766,6 +784,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // The game has its own sound: the menu's music stops while it runs.
     ui->on_play = [&] {
       audio->SetMusic(false, 0.0f);
+      // The quit shortcut's button icons (pc/src/quit_shortcut.cpp) match the
+      // controller in use.
+      launcher::GameConfig config(data_folder / "fifawc14.toml");
+      config.Set("quit_buttons", g_controllers.PlayStation() ? "\"playstation\"" : "\"xbox\"");
+      config.Save();
       std::string problem = StartGame(game_folder);
       if (!problem.empty()) {
         ui->ApplySoundSettings();  // the music back
@@ -791,6 +814,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       if (auto data = files->Read("data/ui/fonts/futurastd-condensed.ttf")) {
         std::ofstream(font, std::ios::binary)
             .write(reinterpret_cast<const char*>(data->data()), std::streamsize(data->size()));
+      }
+    }
+    // One of the game's brush-stroke panels, behind the game's quit shortcut
+    // (pc/src/quit_shortcut.cpp).
+    fs::path panel = data_folder / "quit-panel.png";
+    if (!fs::exists(panel, ec)) {
+      if (auto dds = files->Read("data/ui/imgassets/custompanels/custompanels_42.dds")) {
+        int width = 0, height = 0;
+        std::vector<uint8_t> rgba = launcher::DecodeDds(*dds, &width, &height);
+        if (!rgba.empty()) WriteRgbaPng(panel, rgba, width, height);
       }
     }
     launcher::SetWindowIcon(g_window, icon);

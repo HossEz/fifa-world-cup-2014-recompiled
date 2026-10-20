@@ -70,7 +70,9 @@ struct Section {
 
 // The keyboard layout: one row per controller button, the keys the launcher
 // binds to it (the game's keybind_* settings, SDK key names) and what it does
-// in a match. The Controls page shows the same table.
+// in a match with the game's Classic preset, in the game's own words (its
+// Controller Settings screen, 2026-10-20). The Controls page shows the same
+// table.
 enum class Glyph { kFace, kBumper, kTrigger, kStick, kPad, kSmall };
 struct ControlRow {
   const char* button;   // "A", "LB", "L", "D-pad", ...
@@ -78,7 +80,8 @@ struct ControlRow {
   const char* setting;  // keybind_* setting(s), comma-separated for a stick's four
   const char* keys;     // SDK key names, as written (comma = alternatives)
   const char* shown;    // the keys as shown to the player
-  const char* match;    // what it does in a match ("" if nothing by default)
+  const char* attacking;  // what it does when attacking ("" if the game lists nothing)
+  const char* defending;  // ... and when defending
 };
 const std::vector<ControlRow>& KeyboardLayout();
 // The game settings for that layout: keyboard play on (it's merged with any

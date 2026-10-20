@@ -28,6 +28,7 @@ constexpr const char* kBackdropRight = "data/ui/game/background/backgroundonline
 constexpr const char* kPanel = "data/ui/imgassets/custompanels/custompanels_27.dds";
 // The update popup's light painted panel, with leaves at its edges.
 constexpr const char* kUpdatePanel = "data/ui/imgassets/custompanels/custompanels_5.dds";
+constexpr const char* kQuitPanel = "data/ui/imgassets/custompanels/custompanels_66.dds";
 constexpr const char* kStroke = "data/ui/imgassets/custompanels/custompanels_61.dds";
 constexpr const char* kLogo = "data/ui/imgassets/custompanels/custompanels_39.dds";
 constexpr const char* kTiles = "data/ui/imgassets/tiles/mainhub/";
@@ -132,6 +133,7 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
   background_ = LoadGameTexture(device, files, kBackground);
   panel_ = LoadGameTexture(device, files, kPanel);
   update_panel_ = LoadGameTexture(device, files, kUpdatePanel);
+  quit_panel_ = LoadGameTexture(device, files, kQuitPanel);
   update_icon_ = LoadGameTexture(device, files, std::string(kTiles) + "ct_downloadupdates.dds");
   stroke_ = LoadGameTexture(device, files, kStroke);
   logo_ = LoadGameTexture(device, files, kLogo);
@@ -228,6 +230,10 @@ std::string Ui::OptionInfo(const Option& option) {
 
 void Ui::OnCommand(Command command, InputDevice device) {
   device_ = device;
+  if (quit_asked_) {
+    QuitCommand(command);
+    return;
+  }
   if (UpdateVisible()) {
     UpdateCommand(command);
     return;
@@ -249,6 +255,14 @@ void Ui::OnCommand(Command command, InputDevice device) {
       if (command == Command::kUp || command == Command::kDown) {
         int count = int(AboutTopics().size());
         topic_focus_ = (topic_focus_ + (command == Command::kUp ? -1 : 1) + count) % count;
+        Sound(Audio::Effect::kList);
+      } else if (command == Command::kBack) {
+        Go(Screen::kHome);
+      }
+      break;
+    case Screen::kControls:
+      if (command == Command::kLeft || command == Command::kRight) {
+        controls_defending_ = !controls_defending_;
         Sound(Audio::Effect::kList);
       } else if (command == Command::kBack) {
         Go(Screen::kHome);
@@ -288,7 +302,12 @@ void Ui::HomeCommand(Command command) {
       }
       break;
     case Command::kBack:
-      if (on_quit) on_quit();
+      // Asked first: B is also "back" everywhere else, easily pressed once too
+      // often.
+      quit_asked_ = true;
+      quit_focus_ = 0;
+      quit_appear_ = 0.0f;
+      Sound(Audio::Effect::kBack);
       break;
     default: break;
   }
@@ -391,7 +410,7 @@ void Ui::Frame(float width, float height, float dt) {
   // A new screen fades in and slides a little from the left: everything drawn
   // for it gets its alpha and position eased.
   int first_vertex = draw_->VtxBuffer.Size;
-  blocked_ = UpdateVisible();
+  blocked_ = UpdateVisible() || quit_asked_;
   switch (screen_) {
     case Screen::kHome: HomeScreen(width, height); break;
     case Screen::kSettings: SettingsScreen(width, height); break;
@@ -410,7 +429,8 @@ void Ui::Frame(float width, float height, float dt) {
     }
   }
   blocked_ = false;
-  if (UpdateVisible()) UpdatePopup(width, height);
+  if (UpdateVisible() && !quit_asked_) UpdatePopup(width, height);
+  if (quit_asked_) QuitPopup(width, height);
 }
 
 void Ui::ShowMessage(std::string text) {
@@ -626,27 +646,7 @@ void Ui::DrawHints(float width, float height, const std::vector<Hint>& hints) {
       // A PlayStation face button: its symbol on a dark button.
       float r = size * 0.62f;
       x -= 10 * s + 2 * r;
-      ImVec2 c(x + r, middle);
-      draw_->AddCircleFilled(ImVec2(c.x, c.y + 2 * s), r, IM_COL32(0, 0, 0, 90));
-      draw_->AddCircleFilled(c, r, IM_COL32(43, 47, 51, 255));
-      float u = r * 0.45f, t = 2.2f * s;
-      switch (glyph[0]) {
-        case 'A':  // Cross
-          draw_->AddLine(ImVec2(c.x - u, c.y - u), ImVec2(c.x + u, c.y + u), IM_COL32(124, 178, 232, 255), t);
-          draw_->AddLine(ImVec2(c.x - u, c.y + u), ImVec2(c.x + u, c.y - u), IM_COL32(124, 178, 232, 255), t);
-          break;
-        case 'B':  // Circle
-          draw_->AddCircle(c, u, IM_COL32(255, 102, 102, 255), 0, t);
-          break;
-        case 'Y':  // Triangle
-          draw_->AddTriangle(ImVec2(c.x, c.y - u), ImVec2(c.x + u, c.y + u * 0.75f),
-                             ImVec2(c.x - u, c.y + u * 0.75f), IM_COL32(64, 226, 160, 255), t);
-          break;
-        default:  // Square
-          draw_->AddRect(ImVec2(c.x - u * 0.8f, c.y - u * 0.8f), ImVec2(c.x + u * 0.8f, c.y + u * 0.8f),
-                         IM_COL32(255, 105, 248, 255), 0, 0, t);
-          break;
-      }
+      DrawPlayStationFace(x + r, middle, r, glyph[0]);
     } else if (controller && !arrows && std::strlen(glyph) == 1) {
       // A face button in its console colour.
       ImU32 colors[] = {IM_COL32(93, 184, 47, 255), IM_COL32(226, 65, 47, 255),
@@ -883,9 +883,35 @@ float Ui::DrawKey(float right, float middle, float key_size, const char* text, b
   return key_w;
 }
 
+void Ui::DrawPlayStationFace(float x, float y, float r, char xbox_letter) {
+  float s = scale_;
+  ImVec2 c(x, y);
+  draw_->AddCircleFilled(ImVec2(c.x, c.y + 2 * s), r, IM_COL32(0, 0, 0, 90));
+  draw_->AddCircleFilled(c, r, IM_COL32(43, 47, 51, 255));
+  float u = r * 0.45f, t = std::max(2.2f * s, r * 0.12f);
+  switch (xbox_letter) {
+    case 'A':  // Cross
+      draw_->AddLine(ImVec2(c.x - u, c.y - u), ImVec2(c.x + u, c.y + u), IM_COL32(124, 178, 232, 255), t);
+      draw_->AddLine(ImVec2(c.x - u, c.y + u), ImVec2(c.x + u, c.y - u), IM_COL32(124, 178, 232, 255), t);
+      break;
+    case 'B':  // Circle
+      draw_->AddCircle(c, u, IM_COL32(255, 102, 102, 255), 0, t);
+      break;
+    case 'Y':  // Triangle
+      draw_->AddTriangle(ImVec2(c.x, c.y - u), ImVec2(c.x + u, c.y + u * 0.75f),
+                         ImVec2(c.x - u, c.y + u * 0.75f), IM_COL32(64, 226, 160, 255), t);
+      break;
+    default:  // Square
+      draw_->AddRect(ImVec2(c.x - u * 0.8f, c.y - u * 0.8f), ImVec2(c.x + u * 0.8f, c.y + u * 0.8f),
+                     IM_COL32(255, 105, 248, 255), 0, 0, t);
+      break;
+  }
+}
+
 void Ui::DrawGlyph(float x, float y, float size, const ControlRow& row) {
   float s = scale_;
   ImU32 plastic = IM_COL32(43, 47, 51, 255), shadow = IM_COL32(0, 0, 0, 100);
+  ImU32 ink = IM_COL32(230, 230, 230, 255);
   float label_size = size * 0.45f;
   ImU32 label_color = IM_COL32_WHITE;
   auto rounded = [&](float w, float h, float rounding, ImDrawFlags flags) {
@@ -894,8 +920,20 @@ void Ui::DrawGlyph(float x, float y, float size, const ControlRow& row) {
     draw_->AddRectFilled(ImVec2(x - w / 2, y - h / 2), ImVec2(x + w / 2, y + h / 2), plastic,
                          rounding, flags);
   };
+  auto label_text = [&](const char* text) {
+    ImVec2 size_text = bold_->CalcTextSizeA(label_size, FLT_MAX, 0, text);
+    draw_->AddText(bold_, label_size, ImVec2(x - size_text.x * 0.5f, y - label_size * 0.55f),
+                   label_color, text);
+  };
+  bool playstation = controller_style_ == ControllerStyle::kPlayStation;
+  auto named = [&](const char* name) { return std::strcmp(row.button, name) == 0; };
+
   switch (row.glyph) {
     case Glyph::kFace: {
+      if (playstation) {
+        DrawPlayStationFace(x, y, size * 0.5f, row.button[0]);
+        return;
+      }
       // Face buttons in their console colours.
       ImU32 colors[] = {IM_COL32(93, 184, 47, 255), IM_COL32(226, 65, 47, 255),
                         IM_COL32(47, 127, 226, 255), IM_COL32(242, 194, 27, 255)};
@@ -906,29 +944,70 @@ void Ui::DrawGlyph(float x, float y, float size, const ControlRow& row) {
       draw_->AddCircleFilled(ImVec2(x, y), r, colors[index]);
       label_size = size * 0.6f;
       if (index == 3) label_color = kInk;
-      break;
+      label_text(row.button);
+      return;
     }
-    case Glyph::kBumper: rounded(size * 1.7f, size * 0.9f, size * 0.4f, 0); break;
+    case Glyph::kBumper:
+      rounded(size * 1.7f, size * 0.9f, size * 0.4f, 0);
+      label_text(playstation ? (named("LB") ? "L1" : "R1") : row.button);
+      return;
     case Glyph::kTrigger:
       rounded(size * 1.45f, size * 1.2f, size * 0.55f, ImDrawFlags_RoundCornersTop);
-      break;
+      label_text(playstation ? (named("LT") ? "L2" : "R2") : row.button);
+      return;
     case Glyph::kStick: {
+      // A stick from above; pressing it (L3 / R3, LS / RS on Xbox) has a
+      // second ring.
       float r = size * 0.5f;
+      bool press = named("L3") || named("R3");
       draw_->AddCircleFilled(ImVec2(x, y + 2 * s), r, shadow);
       draw_->AddCircleFilled(ImVec2(x, y), r, plastic);
       draw_->AddCircle(ImVec2(x, y), r - 2 * s, IM_COL32(85, 91, 97, 255), 0, 3 * s);
-      break;
+      if (press) draw_->AddCircle(ImVec2(x, y), r * 0.55f, IM_COL32(85, 91, 97, 255), 0, 2 * s);
+      const char* text = row.button;
+      if (!playstation && press) text = named("L3") ? "LS" : "RS";
+      label_size = size * (press ? 0.38f : 0.45f);
+      label_text(text);
+      return;
     }
-    case Glyph::kPad:
+    case Glyph::kPad: {
+      // The D-pad: a cross.
+      float arm = size * 0.36f, len = size * 0.52f, round = size * 0.08f;
+      for (float dy : {2 * s, 0.0f}) {
+        ImU32 color = dy ? shadow : plastic;
+        draw_->AddRectFilled(ImVec2(x - arm * 0.5f, y - len + dy), ImVec2(x + arm * 0.5f, y + len + dy),
+                             color, round);
+        draw_->AddRectFilled(ImVec2(x - len, y - arm * 0.5f + dy), ImVec2(x + len, y + arm * 0.5f + dy),
+                             color, round);
+      }
+      draw_->AddCircleFilled(ImVec2(x, y), arm * 0.22f, IM_COL32(85, 91, 97, 255));
+      return;
+    }
     case Glyph::kSmall: {
-      ImVec2 text = bold_->CalcTextSizeA(label_size, FLT_MAX, 0, row.button);
-      rounded(std::max(text.x + size * 0.5f, size), size * 0.95f, size * 0.28f, 0);
-      break;
+      // Start / Back as on the pad: Menu and View on Xbox, Options and Create
+      // on PlayStation (as the game's quit shortcut, pc/src/quit_shortcut.cpp).
+      float h = size * 0.95f, w = size * 1.45f;
+      rounded(w, h, h * 0.5f, 0);
+      float u = h * 0.22f, t = std::max(1.5f * s, size * 0.07f);
+      if (named("Start")) {
+        for (int i = -1; i <= 1; ++i) {
+          draw_->AddLine(ImVec2(x - u * 1.2f, y + i * u * 0.8f), ImVec2(x + u * 1.2f, y + i * u * 0.8f),
+                         ink, t);
+        }
+      } else if (playstation) {
+        ImVec2 base(x, y + u * 1.1f);
+        draw_->AddLine(base, ImVec2(x, y - u * 1.1f), ink, t);
+        draw_->AddLine(ImVec2(base.x - u * 0.4f, base.y), ImVec2(x - u * 1.3f, y - u * 0.6f), ink, t);
+        draw_->AddLine(ImVec2(base.x + u * 0.4f, base.y), ImVec2(x + u * 1.3f, y - u * 0.6f), ink, t);
+      } else {
+        draw_->AddRect(ImVec2(x - u * 1.2f, y - u * 0.9f), ImVec2(x + u * 0.4f, y + u * 0.5f), ink, 0,
+                       0, t);
+        draw_->AddRect(ImVec2(x - u * 0.4f, y - u * 0.3f), ImVec2(x + u * 1.2f, y + u * 1.1f), ink, 0,
+                       0, t);
+      }
+      return;
     }
   }
-  ImVec2 text = bold_->CalcTextSizeA(label_size, FLT_MAX, 0, row.button);
-  draw_->AddText(bold_, label_size, ImVec2(x - text.x * 0.5f, y - label_size * 0.55f), label_color,
-                 row.button);
 }
 
 void Ui::TwoBoards(float width, float height, const char* heading, float list_height, float* x,
@@ -961,9 +1040,29 @@ void Ui::ControlsScreen(float width, float height) {
 
   // One row per button: the button, its keys, what it does in a match.
   const auto& layout = KeyboardLayout();
-  float size = 17 * s, row_h = (bh - 64 * s - 50 * s - 70 * s) / float(layout.size());
-  float glyph_x = bx + 48 * s + 34 * s, keys_x = bx + 48 * s + 84 * s, match_x = bx + bw * 0.56f;
-  float y = by + 64 * s + 50 * s;
+  float size = 17 * s, row_h = (bh - 64 * s - 74 * s - 66 * s) / float(layout.size());
+  float glyph_x = bx + 48 * s + 34 * s, keys_x = bx + 48 * s + 84 * s, match_x = bx + bw * 0.48f;
+  float y = by + 64 * s + 74 * s;
+  // What the buttons do: the game's Classic preset, attacking or defending
+  // (left / right), as the game's own Controller Settings screen.
+  {
+    const char* page = controls_defending_ ? "DEFENDING" : "ATTACKING";
+    float head_y = by + 64 * s + 6 * s;
+    draw_->AddText(bold_, size * 0.8f, ImVec2(match_x, head_y), kCreamDim, "CLASSIC PRESET");
+    ImVec2 page_size = bold_->CalcTextSizeA(size, FLT_MAX, 0, page);
+    float arrow = size * 0.3f, page_y = head_y + size * 1.05f, mid = page_y + size * 0.62f;
+    float text_x = match_x + arrow * 2.0f + 6 * s;
+    draw_->AddTriangleFilled(ImVec2(match_x, mid), ImVec2(match_x + arrow * 1.4f, mid - arrow),
+                             ImVec2(match_x + arrow * 1.4f, mid + arrow), kCream);
+    draw_->AddText(bold_, size, ImVec2(text_x, page_y), kCream, page);
+    float right_x = text_x + page_size.x + 6 * s;
+    draw_->AddTriangleFilled(ImVec2(right_x + arrow * 1.4f, mid), ImVec2(right_x, mid - arrow),
+                             ImVec2(right_x, mid + arrow), kCream);
+    if (MouseIn(match_x - 4 * s, page_y - 4 * s, right_x + arrow * 2.0f, page_y + size * 1.3f)) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) OnCommand(Command::kRight, device_);
+    }
+  }
   for (const ControlRow& row : layout) {
     float middle = y + row_h * 0.5f;
     DrawGlyph(glyph_x, middle, row_h * 0.72f, row);
@@ -981,10 +1080,13 @@ void Ui::ControlsScreen(float width, float height) {
       if (end == std::string::npos) break;
       start = end + 2;
     }
-    draw_->AddText(book_, size, ImVec2(match_x, middle - size * 0.6f), kCreamDim, row.match);
+    draw_->AddText(book_, size, ImVec2(match_x, middle - size * 0.6f), kCreamDim,
+                   controls_defending_ ? row.defending : row.attacking);
     y += row_h;
   }
-  DrawHints(width, height, {{"Esc", "B", "Back", Command::kBack}});
+  DrawHints(width, height, {{"<>", "<>", controls_defending_ ? "Attacking" : "Defending",
+                             Command::kRight},
+                            {"Esc", "B", "Back", Command::kBack}});
 }
 
 void Ui::AboutScreen(float width, float height) {
@@ -1192,6 +1294,72 @@ void Ui::UpdatePopup(float width, float height) {
                            WithAlpha(IM_COL32(247, 209, 23, 255), t), bar_h * 0.5f);
     }
   }
+}
+
+void Ui::QuitCommand(Command command) {
+  switch (command) {
+    case Command::kUp:
+    case Command::kDown:
+    case Command::kLeft:
+    case Command::kRight:
+      quit_focus_ = 1 - quit_focus_;
+      Sound(Audio::Effect::kList);
+      break;
+    case Command::kAccept:
+      Sound(Audio::Effect::kSelect);
+      quit_asked_ = false;
+      if (quit_focus_ == 0 && on_quit) on_quit();
+      break;
+    case Command::kBack:
+      Sound(Audio::Effect::kBack);
+      quit_asked_ = false;
+      break;
+    default: break;
+  }
+}
+
+// Quitting asked on one of the game's painted panels over the dimmed menu, as
+// the update popup: Yes / No.
+void Ui::QuitPopup(float width, float height) {
+  float s = scale_;
+  quit_appear_ = std::min(1.0f, quit_appear_ + dt_ / 0.2f);
+  float t = EaseOut(quit_appear_);
+  draw_ = ImGui::GetForegroundDrawList();
+  draw_->AddRectFilled(ImVec2(0, 0), ImVec2(width, height), IM_COL32(0, 8, 24, int(200 * t)));
+
+  const Texture& panel = quit_panel_ ? quit_panel_ : panel_;
+  float panel_w = std::min(660 * s, width - 80 * s);
+  float panel_h = panel_w * panel.height / std::max(1, panel.width);
+  float px = (width - panel_w) * 0.5f, py = (height - panel_h) * 0.5f + (1 - t) * 16 * s;
+  Image(draw_, panel, ImVec2(px, py), ImVec2(px + panel_w, py + panel_h), WithAlpha(IM_COL32_WHITE, t));
+
+  // In the panel's painted area (about 8-93% across, 10-85% down).
+  ImU32 ink = WithAlpha(kInk, t), soft = WithAlpha(kInk, 0.72f * t);
+  float x = px + panel_w * 0.17f;
+  float content_h = 34 * s * 1.2f + 18 * s + 2 * (24 * s * 1.35f + 6 * s);
+  float y = py + panel_h * 0.47f - content_h * 0.5f;
+  draw_->AddText(bold_, 34 * s, ImVec2(x, y), ink, "Quit the launcher?");
+  y += 34 * s * 1.2f + 18 * s;
+  const char* labels[] = {"Yes", "No"};
+  for (int i = 0; i < 2; ++i) {
+    float focus = Anim("quit" + std::to_string(i), i == quit_focus_ ? 1.0f : 0.0f, 0.2f);
+    float top = y;
+    y = DrawItem(x, y, labels[i], bold_, 24 * s, focus * t, 0.0f, soft);
+    if (MouseIn(x - 20 * s, top, x + 300 * s, y)) {
+      if (mouse_moved_ && quit_focus_ != i) {
+        quit_focus_ = i;
+        Sound(Audio::Effect::kList);
+      }
+      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        quit_focus_ = i;
+        QuitCommand(Command::kAccept);
+        return;
+      }
+    }
+    y += 6 * s;
+  }
+  DrawHints(width, height, {{"Enter", "A", "Select", Command::kAccept},
+                            {"Esc", "B", "Cancel", Command::kBack}});
 }
 
 }  // namespace launcher

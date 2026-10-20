@@ -106,6 +106,9 @@ class Ui {
   void HomeScreen(float width, float height);
   void SettingsScreen(float width, float height);
   void ControlsScreen(float width, float height);
+  // A PlayStation face button for the Xbox one's letter (A Cross, B Circle,
+  // X Square, Y Triangle): its symbol in its colour on a dark button.
+  void DrawPlayStationFace(float x, float y, float radius, char xbox_letter);
   void NoticeScreen(float width, float height);
   void AboutScreen(float width, float height);
   // A keycap (or, `dark`, a controller's d-pad/Start style key) ending at
@@ -138,7 +141,7 @@ class Ui {
 
   Texture backdrop_;  // behind the fluxwaves (BuildBackdrop in ui.cpp)
   std::array<Texture, 35> covers_;  // EA Trax art by Song::cover (1-34)
-  Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_;
+  Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_, quit_panel_;
   std::array<Texture, 4> home_icons_;
   std::array<Texture, 5> section_icons_;
   ImFont* bold_ = nullptr;
@@ -157,6 +160,8 @@ class Ui {
   double shown_song_at_ = 0;  // when it appeared (ImGui time), for scrolling long names
   float skip_pressed_ = 0.0f;  // seconds the skip button still shows pressed
   ControllerStyle controller_style_ = ControllerStyle::kXbox;
+  // The Controls page shows what the buttons do when defending (left / right).
+  bool controls_defending_ = false;
   // Option infos (folder sizes) are computed in the background, every few seconds.
   struct Info {
     std::string text;
@@ -177,6 +182,12 @@ class Ui {
   const UpdateJob* update_job_ = nullptr;
   int update_focus_ = 0;      // Update now / Later
   float update_appear_ = 0;   // 0..1, its fade-in
+  // B / Esc on Home asks before quitting (QuitPopup).
+  bool quit_asked_ = false;
+  int quit_focus_ = 0;  // 0 Yes, 1 No
+  float quit_appear_ = 0.0f;
+  void QuitCommand(Command command);
+  void QuitPopup(float width, float height);
   bool blocked_ = false;      // drawing the screen behind the popup: no mouse, no hints
   std::string message_;
   float message_left_ = 0.0f;  // seconds the message still shows

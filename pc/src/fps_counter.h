@@ -17,8 +17,9 @@ class ImGuiDrawer;
 // copied it into the data folder (data_folder.h), with a soft shadow and no
 // background.
 
-// Adds the counter's font to the overlay's font atlas (call from
-// OnConfigureFonts). Null if the font file isn't there (ImGui's own is used).
+// Adds the game's font to the overlay's font atlas (call from
+// OnConfigureFonts), for the counter and the quit shortcut (quit_shortcut.h).
+// Null if the font file isn't there (ImGui's own is used).
 ImFont* AddFpsFont(ImFontAtlas* atlas, const std::filesystem::path& folder);
 
 // The counter, or null if show_fps is off.
