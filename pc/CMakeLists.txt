@@ -18,10 +18,11 @@ project(fifawc14 LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Target AVX2-era CPUs (Intel Haswell / AMD Zen and newer) instead of the SSE4.1
-# baseline: the recompiled VMX128 vector code benefits most.
+# Target the SSE4.2 baseline (Intel Nehalem / AMD Bulldozer and newer, the same as
+# the SDK) rather than AVX2 (-march=x86-64-v3): AVX2 kept processors from before
+# 2013 (and some newer low-end ones) from starting the game at all.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
-    add_compile_options(-march=x86-64-v3)
+    add_compile_options(-march=x86-64-v2)
 endif()
 
 # Release builds keep line tables (function names and line numbers, no

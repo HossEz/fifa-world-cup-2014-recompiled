@@ -249,11 +249,11 @@ const Entry kEntries[] = {
      "estádio correta sem deixar a GPU mais lenta."},
     {"What it needs", "Requisitos", "Requisitos"},
     {"Windows 10 or 11, 64-bit, a graphics card with Direct3D 12 and up-to-date drivers, and a "
-     "processor with AVX2.",
+     "processor with SSE4.2.",
      "Windows 10 u 11 de 64 bits, una tarjeta gráfica con Direct3D 12 y drivers actualizados, y "
-     "un procesador con AVX2.",
+     "un procesador con SSE4.2.",
      "Windows 10 ou 11 de 64 bits, uma placa de vídeo com Direct3D 12 e drivers atualizados, e "
-     "um processador com AVX2."},
+     "um processador com SSE4.2."},
     {"A controller is recommended; the keyboard works too (its keys are on the Controls page).",
      "Se recomienda un control; el teclado también funciona (sus teclas están en la página "
      "Controles).",
@@ -389,24 +389,24 @@ const Entry kEntries[] = {
      "lo esté bloqueando.",
      "Não foi possível iniciar o jogo (fifawc14.exe) (erro do Windows {0}). Talvez o seu "
      "antivírus esteja bloqueando."},
-    {"The game stopped: your processor doesn't support AVX2, which the game needs (Intel from "
-     "2013 on, AMD Ryzen).",
-     "El juego se detuvo: tu procesador no es compatible con AVX2, que el juego necesita (Intel "
-     "desde 2013, AMD Ryzen).",
-     "O jogo parou: seu processador não é compatível com AVX2, que o jogo precisa (Intel a "
-     "partir de 2013, AMD Ryzen)."},
+    {"The game stopped: your processor doesn't support SSE4.2, which the game needs (Intel from "
+     "2008 on, AMD from 2011).",
+     "El juego se detuvo: tu procesador no es compatible con SSE4.2, que el juego necesita (Intel "
+     "desde 2008, AMD desde 2011).",
+     "O jogo parou: seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a "
+     "partir de 2008, AMD a partir de 2011)."},
     {"The game closed unexpectedly (error {0}). Please report it with fifawc14.log (Settings, "
      "Data, Logs opens its folder).",
      "El juego se cerró inesperadamente (error {0}). Repórtalo junto con fifawc14.log (Ajustes, "
      "Datos, Registros abre su carpeta).",
      "O jogo fechou inesperadamente (erro {0}). Relate o problema com o fifawc14.log "
      "(Configurações, Dados, Registros abre a pasta dele)."},
-    {"Your processor doesn't support AVX2, which the game needs (Intel from 2013 on, AMD Ryzen). "
-     "The game won't start on this computer.",
-     "Tu procesador no es compatible con AVX2, que el juego necesita (Intel desde 2013, AMD "
-     "Ryzen). El juego no va a iniciar en esta computadora.",
-     "Seu processador não é compatível com AVX2, que o jogo precisa (Intel a partir de 2013, AMD "
-     "Ryzen). O jogo não vai iniciar neste computador."},
+    {"Your processor doesn't support SSE4.2, which the game needs (Intel from 2008 on, AMD from "
+     "2011). The game won't start on this computer.",
+     "Tu procesador no es compatible con SSE4.2, que el juego necesita (Intel desde 2008, AMD "
+     "desde 2011). El juego no va a iniciar en esta computadora.",
+     "Seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a partir de 2008, "
+     "AMD a partir de 2011). O jogo não vai iniciar neste computador."},
     {"The menu's art couldn't be read from the game's files.",
      "No se pudo leer el arte del menú desde los archivos del juego.",
      "Não foi possível ler a arte do menu nos arquivos do jogo."},

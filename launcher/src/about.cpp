@@ -39,7 +39,7 @@ const std::vector<Topic>& AboutTopics() {
           "the GPU down.")}},
       {T("What it needs"),
        {T("Windows 10 or 11, 64-bit, a graphics card with Direct3D 12 and up-to-date drivers, "
-          "and a processor with AVX2."),
+          "and a processor with SSE4.2."),
         T("A controller is recommended; the keyboard works too (its keys are on the Controls "
           "page)."),
         T("Your own copy of the game. Everything of the game's, including the art and music in "

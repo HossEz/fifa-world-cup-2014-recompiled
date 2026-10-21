@@ -58,7 +58,7 @@
   |---|---|
   | Windows | 10 or 11, 64-bit |
   | Graphics | Direct3D 12, with up-to-date drivers |
-  | Processor | With AVX2 |
+  | Processor | With SSE4.2 (Intel from 2008, AMD from 2011) |
   | The game | Not included: your own copy of *2014 FIFA World Cup Brazil* for Xbox 360, as a disc image (`.iso`) or its folder with `default.xex` (the launcher checks if your copy is playable) |
 
   ### Where things are (by default)
