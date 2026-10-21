@@ -52,6 +52,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0017 new swap chain when the window is in front again | low frame rate for a while after alt-tab |
 | 0018 the buttons the game last read (`InputSystem::GetLastGuestButtons`) | the game's quit shortcut |
 | 0019 UTF-8 path settings read as UTF-8 | game data (or saves, cache) under a path with letters like é, ö, Cyrillic |
+| 0020 the high-performance GPU first | laptops running the game on the integrated GPU |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -296,3 +297,17 @@ Windows reads it in the system's code page: a path with letters outside it
 (UTF-8 to UTF-16) now. The game's own early read of `game_data_root`
 (`pc/src/fifawc14_app.h`) does the same; that one sent players whose `.iso`
 was under such a path straight back to the launcher on Play.
+
+## 0020-high-performance-gpu
+
+`D3D12Provider::Initialize` took the first adapter `EnumAdapters1` lists that
+can make a Direct3D 12 device. That one drives the main display, on most
+laptops the integrated GPU, so a laptop with an RTX 3080 Ti ran the game at
+~20 FPS on its integrated graphics. With `d3d12_adapter = -1` (the default) it now
+asks Windows for the high-performance GPU first
+(`IDXGIFactory6::EnumAdapterByGpuPreference`), which also follows the per-app
+choice in Windows' Graphics settings. An index, WARP (`-2`), or a Windows
+without `IDXGIFactory6` (before 10 1803) choose as before. The SDK's
+`NvOptimusEnablement` / `AmdPowerXpressRequestHighPerformance` exports are in
+the GPU plugin DLL, where the drivers don't look; the game exports its own
+(`pc/src/main.cpp`).
