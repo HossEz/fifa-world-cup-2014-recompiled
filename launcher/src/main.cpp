@@ -896,6 +896,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         language = 1;
       }
       config.Set("user_language", std::to_string(language));
+      // The game's quit shortcut (pc/src/quit_shortcut.cpp) in the launcher's language.
+      config.Set("quit_language", std::string("\"") + launcher::Info(launcher::CurrentLanguage()).code + "\"");
       config.Save();
       std::string problem = StartGame(game_folder);
       if (!problem.empty()) {
@@ -1009,6 +1011,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         g_game_process = nullptr;
         ShowWindow(g_window, SW_SHOW);
         SetForegroundWindow(g_window);
+        // Play was pressed on the mouse button's press, and the window hidden
+        // before its release: the menu would still think it's held, and take
+        // the next click for its release.
+        for (int button = 0; button < ImGuiMouseButton_COUNT; ++button) {
+          ImGui::GetIO().AddMouseButtonEvent(button, false);
+        }
         ui->ApplySoundSettings();
         // A crash looks like the menu coming back by itself: say what happened.
         launcher::Log("game exited with code 0x%08lX", static_cast<unsigned long>(exit_code));

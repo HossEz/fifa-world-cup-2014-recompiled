@@ -435,6 +435,7 @@ void Ui::Frame(float width, float height, float dt) {
   dt_ = dt;
   ImGuiIO& io = ImGui::GetIO();
   mouse_moved_ = io.MouseDelta.x != 0 || io.MouseDelta.y != 0;
+  hint_clicked_ = false;
   splash_appear_ = std::min(1.0f, splash_appear_ + dt / 0.26f);
   skip_pressed_ = std::max(0.0f, skip_pressed_ - dt);
   screen_appear_ = std::min(1.0f, screen_appear_ + dt / 0.22f);
@@ -714,7 +715,10 @@ void Ui::DrawHints(float width, float height, const std::vector<Hint>& hints) {
     bool over = clickable && MouseIn(x - 4 * s, y - 6 * s, hint_right + 4 * s,
                                      y + size * 1.3f + 6 * s);
     if (over) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-    if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    if (over && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !hint_clicked_) {
+      // Once a frame: the popup a hint opens (Quit) has its own hint in the same
+      // place (Cancel), which the same click would press too.
+      hint_clicked_ = true;
       if (hint.skip_song) {
         SkipSong();
       } else if (hint.command != Command::kNone) {

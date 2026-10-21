@@ -144,6 +144,7 @@ class Ui {
   float scale_ = 1.0f;  // window height / 1080
   float dt_ = 0.0f;
   bool mouse_moved_ = false;
+  bool hint_clicked_ = false;  // a hint was clicked this frame
   InputDevice device_ = InputDevice::kKeyboard;
   std::unordered_map<std::string, float> anims_;
 

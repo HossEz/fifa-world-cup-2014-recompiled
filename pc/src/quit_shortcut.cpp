@@ -14,7 +14,6 @@
 #include <rex/input/input.h>
 #include <rex/input/input_system.h>
 #include <rex/runtime.h>
-#include <rex/system/flags.h>
 #include <rex/ui/image_decode.h>
 #include <rex/ui/imgui_dialog.h>
 #include <rex/ui/immediate_drawer.h>
@@ -26,6 +25,8 @@
 REXCVAR_DEFINE_STRING(quit_buttons, "xbox", "Game",
                       "Button icons of the quit shortcut: xbox or playstation (the launcher sets "
                       "it from the controller in use)");
+REXCVAR_DEFINE_STRING(quit_language, "en", "Game",
+                      "Language of the quit shortcut: en, es or pt (the launcher sets its own)");
 
 namespace {
 
@@ -37,8 +38,8 @@ constexpr ImU32 kCream = IM_COL32(244, 239, 200, 255);
 constexpr uint16_t kQuitButtons = rex::input::X_INPUT_GAMEPAD_BACK |
                                   rex::input::X_INPUT_GAMEPAD_START;
 
-// The overlay's words in the game's language (user_language, which the
-// launcher sets to its own language when the disc has it).
+// The overlay's words in the launcher's language (quit_language; the game's
+// own may differ, when the disc doesn't have the launcher's).
 struct Words {
   const char* hold;       // "Hold " [buttons]
   const char* to_quit;    // " to quit"
@@ -46,15 +47,13 @@ struct Words {
   const char* create;     // the PlayStation buttons' names (Back and Start stay)
   const char* options;
 };
-const Words& WordsFor(uint32_t language) {
+const Words& WordsFor(const std::string& language) {
   static const Words english = {"Hold ", " to quit", "Quitting", "Create", "Options"};
   static const Words spanish = {"Mant\xC3\xA9n ", " para salir", "Saliendo", "Crear", "Options"};
   static const Words portuguese = {"Segure ", " para sair", "Saindo", "Criar", "Options"};
-  switch (language) {
-    case 5: return spanish;
-    case 9: return portuguese;
-    default: return english;
-  }
+  if (language == "es") return spanish;
+  if (language == "pt") return portuguese;
+  return english;
 }
 
 ImU32 WithAlpha(ImU32 color, float alpha) {
@@ -72,7 +71,7 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
         window_(window),
         panel_(std::move(panel)),
         playstation_(REXCVAR_GET(quit_buttons) == "playstation"),
-        words_(WordsFor(REXCVAR_GET(user_language))) {}
+        words_(WordsFor(REXCVAR_GET(quit_language))) {}
 
  protected:
   void OnDraw(ImGuiIO& io) override {
