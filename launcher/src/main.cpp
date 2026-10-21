@@ -30,7 +30,6 @@
 #include <string>
 
 #include <imgui.h>
-#include <intrin.h>
 
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
@@ -211,17 +210,9 @@ std::string StartGame(const fs::path& game_folder) {
 }
 
 // The game is built for processors with AVX2 (-march=x86-64-v3, pc/CMakeLists.txt):
-// without it, it stops at its first AVX2 instruction.
-bool ProcessorHasAvx2() {
-  int info[4];
-  __cpuid(info, 0);
-  if (info[0] < 7) return false;
-  __cpuid(info, 1);
-  bool osxsave = (info[2] >> 27) & 1, avx = (info[2] >> 28) & 1;
-  if (!osxsave || !avx || (_xgetbv(0) & 6) != 6) return false;  // the OS saves YMM state
-  __cpuidex(info, 7, 0);
-  return (info[1] >> 5) & 1;
-}
+// without it, it stops at its first AVX2 instruction. Asked of Windows rather
+// than with cpuid, which antivirus heuristics count against a program.
+bool ProcessorHasAvx2() { return IsProcessorFeaturePresent(PF_AVX2_INSTRUCTIONS_AVAILABLE); }
 
 // What to tell the player when the game ended with `code` (0 is a normal
 // quit): why, if it's known, or the code and where its log is.
@@ -684,7 +675,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   launcher::CleanUpAfterUpdate(game_folder);  // what a portable update left behind
 
   EnsureGameConfig(data_folder);
-  // The language chosen before, or Windows' until one is.
+  // The language chosen before, or Windows' region setting's until one is.
   {
     launcher::GameConfig config(data_folder / "launcher.toml");
     std::string code = config.Get("language", "");

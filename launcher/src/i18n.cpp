@@ -504,12 +504,14 @@ const LanguageInfo& Info(Language language) {
 Language CurrentLanguage() { return g_language.load(); }
 void SetLanguage(Language language) { g_language = language; }
 
+// From the user's locale ("es-MX" -> Spanish), not the display language:
+// antivirus heuristics count the display-language call against a program.
 Language SystemLanguage() {
-  switch (PRIMARYLANGID(GetUserDefaultUILanguage())) {
-    case LANG_SPANISH: return Language::kSpanish;
-    case LANG_PORTUGUESE: return Language::kPortuguese;
-    default: return Language::kEnglish;
-  }
+  wchar_t name[LOCALE_NAME_MAX_LENGTH] = {};
+  GetUserDefaultLocaleName(name, LOCALE_NAME_MAX_LENGTH);
+  if (wcsncmp(name, L"es", 2) == 0) return Language::kSpanish;
+  if (wcsncmp(name, L"pt", 2) == 0) return Language::kPortuguese;
+  return Language::kEnglish;
 }
 
 Language LanguageFromCode(std::string_view code, Language fallback) {
