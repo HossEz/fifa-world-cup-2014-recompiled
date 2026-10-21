@@ -209,16 +209,14 @@ std::string StartGame(const fs::path& game_folder) {
   return {};
 }
 
-// The game is built for processors with SSE4.2 (-march=x86-64-v2, pc/CMakeLists.txt):
-// without it, it stops at its first such instruction. Asked of Windows rather
-// than with cpuid, which antivirus heuristics count against a program.
-bool ProcessorHasSse42() { return IsProcessorFeaturePresent(PF_SSE4_2_INSTRUCTIONS_AVAILABLE); }
-
 // What to tell the player when the game ended with `code` (0 is a normal
 // quit): why, if it's known, or the code and where its log is.
 std::string GameExitMessage(DWORD code) {
   if (code == 0) return {};
-  if (code == 0xC000001D && !ProcessorHasSse42()) {
+  // An illegal instruction: the game is built for processors with SSE4.2
+  // (-march=x86-64-v2, pc/CMakeLists.txt). Told from the exit code alone: no
+  // processor check, which antivirus heuristics count against a program.
+  if (code == 0xC000001D) {
     return T("The game stopped: your processor doesn't support SSE4.2, which the game needs "
              "(Intel from 2008 on, AMD from 2011).");
   }
@@ -909,11 +907,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       ui->SetUpdateJob(update_job.get());
     }
     g_ui = ui.get();
-    if (!ProcessorHasSse42()) {
-      launcher::Log("processor without SSE4.2");
-      ui->ShowMessage(T("Your processor doesn't support SSE4.2, which the game needs (Intel "
-                        "from 2008 on, AMD from 2011). The game won't start on this computer."));
-    }
     // The game's condensed font, for the game's frame-rate display (pc/src/fps_counter.cpp).
     fs::path font = data_folder / "futurastd-condensed.ttf";
     if (!fs::exists(font, ec)) {

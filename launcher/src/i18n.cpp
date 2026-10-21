@@ -401,12 +401,6 @@ const Entry kEntries[] = {
      "Datos, Registros abre su carpeta).",
      "O jogo fechou inesperadamente (erro {0}). Relate o problema com o fifawc14.log "
      "(Configurações, Dados, Registros abre a pasta dele)."},
-    {"Your processor doesn't support SSE4.2, which the game needs (Intel from 2008 on, AMD from "
-     "2011). The game won't start on this computer.",
-     "Tu procesador no es compatible con SSE4.2, que el juego necesita (Intel desde 2008, AMD "
-     "desde 2011). El juego no va a iniciar en esta computadora.",
-     "Seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a partir de 2008, "
-     "AMD a partir de 2011). O jogo não vai iniciar neste computador."},
     {"The menu's art couldn't be read from the game's files.",
      "No se pudo leer el arte del menú desde los archivos del juego.",
      "Não foi possível ler a arte do menu nos arquivos do jogo."},
