@@ -66,8 +66,8 @@ const Entry kEntries[] = {
      "screen. A size larger than your screen is shrunk to fit.",
      "El tamaño de la ventana del juego en modo En ventana. Automático la hace tan grande como "
      "quepa en tu pantalla. Un tamaño mayor que tu pantalla se reduce para que quepa.",
-     "O tamanho da janela do jogo no modo Em janela. Automático deixa ela do maior tamanho que "
-     "cabe na sua tela. Um tamanho maior que a tela é reduzido para caber."},
+     "O tamanho da janela do jogo no modo Em janela. Automático deixa a janela no maior tamanho "
+     "que couber na tela. Um tamanho maior que a tela é reduzido para caber."},
     {"Automatic", "Automático", "Automático"},
     {"Monitor", "Monitor", "Monitor"},
     {"The screen the game opens on.", "La pantalla en la que se abre el juego.",
@@ -137,8 +137,8 @@ const Entry kEntries[] = {
     {"Game", "Juego", "Jogo"},
     {"Your copy of the game, read from {0}. Change it if you've moved it, or to use its .iso "
      "instead.",
-     "Tu copia del juego, leída desde {0}. Cámbiala si la moviste, o para usar su .iso.",
-     "Sua cópia do jogo, lida de {0}. Mude se você moveu ela, ou para usar o .iso dela."},
+     "Tu copia del juego, ubicada en {0}. Cámbiala si la moviste, o para usar su .iso.",
+     "Sua cópia do jogo, lida de {0}. Altere se você a moveu, ou para usar o .iso dela."},
     {"Saves", "Partidas guardadas", "Jogos salvos"},
     {"Open folder", "Abrir carpeta", "Abrir pasta"},
     {"Your profile, settings and tournament saves.",
@@ -155,14 +155,14 @@ const Entry kEntries[] = {
     {"Logs", "Registros", "Registros"},
     {"The game's log (fifawc14.log). Attach it when you report a problem.",
      "El registro del juego (fifawc14.log). Adjúntalo cuando reportes un problema.",
-     "O registro do jogo (fifawc14.log). Anexe ele quando relatar um problema."},
+     "O registro do jogo (fifawc14.log). Anexe-o quando relatar um problema."},
     {"Check for updates", "Buscar actualizaciones", "Procurar atualizações"},
     {"At start, asks this project's GitHub page whether a newer version is out, and offers it. "
      "Nothing is sent about you or your game.",
      "Al iniciar, consulta la página de GitHub del proyecto por si hay una versión nueva y te la "
      "ofrece. No se envía nada sobre ti ni sobre tu juego.",
-     "Ao iniciar, consulta a página do projeto no GitHub para ver se há uma versão nova e "
-     "oferece ela. Nada sobre você ou seu jogo é enviado."},
+     "Ao iniciar, consulta a página do projeto no GitHub para ver se há uma versão nova e a "
+     "oferece. Nada sobre você ou seu jogo é enviado."},
     {"Desktop shortcut", "Acceso directo", "Atalho"},
     {"Create", "Crear", "Criar"},
     {"On desktop", "En el escritorio", "Na área de trabalho"},
@@ -328,10 +328,11 @@ const Entry kEntries[] = {
      "funciona, e as teclas estão na página Controles."},
     {"Settings here change how the game looks and runs, from the next Play. Show FPS (Settings, "
      "Display) puts the frame rate in the game's corner.",
-     "Los ajustes de aquí cambian cómo se ve y funciona el juego, a partir del siguiente Jugar. "
+     "Los ajustes de aquí cambian cómo se ve y funciona el juego, a partir de la próxima vez que "
+     "elijas Jugar. "
      "Mostrar FPS (Ajustes, Pantalla) muestra los FPS en una esquina del juego.",
-     "As configurações daqui mudam como o jogo fica e roda, a partir do próximo Jogar. Mostrar "
-     "FPS (Configurações, Tela) mostra os FPS no canto do jogo."},
+     "As configurações daqui mudam como o jogo fica e roda, a partir da próxima vez que você "
+     "escolher Jogar. Mostrar FPS (Configurações, Tela) mostra os FPS no canto do jogo."},
     {"Got it", "Entendido", "Entendi"},
 
     // Updates.
@@ -373,21 +374,21 @@ const Entry kEntries[] = {
      "Não foi possível iniciar o instalador."},
     {"The update is in place, but the new launcher didn't start. Start it again yourself.",
      "La actualización está instalada, pero el nuevo launcher no se abrió. Ábrelo tú de nuevo.",
-     "A atualização foi instalada, mas o novo launcher não abriu. Abra ele de novo."},
+     "A atualização foi instalada, mas o novo launcher não abriu. Abra-o novamente."},
 
     // Starting the game.
     {"The game (fifawc14.exe) is missing from the launcher's folder. Your antivirus may have "
      "removed it. Restore it there, or download the release again.",
      "Falta el juego (fifawc14.exe) en la carpeta del launcher. Puede que tu antivirus lo haya "
      "eliminado. Restáuralo ahí o vuelve a descargar la versión.",
-     "O jogo (fifawc14.exe) não está na pasta do launcher. Talvez o seu antivírus tenha removido "
-     "ele. Restaure ele lá ou baixe a versão de novo."},
+     "O jogo (fifawc14.exe) não está na pasta do launcher. Talvez o seu antivírus o tenha "
+     "removido. Restaure-o nessa pasta ou baixe a versão de novo."},
     {"The game (fifawc14.exe) couldn't be started (Windows error {0}). Your antivirus may be "
      "blocking it.",
      "No se pudo iniciar el juego (fifawc14.exe) (error de Windows {0}). Puede que tu antivirus "
      "lo esté bloqueando.",
      "Não foi possível iniciar o jogo (fifawc14.exe) (erro do Windows {0}). Talvez o seu "
-     "antivírus esteja bloqueando ele."},
+     "antivírus esteja bloqueando."},
     {"The game stopped: your processor doesn't support AVX2, which the game needs (Intel from "
      "2013 on, AMD Ryzen).",
      "El juego se detuvo: tu procesador no es compatible con AVX2, que el juego necesita (Intel "
