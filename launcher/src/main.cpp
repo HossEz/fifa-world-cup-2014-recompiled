@@ -18,6 +18,7 @@
 #include <wincodec.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -39,6 +40,7 @@
 #include "game_check.h"
 #include "game_files.h"
 #include "game_source.h"
+#include "i18n.h"
 #include "icon.h"
 #include "textures.h"
 #include "log.h"
@@ -52,6 +54,7 @@
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 using Microsoft::WRL::ComPtr;
+using launcher::T;
 namespace fs = std::filesystem;
 
 namespace {
@@ -68,6 +71,70 @@ launcher::Setup* g_setup = nullptr;  // until the game is found
 launcher::Audio* g_audio = nullptr;
 HWND g_window = nullptr;
 HANDLE g_game_process = nullptr;
+
+// UTF-8 (the launcher's text) for Windows' own dialogs.
+std::wstring Wide(const char* text) {
+  int length = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
+  std::wstring wide(length > 0 ? length - 1 : 0, L'\0');
+  if (length > 1) MultiByteToWideChar(CP_UTF8, 0, text, -1, wide.data(), length);
+  return wide;
+}
+
+// Drops on the window, while the game is being found. Through OLE rather than
+// WM_DROPFILES, so the setup screen also knows while something is dragged over
+// it and lights its drop box up.
+class DropTarget : public IDropTarget {
+ public:
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) override {
+    if (riid == IID_IUnknown || riid == IID_IDropTarget) {
+      *object = static_cast<IDropTarget*>(this);
+      return S_OK;
+    }
+    *object = nullptr;
+    return E_NOINTERFACE;
+  }
+  // It lives as long as the window: no counting.
+  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+
+  HRESULT STDMETHODCALLTYPE DragEnter(IDataObject* data, DWORD, POINTL, DWORD* effect) override {
+    FORMATETC format = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+    files_ = g_setup && data->QueryGetData(&format) == S_OK;
+    if (files_) g_setup->SetDragging(true);
+    *effect = files_ ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE DragOver(DWORD, POINTL, DWORD* effect) override {
+    *effect = files_ && g_setup ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE DragLeave() override {
+    if (g_setup) g_setup->SetDragging(false);
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE Drop(IDataObject* data, DWORD, POINTL, DWORD* effect) override {
+    *effect = DROPEFFECT_NONE;
+    if (!g_setup) return S_OK;
+    g_setup->SetDragging(false);
+    FORMATETC format = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+    STGMEDIUM medium = {};
+    if (data->GetData(&format, &medium) != S_OK) return S_OK;
+    auto drop = static_cast<HDROP>(GlobalLock(medium.hGlobal));
+    wchar_t dropped[MAX_PATH * 4];
+    if (drop && DragQueryFileW(drop, 0, dropped, UINT(std::size(dropped)))) {
+      g_setup->Offer(dropped);
+      SetForegroundWindow(g_window);
+      *effect = DROPEFFECT_COPY;
+    }
+    if (drop) GlobalUnlock(medium.hGlobal);
+    ReleaseStgMedium(&medium);
+    return S_OK;
+  }
+
+ private:
+  bool files_ = false;
+};
+DropTarget g_drop_target;
 
 void CreateTarget() {
   ComPtr<ID3D11Texture2D> back_buffer;
@@ -123,8 +190,8 @@ std::string StartGame(const fs::path& game_folder) {
   std::error_code ec;
   if (!fs::exists(exe, ec)) {
     launcher::Log("play: %s is missing", exe.u8string().c_str());
-    return "The game (fifawc14.exe) is missing from the launcher's folder. Your antivirus may "
-           "have removed it. Restore it there, or download the release again.";
+    return T("The game (fifawc14.exe) is missing from the launcher's folder. Your antivirus "
+             "may have removed it. Restore it there, or download the release again.");
   }
   std::wstring command = L"\"" + exe.wstring() + L"\"";
   STARTUPINFOW startup = {sizeof(startup)};
@@ -133,8 +200,9 @@ std::string StartGame(const fs::path& game_folder) {
                       game_folder.c_str(), &startup, &process)) {
     DWORD error = GetLastError();
     launcher::Log("play: starting %s failed, error %lu", exe.u8string().c_str(), error);
-    return "The game (fifawc14.exe) couldn't be started (Windows error " +
-           std::to_string(error) + "). Your antivirus may be blocking it.";
+    return launcher::Tf("The game (fifawc14.exe) couldn't be started (Windows error {0}). Your "
+                        "antivirus may be blocking it.",
+                        {std::to_string(error)});
   }
   CloseHandle(process.hThread);
   g_game_process = process.hProcess;
@@ -160,15 +228,14 @@ bool ProcessorHasAvx2() {
 std::string GameExitMessage(DWORD code) {
   if (code == 0) return {};
   if (code == 0xC000001D && !ProcessorHasAvx2()) {
-    return "The game stopped: your processor doesn't support AVX2, which the game needs "
-           "(Intel from 2013 on, AMD Ryzen).";
+    return T("The game stopped: your processor doesn't support AVX2, which the game needs "
+             "(Intel from 2013 on, AMD Ryzen).");
   }
-  char text[256];
-  std::snprintf(text, sizeof(text),
-                "The game closed unexpectedly (error 0x%08lX). Please report it with "
-                "fifawc14.log (Settings, Data, Logs opens its folder).",
-                static_cast<unsigned long>(code));
-  return text;
+  char text[16];
+  std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(code));
+  return launcher::Tf("The game closed unexpectedly (error {0}). Please report it with "
+                      "fifawc14.log (Settings, Data, Logs opens its folder).",
+                      {text});
 }
 
 void ToggleFullscreen();
@@ -262,17 +329,6 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
         }
       }
       return 0;
-    case WM_DROPFILES: {
-      // A folder or .iso dropped on the window, while the game is being found.
-      auto drop = reinterpret_cast<HDROP>(wparam);
-      wchar_t dropped[MAX_PATH * 4];
-      if (g_setup && DragQueryFileW(drop, 0, dropped, UINT(std::size(dropped)))) {
-        g_setup->Offer(dropped);
-        SetForegroundWindow(window);
-      }
-      DragFinish(drop);
-      return 0;
-    }
     case WM_DESTROY:
       PostQuitMessage(0);
       return 0;
@@ -396,11 +452,12 @@ fs::path PickLocation(bool iso) {
   dialog->GetOptions(&options);
   dialog->SetOptions(options | FOS_FORCEFILESYSTEM | (iso ? FOS_FILEMUSTEXIST : FOS_PICKFOLDERS));
   if (iso) {
-    COMDLG_FILTERSPEC types[] = {{L"Disc images (*.iso)", L"*.iso"}, {L"All files", L"*.*"}};
+    std::wstring images = Wide(T("Disc images (*.iso)")), all = Wide(T("All files"));
+    COMDLG_FILTERSPEC types[] = {{images.c_str(), L"*.iso"}, {all.c_str(), L"*.*"}};
     dialog->SetFileTypes(2, types);
-    dialog->SetTitle(L"The game's disc image");
+    dialog->SetTitle(Wide(T("The game's disc image")).c_str());
   } else {
-    dialog->SetTitle(L"The game's folder (with default.xex)");
+    dialog->SetTitle(Wide(T("The game's folder (with default.xex)")).c_str());
   }
   ComPtr<IShellItem> item;
   PWSTR picked = nullptr;
@@ -618,18 +675,27 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   fs::path data_folder = DataFolder(game_folder);
 
   // COM for XAudio2, the image encoder and the folder / .iso pickers, which
-  // need a single-threaded apartment (in a multithreaded one they hang).
-  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  // need a single-threaded apartment (in a multithreaded one they hang); OLE
+  // (in that apartment) for drag and drop.
+  OleInitialize(nullptr);
   launcher::OpenLog(data_folder / "launcher.log");
   launcher::Log("game folder: %s, data: %s", game_folder.u8string().c_str(),
                 data_folder.u8string().c_str());
   launcher::CleanUpAfterUpdate(game_folder);  // what a portable update left behind
 
   EnsureGameConfig(data_folder);
+  // The language chosen before, or Windows' until one is.
+  {
+    launcher::GameConfig config(data_folder / "launcher.toml");
+    std::string code = config.Get("language", "");
+    if (code.size() >= 2 && code.front() == '"') code = code.substr(1, code.size() - 2);
+    launcher::SetLanguage(launcher::LanguageFromCode(code, launcher::SystemLanguage()));
+  }
   // The game's folder or .iso from last time, if it's still the right game;
   // otherwise the setup screen finds it. --offer <path> shows the setup
   // screen's answer for that path (with --screenshot, to check its messages).
   std::unique_ptr<launcher::GameSource> source;
+  std::vector<uint32_t> game_languages;  // the disc's languages (GameCheck::languages)
   if (offer.empty()) {
     fs::path data_root = GameDataRoot(data_folder);
     if (!data_root.empty()) source = launcher::OpenGameSource(data_root);
@@ -640,6 +706,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
                       data_root.u8string().c_str(), int(check.result));
         source.reset();
       }
+      game_languages = check.languages;
     } else {
       launcher::Log("no game at '%s', asking", data_root.u8string().c_str());
     }
@@ -749,7 +816,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   ImGui_ImplWin32_Init(g_window);
   ImGui_ImplDX11_Init(g_device.Get(), g_context.Get());
 
-  DragAcceptFiles(g_window, TRUE);
+  RegisterDragDrop(g_window, &g_drop_target);
 
   // The menu, once the game is found (declared in this order so the music,
   // which streams from the game's files, stops before they close).
@@ -804,7 +871,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
     ui = std::make_unique<launcher::Ui>();
     if (!ui->Load(g_device.Get(), *files, data_folder, SavesFolder(game_folder))) {
-      MessageBoxW(g_window, L"The menu's art couldn't be read from the game's files.",
+      MessageBoxW(g_window, Wide(T("The menu's art couldn't be read from the game's files.")).c_str(),
                   kAppName, MB_ICONERROR);
       return false;
     }
@@ -819,6 +886,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       // controller in use.
       launcher::GameConfig config(data_folder / "fifawc14.toml");
       config.Set("quit_buttons", g_controllers.PlayStation() ? "\"playstation\"" : "\"xbox\"");
+      // The launcher's language for the game too: its language screen at
+      // start has it selected (the console's language setting).
+      // Only one the disc has: asked for another, the game picks its own (the
+      // European disc German), so English then.
+      uint32_t language = launcher::Info(launcher::CurrentLanguage()).xbox;
+      if (!game_languages.empty() &&
+          std::find(game_languages.begin(), game_languages.end(), language) == game_languages.end()) {
+        language = 1;
+      }
+      config.Set("user_language", std::to_string(language));
       config.Save();
       std::string problem = StartGame(game_folder);
       if (!problem.empty()) {
@@ -841,8 +918,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     g_ui = ui.get();
     if (!ProcessorHasAvx2()) {
       launcher::Log("processor without AVX2");
-      ui->ShowMessage("Your processor doesn't support AVX2, which the game needs (Intel from "
-                      "2013 on, AMD Ryzen). The game won't start on this computer.");
+      ui->ShowMessage(T("Your processor doesn't support AVX2, which the game needs (Intel "
+                        "from 2013 on, AMD Ryzen). The game won't start on this computer."));
     }
     // The game's condensed font, for the game's frame-rate display (pc/src/fps_counter.cpp).
     fs::path font = data_folder / "futurastd-condensed.ttf";
@@ -877,7 +954,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   auto open_setup = [&]() -> bool {
     setup = std::make_unique<launcher::Setup>();
     if (!setup->Load()) {
-      MessageBoxW(g_window, L"Windows' Segoe UI font is missing.", kAppName,
+      MessageBoxW(g_window, Wide(T("Windows' Segoe UI font is missing.")).c_str(), kAppName,
                   MB_ICONERROR);
       return false;
     }
@@ -885,9 +962,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     setup->on_choose_iso = [&] { pick = 2; };
     setup->on_continue = [&](std::unique_ptr<launcher::GameSource> found) {
       chosen = std::move(found);
+      game_languages = setup->check().languages;
       leaving = true;
     };
     setup->on_back = [&] { going_back = true; };
+    setup->on_language = [&] {
+      launcher::GameConfig config(data_folder / "launcher.toml");
+      config.Set("language", std::string("\"") + launcher::Info(launcher::CurrentLanguage()).code + "\"");
+      config.Save();
+    };
     if (source) setup->AllowBack(source->location());
     g_setup = setup.get();
     g_ui = nullptr;

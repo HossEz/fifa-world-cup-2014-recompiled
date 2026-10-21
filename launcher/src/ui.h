@@ -23,6 +23,7 @@
 #include <d3d11.h>
 
 #include "audio.h"
+#include "language_picker.h"
 #include "settings.h"
 #include "textures.h"
 #include "updater.h"
@@ -132,6 +133,12 @@ class Ui {
   void UpdateCommand(Command command);
   void HomeCommand(Command command);
   void SettingsCommand(Command command);
+  // The settings in the current language (again when it changes).
+  void BuildSections();
+  // After a launcher setting changed (Settings): the sound and the language.
+  void ApplyLocalSettings();
+  // After the language button changed it: into launcher.toml, and the settings again.
+  void SaveLanguage();
 
   ImDrawList* draw_ = nullptr;
   float scale_ = 1.0f;  // window height / 1080
@@ -156,6 +163,8 @@ class Ui {
 
   std::unique_ptr<GameConfig> config_;           // the game's fifawc14.toml
   std::unique_ptr<GameConfig> launcher_config_;  // launcher.toml
+  std::filesystem::path data_folder_, user_folder_;  // for MakeSections
+  LanguagePicker language_;  // top right
   Audio* audio_ = nullptr;
   Song shown_song_;  // the song on the main menu (fades when it changes)
   double shown_song_at_ = 0;  // when it appeared (ImGui time), for scrolling long names

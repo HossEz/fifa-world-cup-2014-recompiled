@@ -14,6 +14,7 @@
 #include <rex/input/input.h>
 #include <rex/input/input_system.h>
 #include <rex/runtime.h>
+#include <rex/system/flags.h>
 #include <rex/ui/image_decode.h>
 #include <rex/ui/imgui_dialog.h>
 #include <rex/ui/immediate_drawer.h>
@@ -36,6 +37,26 @@ constexpr ImU32 kCream = IM_COL32(244, 239, 200, 255);
 constexpr uint16_t kQuitButtons = rex::input::X_INPUT_GAMEPAD_BACK |
                                   rex::input::X_INPUT_GAMEPAD_START;
 
+// The overlay's words in the game's language (user_language, which the
+// launcher sets to its own language when the disc has it).
+struct Words {
+  const char* hold;       // "Hold " [buttons]
+  const char* to_quit;    // " to quit"
+  const char* quitting;
+  const char* create;     // the PlayStation buttons' names (Back and Start stay)
+  const char* options;
+};
+const Words& WordsFor(uint32_t language) {
+  static const Words english = {"Hold ", " to quit", "Quitting", "Create", "Options"};
+  static const Words spanish = {"Mant\xC3\xA9n ", " para salir", "Saliendo", "Crear", "Options"};
+  static const Words portuguese = {"Segure ", " para sair", "Saindo", "Criar", "Options"};
+  switch (language) {
+    case 5: return spanish;
+    case 9: return portuguese;
+    default: return english;
+  }
+}
+
 ImU32 WithAlpha(ImU32 color, float alpha) {
   uint32_t a = uint32_t(float((color >> IM_COL32_A_SHIFT) & 0xFF) * alpha);
   return (color & ~IM_COL32_A_MASK) | (a << IM_COL32_A_SHIFT);
@@ -50,7 +71,8 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
         runtime_(std::move(runtime)),
         window_(window),
         panel_(std::move(panel)),
-        playstation_(REXCVAR_GET(quit_buttons) == "playstation") {}
+        playstation_(REXCVAR_GET(quit_buttons) == "playstation"),
+        words_(WordsFor(REXCVAR_GET(user_language))) {}
 
  protected:
   void OnDraw(ImGuiIO& io) override {
@@ -67,14 +89,14 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
       if (shown < kHintSeconds) {
         float alpha = float(std::clamp(kHintSeconds - shown, 0.0, 1.0));
         // "Hold [icon] Create + [icon] Options to quit (Alt+F4)".
-        float width = Measure(font, size, "Hold ") + MeasureButtons(font, size) +
-                      Measure(font, size, " to quit") + Measure(font, size, " (Alt+F4)");
+        float width = Measure(font, size, words_.hold) + MeasureButtons(font, size) +
+                      Measure(font, size, words_.to_quit) + Measure(font, size, " (Alt+F4)");
         ImVec2 pos(size * 0.5f + PanelPadding(width, size).x,
                    io.DisplaySize.y - size * 1.5f - PanelPadding(width, size).y);
         DrawPanel(draw, pos, width, size, alpha);
-        float x = DrawText(draw, font, size, ImVec2(pos.x, pos.y), "Hold ", alpha);
+        float x = DrawText(draw, font, size, ImVec2(pos.x, pos.y), words_.hold, alpha);
         x = DrawButtons(draw, font, ImVec2(x, pos.y), size, alpha);
-        x = DrawText(draw, font, size, ImVec2(x, pos.y), " to quit", alpha);
+        x = DrawText(draw, font, size, ImVec2(x, pos.y), words_.to_quit, alpha);
         DrawText(draw, font, size, ImVec2(x, pos.y), " (Alt+F4)", alpha * 0.75f);
       }
     }
@@ -102,9 +124,9 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
     ImVec2 pos(io.DisplaySize.x * 0.5f - width * 0.5f, io.DisplaySize.y * 0.5f - size * 2.0f);
     DrawPanel(draw, pos, width, size * 2.6f, 1.0f);
     DrawText(draw, font, big,
-             ImVec2(io.DisplaySize.x * 0.5f - Measure(font, big, "Quitting") * 0.5f,
+             ImVec2(io.DisplaySize.x * 0.5f - Measure(font, big, words_.quitting) * 0.5f,
                     pos.y - size * 0.2f),
-             "Quitting", 1.0f);
+             words_.quitting, 1.0f);
     ImVec2 bar_min(pos.x, pos.y + size * 2.0f);
     ImVec2 bar_max(pos.x + width, bar_min.y + size * 0.4f);
     draw->AddRectFilled(ImVec2(bar_min.x - 2, bar_min.y - 2), ImVec2(bar_max.x + 2, bar_max.y + 2),
@@ -156,8 +178,8 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
     }
   }
 
-  const char* BackLabel() const { return playstation_ ? "Create" : "Back"; }
-  const char* StartLabel() const { return playstation_ ? "Options" : "Start"; }
+  const char* BackLabel() const { return playstation_ ? words_.create : "Back"; }
+  const char* StartLabel() const { return playstation_ ? words_.options : "Start"; }
 
   float MeasureButtons(ImFont* font, float size) const {
     return 2.0f * size * 1.6f + Measure(font, size, BackLabel()) + Measure(font, size, " + ") +
@@ -217,6 +239,7 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
   rex::ui::Window* window_;
   std::unique_ptr<rex::ui::ImmediateTexture> panel_;
   bool playstation_;
+  const Words& words_;
   std::optional<Clock::time_point> hint_start_;
   std::optional<Clock::time_point> hold_start_;
   bool quit_requested_ = false;

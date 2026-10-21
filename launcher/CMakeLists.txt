@@ -47,7 +47,9 @@ add_executable(Launcher WIN32
   src/game_check.cpp
   src/game_files.cpp
   src/game_source.cpp
+  src/i18n.cpp
   src/icon.cpp
+  src/language_picker.cpp
   src/log.cpp
   src/settings.cpp
   src/setup.cpp

@@ -29,14 +29,18 @@ constexpr CodeImage kCodeImages[] = {
      "6feab7629ac4f75c7d34524d3b48471a8b80873d375a0b2562ee5268748bccb0"},
 };
 
-// Releases known to work, by media ID; only for showing which one it is.
+// Releases known to work, by media ID: which one it is, and the languages on
+// the disc (console language IDs: 1 English, 3 German, 4 French, 5 Spanish,
+// 6 Italian). Asked for another, the game picks one of its own: the European
+// disc German.
 struct KnownRelease {
   uint32_t media_id;
   const char* region;
+  std::vector<uint32_t> languages;
 };
-constexpr KnownRelease kKnownReleases[] = {
-    {0x5D31A745, "Europe"},
-    {0x290A9ADA, "USA"},
+const KnownRelease kKnownReleases[] = {
+    {0x5D31A745, "Europe", {1, 3, 6}},
+    {0x290A9ADA, "USA", {1, 4, 5}},
 };
 
 // The retail XEX key: decrypts each file's own AES key.
@@ -189,7 +193,10 @@ GameCheck CheckGame(const GameSource& source) {
                 (version >> 8) & 0xFFFF, version & 0xFF);
   check.version = text;
   for (const KnownRelease& release : kKnownReleases) {
-    if (release.media_id == check.media_id) check.region = release.region;
+    if (release.media_id == check.media_id) {
+      check.region = release.region;
+      check.languages = release.languages;
+    }
   }
 
   if (check.title_id != kGameTitleId) {

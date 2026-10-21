@@ -9,6 +9,8 @@
 #include <fstream>
 #include <regex>
 
+#include "i18n.h"
+
 namespace launcher {
 
 namespace fs = std::filesystem;
@@ -227,11 +229,11 @@ void CreateDesktopShortcut(const fs::path& data_folder) {
   }
 }
 
-Option OnOff(std::string label, std::string key, std::string fallback, std::string help) {
+Option OnOff(const char* label, std::string key, std::string fallback, std::string help) {
   Option option;
-  option.label = std::move(label);
+  option.label = T(label);
   option.help = std::move(help);
-  option.choices = {{"Off", {{key, "false"}}, {}}, {"On", {{key, "true"}}, {}}};
+  option.choices = {{T("Off"), {{key, "false"}}, {}}, {T("On"), {{key, "true"}}, {}}};
   option.defaults = {{key, std::move(fallback)}};
   return option;
 }
@@ -241,25 +243,37 @@ Option OnOff(std::string label, std::string key, std::string fallback, std::stri
 std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& user_folder) {
   std::vector<Section> sections;
 
-  Section display{"Display", 0, {}};
+  Section display{T("Display"), 0, {}};
   {
+    // In launcher.toml; the game gets it at Play (user_language, main.cpp).
+    Option language;
+    language.label = T("Language");
+    language.help = T("The language of this menu and of the game, which asks for it at every "
+                      "start with this one selected.");
+    for (const LanguageInfo& info : Languages()) {
+      language.choices.push_back({info.name, {{"language", std::string("\"") + info.code + "\""}}, {}});
+    }
+    language.defaults = {{"language", std::string("\"") + Info(SystemLanguage()).code + "\""}};
+    language.local = true;
+    display.options.push_back(language);
+
     Option window;
-    window.label = "Window";
-    window.help = "Fullscreen fills your screen and lets you switch apps quickly. Exclusive "
-                  "gives the game the screen to itself. Windowed uses Window size.";
+    window.label = T("Window");
+    window.help = T("Fullscreen fills your screen and lets you switch apps quickly. Exclusive "
+                    "gives the game the screen to itself. Windowed uses Window size.");
     window.choices = {
-        {"Fullscreen", {{"fullscreen", "true"}, {"fullscreen_exclusive", "false"}}, {}},
-        {"Exclusive", {{"fullscreen", "true"}, {"fullscreen_exclusive", "true"}}, {}},
-        {"Windowed", {{"fullscreen", "false"}}, {}}};
+        {T("Fullscreen"), {{"fullscreen", "true"}, {"fullscreen_exclusive", "false"}}, {}},
+        {T("Exclusive"), {{"fullscreen", "true"}, {"fullscreen_exclusive", "true"}}, {}},
+        {T("Windowed"), {{"fullscreen", "false"}}, {}}};
     window.defaults = {{"fullscreen", "true"}, {"fullscreen_exclusive", "false"}};
     display.options.push_back(window);
 
     Option size;
-    size.label = "Window size";
-    size.help = "The size of the game's window in Windowed mode. Automatic makes it as large "
-                "as fits your screen. A size larger than your screen is shrunk to fit.";
+    size.label = T("Window size");
+    size.help = T("The size of the game's window in Windowed mode. Automatic makes it as large "
+                  "as fits your screen. A size larger than your screen is shrunk to fit.");
     size.applies = [](const GameConfig& config) { return config.Get("fullscreen", "true") == "false"; };
-    size.choices = {{"Automatic", {{"windowed_width", "0"}, {"windowed_height", "0"}}, {}}};
+    size.choices = {{T("Automatic"), {{"windowed_width", "0"}, {"windowed_height", "0"}}, {}}};
     for (auto [w, h] : {std::pair{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}}) {
       size.choices.push_back({std::to_string(w) + " x " + std::to_string(h),
                               {{"windowed_width", std::to_string(w)},
@@ -272,11 +286,11 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     int monitors = GetSystemMetrics(SM_CMONITORS);
     if (monitors > 1) {
       Option monitor;
-      monitor.label = "Monitor";
-      monitor.help = "The screen the game opens on.";
-      monitor.choices = {{"Main", {{"monitor", "0"}}, {}}};
+      monitor.label = T("Monitor");
+      monitor.help = T("The screen the game opens on.");
+      monitor.choices = {{T("Main"), {{"monitor", "0"}}, {}}};
       for (int i = 2; i <= monitors; ++i) {
-        monitor.choices.push_back({"Monitor " + std::to_string(i), {{"monitor", std::to_string(i)}}, {}});
+        monitor.choices.push_back({Tf("Monitor {0}", {std::to_string(i)}), {{"monitor", std::to_string(i)}}, {}});
       }
       monitor.defaults = {{"monitor", "0"}};
       display.options.push_back(monitor);
@@ -284,28 +298,28 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     display.options.push_back(OnOff(
         "Variable refresh", "d3d12_allow_variable_refresh_rate_and_tearing", "true",
-        "Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens. "
-        "Off waits for the screen's refresh: no tearing on screens without variable refresh."));
+        T("Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens. "
+          "Off waits for the screen's refresh: no tearing on screens without variable refresh.")));
     Option rate;
-    rate.label = "Frame rate";
-    rate.help = "The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "
-                "60 everywhere lifts both limits.";
-    rate.choices = {{"60 everywhere", {{"present_interval_cap", "1"}, {"frame_rate_floor", "60"}}, {}},
-                    {"As on console", {{"present_interval_cap", "0"}, {"frame_rate_floor", "0"}}, {}}};
+    rate.label = T("Frame rate");
+    rate.help = T("The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "
+                  "60 everywhere lifts both limits.");
+    rate.choices = {{T("60 everywhere"), {{"present_interval_cap", "1"}, {"frame_rate_floor", "60"}}, {}},
+                    {T("As on console"), {{"present_interval_cap", "0"}, {"frame_rate_floor", "0"}}, {}}};
     rate.defaults = {{"present_interval_cap", "0"}, {"frame_rate_floor", "0"}};
     display.options.push_back(rate);
 
     display.options.push_back(OnOff("Show FPS", "show_fps", "false",
-                                    "The frame rate in the top left corner of the game."));
+                                    T("The frame rate in the top left corner of the game.")));
   }
   sections.push_back(display);
 
-  Section graphics{"Graphics", 1, {}};
+  Section graphics{T("Graphics"), 1, {}};
   {
     Option resolution;
-    resolution.label = "Resolution";
-    resolution.help = "What the game draws at. 720p is the console's own. 1440p is sharp on a "
-                      "1080p screen. 4K needs a fast graphics card.";
+    resolution.label = T("Resolution");
+    resolution.help = T("What the game draws at. 720p is the console's own. 1440p is sharp on a "
+                        "1080p screen. 4K needs a fast graphics card.");
     resolution.choices = {{"720p", {{"resolution_scale", "1"}}, {}},
                           {"1440p", {{"resolution_scale", "2"}}, {}},
                           {"4K", {{"resolution_scale", "3"}}, {}}};
@@ -313,19 +327,19 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     graphics.options.push_back(resolution);
 
     Option upscaling;
-    upscaling.label = "Upscaling";
-    upscaling.help = "FSR sharpens the picture as it's fitted to your screen, most of all at "
-                     "720p on a 1080p screen. It can look a bit artificial.";
-    upscaling.choices = {{"Off", {{"present_effect", "\"bilinear\""}}, {}},
+    upscaling.label = T("Upscaling");
+    upscaling.help = T("FSR sharpens the picture as it's fitted to your screen, most of all at "
+                       "720p on a 1080p screen. It can look a bit artificial.");
+    upscaling.choices = {{T("Off"), {{"present_effect", "\"bilinear\""}}, {}},
                          {"FSR", {{"present_effect", "\"fsr\""}}, {}}};
     upscaling.defaults = {{"present_effect", "\"bilinear\""}};
     graphics.options.push_back(upscaling);
 
     Option filtering;
-    filtering.label = "Texture filtering";
-    filtering.help = "Keeps the pitch markings and the stands sharp at shallow angles. Costs "
-                     "next to nothing on today's graphics cards.";
-    filtering.choices = {{"Game's own", {{"anisotropic_override", "-1"}}, {}},
+    filtering.label = T("Texture filtering");
+    filtering.help = T("Keeps the pitch markings and the stands sharp at shallow angles. Costs "
+                       "next to nothing on today's graphics cards.");
+    filtering.choices = {{T("Game's own"), {{"anisotropic_override", "-1"}}, {}},
                          {"2x", {{"anisotropic_override", "2"}}, {}},
                          {"4x", {{"anisotropic_override", "3"}}, {}},
                          {"8x", {{"anisotropic_override", "4"}}, {}},
@@ -336,11 +350,11 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   sections.push_back(graphics);
 
   // This menu's own sound; the game's volume is in the game's own settings.
-  Section sound{"Menu sound", 3, {}};
+  Section sound{T("Menu sound"), 3, {}};
   {
-    auto percent = [](std::string label, std::string key, std::string fallback, std::string help) {
+    auto percent = [](const char* label, std::string key, std::string fallback, std::string help) {
       Option option;
-      option.label = std::move(label);
+      option.label = T(label);
       option.help = std::move(help);
       for (int v = 10; v <= 100; v += 10) {
         option.choices.push_back({std::to_string(v) + "%", {{key, std::to_string(v)}}, {}});
@@ -349,72 +363,74 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
       option.local = true;
       return option;
     };
-    const char* only_here = " Only in this menu. The game's own sound is set in the game.";
+    auto only_here = [](const char* text) {
+      return std::string(T(text)) + " " +
+             T("Only in this menu. The game's own sound is set in the game.");
+    };
     Option music = OnOff("Music", "menu_music", "true",
-                         std::string("The game's EA Trax soundtrack, shuffled, while you're in "
-                                     "this menu.") + only_here);
+                         only_here("The game's EA Trax soundtrack, shuffled, while you're in "
+                                   "this menu."));
     music.local = true;
     sound.options.push_back(music);
     sound.options.push_back(percent("Music volume", "music_volume", "50",
-                                    std::string("How loud this menu's music is.") + only_here));
+                                    only_here("How loud this menu's music is.")));
     Option sounds = OnOff("Sounds", "menu_sounds", "true",
-                          std::string("The game's menu sounds as you move, select and go back.") +
-                              only_here);
+                          only_here("The game's menu sounds as you move, select and go back."));
     sounds.local = true;
     sound.options.push_back(sounds);
     sound.options.push_back(percent("Sounds volume", "sounds_volume", "80",
-                                    std::string("How loud this menu's sounds are.") + only_here));
+                                    only_here("How loud this menu's sounds are.")));
   }
   sections.push_back(sound);
 
-  Section data{"Data", 2, {}};
+  Section data{T("Data"), 2, {}};
   {
     Option saves;
-    saves.label = "Saves";
-    saves.action = "Open folder";
-    saves.help = "Your profile, settings and tournament saves.";
+    saves.label = T("Saves");
+    saves.action = T("Open folder");
+    saves.help = T("Your profile, settings and tournament saves.");
     saves.run = [user_folder] { OpenFolder(user_folder); };
     data.options.push_back(saves);
 
     fs::path shaders = user_folder / "cache";
     Option cache;
-    cache.label = "Shader cache";
-    cache.action = "Clear";
+    cache.label = T("Shader cache");
+    cache.action = T("Clear");
     cache.confirm = true;
     cache.info = [shaders] { return Size(FolderBytes(shaders)); };
     cache.run = [shaders] {
       std::error_code ec;
       fs::remove_all(shaders, ec);
     };
-    cache.help = "Shaders the game has built, kept so later matches don't stutter. Clearing "
-                 "only helps if graphics look wrong after an update.";
+    cache.help = T("Shaders the game has built, kept so later matches don't stutter. Clearing "
+                   "only helps if graphics look wrong after an update.");
     data.options.push_back(cache);
 
     Option logs;
-    logs.label = "Logs";
-    logs.action = "Open folder";
-    logs.help = "The game's log (fifawc14.log). Attach it when you report a problem.";
+    logs.label = T("Logs");
+    logs.action = T("Open folder");
+    logs.help = T("The game's log (fifawc14.log). Attach it when you report a problem.");
     logs.run = [data_folder] { OpenFolder(data_folder); };
     data.options.push_back(logs);
 
     Option updates = OnOff("Check for updates", "check_updates", "true",
-                           "At start, asks this project's GitHub page whether a newer version is "
-                           "out, and offers it. Nothing is sent about you or your game.");
+                           T("At start, asks this project's GitHub page whether a newer version "
+                             "is out, and offers it. Nothing is sent about you or your game."));
     updates.local = true;
     data.options.push_back(updates);
 
     Option shortcut;
-    shortcut.label = "Desktop shortcut";
-    shortcut.action = "Create";
-    shortcut.info = [] { return HasDesktopShortcut() ? std::string("On desktop") : std::string(); };
+    shortcut.label = T("Desktop shortcut");
+    shortcut.action = T("Create");
+    shortcut.info = [] { return HasDesktopShortcut() ? std::string(T("On desktop")) : std::string(); };
     shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
     shortcut.outcome = [] {
       return HasDesktopShortcut()
-                 ? std::make_pair(std::string("The shortcut is on your desktop."), true)
-                 : std::make_pair(std::string("The shortcut couldn't be created."), false);
+                 ? std::make_pair(std::string(T("The shortcut is on your desktop.")), true)
+                 : std::make_pair(std::string(T("The shortcut couldn't be created.")), false);
     };
-    shortcut.help = "A shortcut to this launcher on your desktop, with the game's icon. Useful for "
-                    "the portable version, or if you deleted the one the installer made.";
+    shortcut.help = T("A shortcut to this launcher on your desktop, with the game's icon. Useful "
+                      "for the portable version, or if you deleted the one the installer made.");
     data.options.push_back(shortcut);
   }
   sections.push_back(data);

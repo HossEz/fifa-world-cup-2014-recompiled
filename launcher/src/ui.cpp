@@ -8,6 +8,7 @@
 
 #include "about.h"
 #include "game_files.h"
+#include "i18n.h"
 
 namespace launcher {
 
@@ -161,11 +162,23 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
 
   config_ = std::make_unique<GameConfig>(data_folder / "fifawc14.toml");
   launcher_config_ = std::make_unique<GameConfig>(data_folder / "launcher.toml");
-  sections_ = MakeSections(data_folder, user_folder);
+  data_folder_ = data_folder;
+  user_folder_ = user_folder;
+  BuildSections();
+  anims_["home0"] = 1.0f;
+  // The first start's welcome.
+  if (launcher_config_->Get("welcome_seen", "false") != "true") screen_ = Screen::kNotice;
+  return background_ && panel_ && stroke_ && logo_ && bold_ && book_ && condensed_;
+}
+
+// The settings in the current language.
+void Ui::BuildSections() {
+  infos_.clear();
+  sections_ = MakeSections(data_folder_, user_folder_);
   // Data starts with where the game is read from; changing it is the host's
   // (it reopens the setup screen).
   for (Section& section : sections_) {
-    if (section.label != "Data") continue;
+    if (section.icon != 2) continue;  // Data
     std::string location = config_->Get("game_data_root", "");
     if (location.size() >= 2 && location.front() == '"') location = location.substr(1, location.size() - 2);
     std::filesystem::path path = std::filesystem::u8path(location).make_preferred();
@@ -174,18 +187,33 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
     if (name.empty()) name = location;  // a drive's root ("E:/")
     if (name.size() > 22) name = name.substr(0, 21) + "\xE2\x80\xA6";
     Option game;
-    game.label = "Game";
-    game.action = "Change";
+    game.label = T("Game");
+    game.action = T("Change");
     game.info = [name] { return name; };
-    game.help = "Your copy of the game, read from " + location +
-                ". Change it if you've moved it, or to use its .iso instead.";
+    game.help = Tf("Your copy of the game, read from {0}. Change it if you've moved it, or to use "
+                   "its .iso instead.",
+                   {location});
     game.run = [this] { if (on_change_game) on_change_game(); };
     section.options.insert(section.options.begin(), game);
   }
-  anims_["home0"] = 1.0f;
-  // The first start's welcome.
-  if (launcher_config_->Get("welcome_seen", "false") != "true") screen_ = Screen::kNotice;
-  return background_ && panel_ && stroke_ && logo_ && bold_ && book_ && condensed_;
+}
+
+// After a launcher setting changed: the sound, and the language.
+void Ui::ApplyLocalSettings() {
+  ApplySoundSettings();
+  std::string code = launcher_config_->Get("language", "");
+  if (code.size() >= 2 && code.front() == '"') code = code.substr(1, code.size() - 2);
+  Language language = LanguageFromCode(code, CurrentLanguage());
+  if (language != CurrentLanguage()) {
+    SetLanguage(language);
+    BuildSections();
+  }
+}
+
+void Ui::SaveLanguage() {
+  launcher_config_->Set("language", std::string("\"") + launcher::Info(CurrentLanguage()).code + "\"");
+  launcher_config_->Save();
+  BuildSections();
 }
 
 void Ui::SetAudio(Audio* audio) {
@@ -352,7 +380,7 @@ void Ui::SettingsCommand(Command command) {
       if (!option.is_action() && applies) {
         option.Step(ConfigFor(option), command == Command::kLeft ? -1 : 1);
         Sound(Audio::Effect::kChange);
-        if (option.local) ApplySoundSettings();
+        if (option.local) ApplyLocalSettings();  // may rebuild the sections
       }
       break;
     case Command::kAccept:
@@ -361,7 +389,7 @@ void Ui::SettingsCommand(Command command) {
       } else if (!option.is_action()) {
         option.Step(ConfigFor(option), 1);
         Sound(Audio::Effect::kChange);
-        if (option.local) ApplySoundSettings();
+        if (option.local) ApplyLocalSettings();  // may rebuild the sections
       } else if (option.confirm && armed_option_ != option_focus_) {
         armed_option_ = option_focus_;  // press again to confirm
         Sound(Audio::Effect::kSelect);
@@ -386,6 +414,7 @@ void Ui::SettingsCommand(Command command) {
 
 bool Ui::MouseIn(float x0, float y0, float x1, float y1) const {
   if (blocked_) return false;  // behind the update popup
+  if (language_.Captures()) return false;
   ImVec2 mouse = ImGui::GetIO().MousePos;
   return mouse.x >= x0 && mouse.x < x1 && mouse.y >= y0 && mouse.y < y1;
 }
@@ -423,6 +452,18 @@ void Ui::Frame(float width, float height, float dt) {
     case Screen::kNotice: NoticeScreen(width, height); break;
   }
   DrawMessage(width, height);
+  if (!blocked_) {
+    float s = scale_;
+    ImDrawList* screen_draw = draw_;
+    if (language_.Frame(ImGui::GetForegroundDrawList(), condensed_, width - 40 * s, 24 * s, 21 * s,
+                        true)) {
+      Sound(Audio::Effect::kChange);
+      SaveLanguage();
+    }
+    draw_ = screen_draw;
+  } else {
+    language_.Close();
+  }
   if (screen_appear_ < 1.0f) {
     float t = EaseOut(screen_appear_), shift = (1.0f - t) * -24.0f * scale_;
     for (int i = first_vertex; i < draw_->VtxBuffer.Size; ++i) {
@@ -631,7 +672,8 @@ void Ui::DrawHints(float width, float height, const std::vector<Hint>& hints) {
   float x = width - 64 * s, y = height - 40 * s - size * 1.3f;
   for (int i = int(hints.size()) - 1; i >= 0; --i) {
     const Hint& hint = hints[i];
-    ImVec2 label = condensed_->CalcTextSizeA(size, FLT_MAX, 0, hint.label);
+    const char* text = T(hint.label);
+    ImVec2 label = condensed_->CalcTextSizeA(size, FLT_MAX, 0, text);
     float hint_right = x;
     x -= label.x;
     // Pointed at: the label in the focus yellow and a hand cursor. The glyph's
@@ -639,9 +681,9 @@ void Ui::DrawHints(float width, float height, const std::vector<Hint>& hints) {
     bool clickable = hint.skip_song || hint.command != Command::kNone;
     bool hover = clickable && MouseIn(x - 90 * s, y - 6 * s, hint_right + 4 * s,
                                       y + size * 1.3f + 6 * s);
-    draw_->AddText(condensed_, size, ImVec2(x + 1, y + 1), IM_COL32(0, 0, 0, 150), hint.label);
+    draw_->AddText(condensed_, size, ImVec2(x + 1, y + 1), IM_COL32(0, 0, 0, 150), text);
     draw_->AddText(condensed_, size, ImVec2(x, y), hover ? IM_COL32(247, 209, 23, 255) : kCream,
-                   hint.label);
+                   text);
     float middle = y + size * 0.6f;
     bool controller = device_ == InputDevice::kController;
     const char* glyph = controller ? hint.button : hint.key;
@@ -701,7 +743,7 @@ void Ui::HomeScreen(float width, float height) {
   for (int i = 0; i < int(std::size(kHomeItems)); ++i) {
     float top = y;
     float focus = Anim("home" + std::to_string(i), i == home_focus_ ? 1.0f : 0.0f, 0.24f);
-    y = DrawItem(board_x + pad_x, y, kHomeItems[i], bold_, size, focus);
+    y = DrawItem(board_x + pad_x, y, T(kHomeItems[i]), bold_, size, focus);
     if (MouseIn(board_x, top, board_x + board_w, y)) {
       if (mouse_moved_ && home_focus_ != i) {
         home_focus_ = i;
@@ -738,7 +780,7 @@ void Ui::SettingsScreen(float width, float height) {
   float list_h = 64 * s + heading_size * 1.1f + 40 * s + item_h * sections_.size() + 88 * s;
   DrawBoard(list_x, top, list_w, list_h, false);
   float x = list_x + 48 * s, y = top + 64 * s;
-  draw_->AddText(bold_, heading_size, ImVec2(x, y), kCream, "Settings");
+  draw_->AddText(bold_, heading_size, ImVec2(x, y), kCream, T("Settings"));
   y += heading_size * 1.1f + 40 * s;
   for (int i = 0; i < int(sections_.size()); ++i) {
     float row_top = y;
@@ -777,7 +819,7 @@ void Ui::SettingsScreen(float width, float height) {
 
   float option_size = 22 * s, em = option_size;
   float row_x0 = board_x + 48 * s + 0.9f * em, row_x1 = board_x + board_w - 48 * s - 0.6f * em;
-  y = board_y + 64 * s + 110 * s;
+  y = board_y + 64 * s + 70 * s;
   for (int i = 0; i < int(section.options.size()); ++i) {
     const Option& option = section.options[i];
     bool focused = in_options_ && i == option_focus_;
@@ -811,7 +853,7 @@ void Ui::SettingsScreen(float width, float height) {
             arrow_color);
     } else {
       bool armed = armed_option_ == i;
-      std::string label = armed ? "Sure? Press again" : option.action;
+      std::string label = armed ? T("Sure? Press again") : option.action;
       ImVec2 text = condensed_->CalcTextSizeA(value_size, FLT_MAX, 0, label.c_str());
       float pad = 0.6f * value_size, pill_w = text.x + 2 * pad, pill_h = value_size * 1.3f;
       float px = vx - pill_w, py = row_top + (row_h - pill_h) * 0.5f;
@@ -1035,10 +1077,10 @@ void Ui::ControlsScreen(float width, float height) {
   float s = scale_;
   float bx, by, bw, bh, list_y;
   float intro_size = 19 * s;
-  TwoBoards(width, height, "Controls", intro_size * 1.35f * 5, &bx, &by, &bw, &bh, &list_y);
+  TwoBoards(width, height, T("Controls"), intro_size * 1.35f * 5, &bx, &by, &bw, &bh, &list_y);
   DrawWrapped(book_, intro_size, 56 * s + 48 * s, list_y, 290 * s, kCreamDim,
-              "A controller works as it does on the console. On a keyboard each button has its "
-              "own keys. Both work at any time.");
+              T("A controller works as it does on the console. On a keyboard each button has "
+                "its own keys. Both work at any time."));
   float icon_w = 230 * s;
   DrawSplash(home_icons_[2], std::min(bx + bw + 50 * s - icon_w * 0.5f, width - icon_w * 0.55f), by - 70 * s + icon_w * 0.33f,
              icon_w, splash_appear_);
@@ -1051,9 +1093,9 @@ void Ui::ControlsScreen(float width, float height) {
   // What the buttons do: the game's Classic preset, attacking or defending
   // (left / right), as the game's own Controller Settings screen.
   {
-    const char* page = controls_defending_ ? "DEFENDING" : "ATTACKING";
+    const char* page = controls_defending_ ? T("DEFENDING") : T("ATTACKING");
     float head_y = by + 64 * s + 6 * s;
-    draw_->AddText(bold_, size * 0.8f, ImVec2(match_x, head_y), kCreamDim, "CLASSIC PRESET");
+    draw_->AddText(bold_, size * 0.8f, ImVec2(match_x, head_y), kCreamDim, T("CLASSIC PRESET"));
     ImVec2 page_size = bold_->CalcTextSizeA(size, FLT_MAX, 0, page);
     float arrow = size * 0.3f, page_y = head_y + size * 1.05f, mid = page_y + size * 0.62f;
     float text_x = match_x + arrow * 2.0f + 6 * s;
@@ -1072,7 +1114,7 @@ void Ui::ControlsScreen(float width, float height) {
     float middle = y + row_h * 0.5f;
     DrawGlyph(glyph_x, middle, row_h * 0.72f, row);
     // The keys as caps, left to right ("Space  Z" -> two caps).
-    std::string shown = row.shown;
+    std::string shown = T(row.shown);
     float key_x = keys_x, key_size = size * 0.85f;
     for (size_t start = 0; start < shown.size();) {
       size_t end = shown.find("  ", start);
@@ -1086,7 +1128,7 @@ void Ui::ControlsScreen(float width, float height) {
       start = end + 2;
     }
     draw_->AddText(book_, size, ImVec2(match_x, middle - size * 0.6f), kCreamDim,
-                   controls_defending_ ? row.defending : row.attacking);
+                   T(controls_defending_ ? row.defending : row.attacking));
     y += row_h;
   }
   DrawHints(width, height, {{"<>", "<>", controls_defending_ ? "Attacking" : "Defending",
@@ -1099,7 +1141,7 @@ void Ui::AboutScreen(float width, float height) {
   const auto& topics = AboutTopics();
   float item_size = 30 * s, item_h = item_size * 1.35f + 0.15f * item_size;
   float bx, by, bw, bh, list_y;
-  TwoBoards(width, height, "About", item_h * float(topics.size()), &bx, &by, &bw, &bh, &list_y);
+  TwoBoards(width, height, T("About"), item_h * float(topics.size()), &bx, &by, &bw, &bh, &list_y);
   float x = 56 * s + 48 * s, y = list_y;
   for (int i = 0; i < int(topics.size()); ++i) {
     float row_top = y;
@@ -1140,22 +1182,22 @@ void Ui::NoticeScreen(float width, float height) {
   float logo_w = 120 * s, logo_h = logo_w * logo_.height / std::max(1, logo_.width);
   Image(draw_, logo_, ImVec2(x, y), ImVec2(x + logo_w, y + logo_h));
   y += logo_h + 28 * s;
-  draw_->AddText(bold_, 40 * s, ImVec2(x, y), kCream, "Before you play");
+  draw_->AddText(bold_, 40 * s, ImVec2(x, y), kCream, T("Before you play"));
   y += 40 * s * 1.1f + 22 * s;
   const char* paragraphs[] = {
-      "An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
-      "game. It runs on your own copy of the game; nothing of the game's is included.",
-      "A controller is recommended (Xbox, PlayStation and others work). The keyboard works "
-      "too, and its keys are on the Controls page.",
-      "Settings here change how the game looks and runs, from the next Play. Show FPS (Settings, "
-      "Display) puts the frame rate in the game's corner."};
+      T("An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
+        "game. It runs on your own copy of the game; nothing of the game's is included."),
+      T("A controller is recommended (Xbox, PlayStation and others work). The keyboard works "
+        "too, and its keys are on the Controls page."),
+      T("Settings here change how the game looks and runs, from the next Play. Show FPS "
+        "(Settings, Display) puts the frame rate in the game's corner.")};
   float text_size = 19 * s;
   for (const char* paragraph : paragraphs) {
     y += DrawWrapped(book_, text_size, x, y, wrap, kCreamDim, paragraph) + text_size * 0.5f;
   }
   y += 14 * s;
   float top = y;
-  float bottom = DrawItem(x, y, "Got it", bold_, 34 * s, Anim("notice", 1.0f, 0.24f));
+  float bottom = DrawItem(x, y, T("Got it"), bold_, 34 * s, Anim("notice", 1.0f, 0.24f));
   if (MouseIn(x - 20 * s, top, x + 300 * s, bottom) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     OnCommand(Command::kAccept, device_);
   }
@@ -1231,10 +1273,10 @@ void Ui::UpdatePopup(float width, float height) {
   if (update_job_ && state == State::kFailed) content_h += 18 * s * 2.6f;
   content_h += choosing ? 2 * (32 * s * 1.35f + 6 * s) : 24 * s * 1.5f + 12 * s;
   float y = py + std::max(56 * s, (panel_h * 0.9f - content_h) * 0.5f);
-  draw_->AddText(bold_, 38 * s, ImVec2(x, y), ink, "Update available");
+  draw_->AddText(bold_, 38 * s, ImVec2(x, y), ink, T("Update available"));
   y += 38 * s * 1.2f;
-  std::string versions = "Version " + update_->version + "   \xC2\xB7   you have " +
-                         std::string(*LauncherVersion() ? LauncherVersion() : "?");
+  std::string versions = Tf("Version {0}   \xC2\xB7   you have {1}",
+                            {update_->version, *LauncherVersion() ? LauncherVersion() : "?"});
   draw_->AddText(condensed_, 24 * s, ImVec2(x, y), soft, versions.c_str());
   y += 24 * s * 1.5f;
   for (const std::string& change : update_->changes) {
@@ -1247,7 +1289,7 @@ void Ui::UpdatePopup(float width, float height) {
     y += 18 * s * 2.6f;
   }
   if (choosing) {
-    const char* labels[] = {update_job_ ? "Try again" : "Update now", "Later"};
+    const char* labels[] = {update_job_ ? T("Try again") : T("Update now"), T("Later")};
     for (int i = 0; i < 2; ++i) {
       float focus = Anim("update" + std::to_string(i), i == update_focus_ ? 1.0f : 0.0f, 0.2f);
       float top = y;
@@ -1271,21 +1313,20 @@ void Ui::UpdatePopup(float width, float height) {
     // Progress: a bar while downloading, then what's happening.
     uint64_t done = update_job_->downloaded(), total = update_job_->total();
     std::string line;
-    char text[96];
+    auto mb = [](uint64_t bytes) {
+      char text[32];
+      std::snprintf(text, sizeof(text), "%.1f", bytes / 1048576.0);
+      return std::string(text);
+    };
     if (state == State::kDownloading) {
-      if (total) {
-        std::snprintf(text, sizeof(text), "Downloading   %.1f of %.1f MB", done / 1048576.0,
-                      total / 1048576.0);
-      } else {
-        std::snprintf(text, sizeof(text), "Downloading   %.1f MB", done / 1048576.0);
-      }
-      line = text;
+      line = total ? Tf("Downloading   {0} of {1} MB", {mb(done), mb(total)})
+                   : Tf("Downloading   {0} MB", {mb(done)});
     } else if (state == State::kVerifying) {
-      line = "Checking the download";
+      line = T("Checking the download");
     } else if (state == State::kInstalling) {
-      line = "Installing";
+      line = T("Installing");
     } else {
-      line = "Starting the update";
+      line = T("Starting the update");
     }
     draw_->AddText(condensed_, 24 * s, ImVec2(x, y), ink, line.c_str());
     y += 24 * s * 1.5f;
@@ -1343,9 +1384,9 @@ void Ui::QuitPopup(float width, float height) {
   float x = px + panel_w * 0.17f;
   float content_h = 34 * s * 1.2f + 18 * s + 2 * (24 * s * 1.35f + 6 * s);
   float y = py + panel_h * 0.47f - content_h * 0.5f;
-  draw_->AddText(bold_, 34 * s, ImVec2(x, y), ink, "Quit the launcher?");
+  draw_->AddText(bold_, 34 * s, ImVec2(x, y), ink, T("Quit the launcher?"));
   y += 34 * s * 1.2f + 18 * s;
-  const char* labels[] = {"Yes", "No"};
+  const char* labels[] = {T("Yes"), T("No")};
   for (int i = 0; i < 2; ++i) {
     float focus = Anim("quit" + std::to_string(i), i == quit_focus_ ? 1.0f : 0.0f, 0.2f);
     float top = y;

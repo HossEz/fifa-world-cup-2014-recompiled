@@ -1,5 +1,7 @@
 #include "updater.h"
 
+#include "i18n.h"
+
 #include <windows.h>
 #include <bcrypt.h>
 #include <shellapi.h>
@@ -300,10 +302,10 @@ void UpdateJob::Run() {
   fs::remove_all(work_, ec);
   fs::create_directories(work_, ec);
   const std::string& url = kind_ == InstallKind::kPortable ? release_.portable_url : release_.setup_url;
-  if (url.empty()) return Fail("This release has no download for this kind of copy.");
+  if (url.empty()) return Fail(T("This release has no download for this kind of copy."));
 
   std::string sums;
-  if (!HttpGetText(release_.sums_url, &sums)) return Fail("Couldn't download the checksums.");
+  if (!HttpGetText(release_.sums_url, &sums)) return Fail(T("Couldn't download the checksums."));
   download_ = work_ / FileNameOf(url);
   {
     std::ofstream file(download_, std::ios::binary);
@@ -312,7 +314,7 @@ void UpdateJob::Run() {
       downloaded_ += size;
       return bool(file);
     }, &total_);
-    if (!ok) return Fail("The download failed. Check your connection and try again.");
+    if (!ok) return Fail(T("The download failed. Check your connection and try again."));
   }
 
   state_ = State::kVerifying;
@@ -320,7 +322,7 @@ void UpdateJob::Run() {
   std::string actual = Sha256File(download_);
   if (expected.empty() || actual != expected) {
     fs::remove(download_, ec);
-    return Fail("The download didn't match its checksum, so nothing was changed.");
+    return Fail(T("The download didn't match its checksum, so nothing was changed."));
   }
   Log("update: %s verified", FileNameOf(url).c_str());
 
@@ -334,7 +336,7 @@ void UpdateJob::Run() {
   fs::path unpacked = work_ / "unpacked";
   fs::create_directories(unpacked, ec);
   if (!RunHidden(L"tar.exe -xf \"" + download_.wstring() + L"\"", unpacked)) {
-    return Fail("Couldn't unpack the update.");
+    return Fail(T("Couldn't unpack the update."));
   }
   fs::path source;
   for (auto it = fs::recursive_directory_iterator(unpacked, ec); it != fs::recursive_directory_iterator();
@@ -344,7 +346,7 @@ void UpdateJob::Run() {
       break;
     }
   }
-  if (source.empty()) return Fail("The update has no launcher in it.");
+  if (source.empty()) return Fail(T("The update has no launcher in it."));
 
   std::vector<fs::path> replaced, added;
   auto roll_back = [&] {
@@ -367,7 +369,7 @@ void UpdateJob::Run() {
       fs::rename(target, old, ec);
       if (ec) {
         roll_back();
-        return Fail("Couldn't replace " + entry.path().filename().string() + ". Is the game running?");
+        return Fail(Tf("Couldn't replace {0}. Is the game running?", {entry.path().filename().string()}));
       }
       replaced.push_back(target);
     } else {
@@ -376,7 +378,7 @@ void UpdateJob::Run() {
     fs::copy_file(entry.path(), target, fs::copy_options::overwrite_existing, ec);
     if (ec) {
       roll_back();
-      return Fail("Couldn't write " + entry.path().filename().string() + " into the game's folder.");
+      return Fail(Tf("Couldn't write {0} into the game's folder.", {entry.path().filename().string()}));
     }
   }
   Log("update: %zu files replaced, %zu added", replaced.size(), added.size());
@@ -396,8 +398,8 @@ bool UpdateJob::Finish() {
     info.lpParameters = L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART";
     info.nShow = SW_SHOWNORMAL;
     if (!ShellExecuteExW(&info)) {
-      Fail(GetLastError() == ERROR_CANCELLED ? "The update was cancelled at Windows' prompt."
-                                             : "Couldn't start the installer.");
+      Fail(GetLastError() == ERROR_CANCELLED ? T("The update was cancelled at Windows' prompt.")
+                                             : T("Couldn't start the installer."));
       return false;
     }
     Log("update: installer started");
@@ -410,7 +412,7 @@ bool UpdateJob::Finish() {
   PROCESS_INFORMATION process = {};
   if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
                       game_folder_.c_str(), &startup, &process)) {
-    Fail("The update is in place, but the new launcher didn't start. Start it again yourself.");
+    Fail(T("The update is in place, but the new launcher didn't start. Start it again yourself."));
     return false;
   }
   CloseHandle(process.hThread);

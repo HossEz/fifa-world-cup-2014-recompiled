@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace launcher {
 
@@ -32,6 +33,7 @@ struct GameCheck {
   uint32_t media_id = 0;
   std::string version;  // "0.0.0.13"
   std::string region;   // "Europe", "USA" for the releases known to work; else empty
+  std::vector<uint32_t> languages;  // the disc's (console language IDs), for those releases
   int disc = 0, discs = 0;
   std::string file;  // the differing or missing file, for kOtherCode / kIncomplete
 };
