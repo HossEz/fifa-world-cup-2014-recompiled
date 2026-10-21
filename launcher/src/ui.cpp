@@ -824,6 +824,7 @@ void Ui::SettingsScreen(float width, float height) {
   float option_size = 22 * s, em = option_size;
   float row_x0 = board_x + 48 * s + 0.9f * em, row_x1 = board_x + board_w - 48 * s - 0.6f * em;
   y = board_y + 64 * s + 70 * s;
+  bool accept_click = false;
   for (int i = 0; i < int(section.options.size()); ++i) {
     const Option& option = section.options[i];
     bool focused = in_options_ && i == option_focus_;
@@ -888,7 +889,7 @@ void Ui::SettingsScreen(float width, float height) {
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         in_options_ = true;
         option_focus_ = i;
-        SettingsCommand(Command::kAccept);
+        accept_click = true;  // after the frame: it may rebuild the sections drawn here
       }
     }
     y = row_top + row_h + 4 * s;
@@ -910,6 +911,7 @@ void Ui::SettingsScreen(float width, float height) {
   } else {
     DrawHints(width, height, {{"Enter", "A", "Select", Command::kAccept}, {"Esc", "B", "Back", Command::kBack}});
   }
+  if (accept_click) SettingsCommand(Command::kAccept);
 }
 
 float Ui::DrawKey(float right, float middle, float key_size, const char* text, bool dark) {
