@@ -1,0 +1,16 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "2014 FIFA World Cup Brazil",
+  "system": "Xbox 360",
+  "type": "recomp",
+  "project": "2014 FIFA World Cup Brazil: Recompiled",
+  "status": "released",
+  "targets": ["Windows"],
+  "toolchain": "Rexglue",
+  "approach": "Static recompilation of the Xbox 360 code to C++ with ReXGlue, native Direct3D 12 renderer",
+  "maintainers": [{ "name": "HossEz", "link": "https://github.com/HossEz" }],
+  "links": [
+    { "label": "Releases", "url": "https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases" }
+  ],
+  "notes": "Unofficial Windows port with a launcher that handles setup, settings and updates. Needs your own copy of the game, no game files are included."
+}
