@@ -51,6 +51,7 @@ set(FIFAWC14_SOURCES
     ${FIXES}/gpu_memcpy.cpp
     ${FIXES}/boot_race_fixes.cpp
     ${FIXES}/present_interval.cpp
+    ${FIXES}/lua_errors.cpp
 )
 
 if(WIN32)
