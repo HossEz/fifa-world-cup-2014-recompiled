@@ -253,7 +253,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     for (const LanguageInfo& info : Languages()) {
       language.choices.push_back({info.name, {{"language", std::string("\"") + info.code + "\""}}, {}});
     }
-    language.defaults = {{"language", std::string("\"") + Info(SystemLanguage()).code + "\""}};
+    language.defaults = {{"language", std::string("\"") + Info(Language::kEnglish).code + "\""}};
     language.local = true;
     display.options.push_back(language);
 

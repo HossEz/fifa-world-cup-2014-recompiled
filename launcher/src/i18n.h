@@ -29,8 +29,6 @@ const LanguageInfo& Info(Language language);
 
 Language CurrentLanguage();
 void SetLanguage(Language language);
-// The language of Windows' region setting, if it's one of these (else English).
-Language SystemLanguage();
 // "es" -> Spanish; an unknown code -> `fallback`.
 Language LanguageFromCode(std::string_view code, Language fallback);
 

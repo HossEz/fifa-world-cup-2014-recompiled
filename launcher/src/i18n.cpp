@@ -1,7 +1,5 @@
 #include "i18n.h"
 
-#include <windows.h>
-
 #include <atomic>
 #include <unordered_map>
 
@@ -165,6 +163,10 @@ const Entry kEntries[] = {
      "oferece. Nada sobre você ou seu jogo é enviado."},
     {"Desktop shortcut", "Acceso directo", "Atalho"},
     {"Create", "Crear", "Criar"},
+    // The game's quit shortcut: "Hold [Back] + [Start] to quit", then "Quitting".
+    {"Hold", "Mantén", "Segure"},
+    {"to quit", "para salir", "para sair"},
+    {"Quitting", "Saliendo", "Saindo"},
     {"On desktop", "En el escritorio", "Na área de trabalho"},
     {"The shortcut is on your desktop.", "El acceso directo está en tu escritorio.",
      "O atalho está na sua área de trabalho."},
@@ -497,16 +499,6 @@ const LanguageInfo& Info(Language language) {
 
 Language CurrentLanguage() { return g_language.load(); }
 void SetLanguage(Language language) { g_language = language; }
-
-// From the user's locale ("es-MX" -> Spanish), not the display language:
-// antivirus heuristics count the display-language call against a program.
-Language SystemLanguage() {
-  wchar_t name[LOCALE_NAME_MAX_LENGTH] = {};
-  GetUserDefaultLocaleName(name, LOCALE_NAME_MAX_LENGTH);
-  if (wcsncmp(name, L"es", 2) == 0) return Language::kSpanish;
-  if (wcsncmp(name, L"pt", 2) == 0) return Language::kPortuguese;
-  return Language::kEnglish;
-}
 
 Language LanguageFromCode(std::string_view code, Language fallback) {
   for (const LanguageInfo& info : kLanguages) {

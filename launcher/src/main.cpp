@@ -673,12 +673,14 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   launcher::CleanUpAfterUpdate(game_folder);  // what a portable update left behind
 
   EnsureGameConfig(data_folder);
-  // The language chosen before, or Windows' region setting's until one is.
+  // The language chosen before, or English until one is. Not guessed from
+  // Windows' language or region: antivirus models count asking for either
+  // against a program (Microsoft flagged the setup for it, 0.1.5 and 0.1.6).
   {
     launcher::GameConfig config(data_folder / "launcher.toml");
     std::string code = config.Get("language", "");
     if (code.size() >= 2 && code.front() == '"') code = code.substr(1, code.size() - 2);
-    launcher::SetLanguage(launcher::LanguageFromCode(code, launcher::SystemLanguage()));
+    launcher::SetLanguage(launcher::LanguageFromCode(code, launcher::Language::kEnglish));
   }
   // The game's folder or .iso from last time, if it's still the right game;
   // otherwise the setup screen finds it. --offer <path> shows the setup
@@ -885,8 +887,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         language = 1;
       }
       config.Set("user_language", std::to_string(language));
-      // The game's quit shortcut (pc/src/quit_shortcut.cpp) in the launcher's language.
-      config.Set("quit_language", std::string("\"") + launcher::Info(launcher::CurrentLanguage()).code + "\"");
+      // The game's quit shortcut (pc/src/quit_shortcut.cpp) in the launcher's
+      // language: its words, translated here (the game has no translations).
+      auto quoted = [](const char* text) { return std::string("\"") + text + "\""; };
+      config.Set("quit_hold", quoted(T("Hold")));
+      config.Set("quit_to_quit", quoted(T("to quit")));
+      config.Set("quit_quitting", quoted(T("Quitting")));
+      config.Set("quit_create", quoted(T("Create")));
       config.Save();
       std::string problem = StartGame(game_folder);
       if (!problem.empty()) {
