@@ -198,10 +198,9 @@ std::string StartGame(const fs::path& game_folder) {
     return T("The game (fifawc14.exe) is missing from the launcher's folder. Your antivirus "
              "may have removed it. Restore it there, or download the release again.");
   }
-  std::wstring command = L"\"" + exe.wstring() + L"\"";
-  // The game then ends with kNoGameExitCode if it can't find the game, instead
-  // of opening another launcher (pc/src/launcher_redirect.cpp).
-  SetEnvironmentVariableW(L"FIFAWC14_FROM_LAUNCHER", L"1");
+  // --from_launcher: the game then ends with kNoGameExitCode if it can't find
+  // the game, instead of opening another launcher (pc/src/launcher_redirect.cpp).
+  std::wstring command = L"\"" + exe.wstring() + L"\" --from_launcher";
   STARTUPINFOW startup = {sizeof(startup)};
   PROCESS_INFORMATION process = {};
   if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
