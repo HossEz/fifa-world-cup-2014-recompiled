@@ -53,6 +53,7 @@ set(FIFAWC14_SOURCES
     ${FIXES}/boot_race_fixes.cpp
     ${FIXES}/present_interval.cpp
     ${FIXES}/lua_errors.cpp
+    ${FIXES}/ring_wait_sleep.cpp
 )
 
 if(WIN32)

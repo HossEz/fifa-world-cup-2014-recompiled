@@ -58,6 +58,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0023 vblanks from a 60 Hz display, presented with vsync (`vsync_to_display`) | constant tearing and occasional hitches on 60 Hz screens |
 | 0024 present spacing in the log | measuring how evenly frames reach the display |
 | 0025 overlays without continuous repaint (`ImGuiDialog::WantsContinuousPaint`) | micro-stutter with G-SYNC / FreeSync |
+| 0026 sleep instead of spinning | CPU running hot at a fraction of its total use |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -378,3 +379,24 @@ the FPS counter at 60. A dialog now says whether it needs continuous repaints
 toast is queued or showing, and the game's overlays never, as they're drawn
 with each guest frame. Measured at 144 Hz with FreeSync: the spacing median
 went from 5.8 ms to 16.7 ms, with almost none off by more than 2 ms.
+
+## 0026-sleep-instead-of-spinning
+
+A laptop's CPU ran hot at ~40% use: several threads kept a core each at 100%
+while only waiting. Measured with `log_thread_cpu` and the dev sampler:
+
+- `rex::thread::Sleep` and `AlertableSleep` on Windows passed whole
+  milliseconds to `::Sleep`, so anything under 1 ms became `Sleep(0)`, a
+  yield. 0002's 250 us poll in WAIT_REG_MEM spun the GPU command thread at
+  ~98%. Sub-20 ms sleeps now use a high-resolution waitable timer (Windows 10
+  1803+, one per thread); without one, whole milliseconds rounded up.
+- `XThread::Delay` (KeDelayExecutionThread) turned the guest's interval into
+  milliseconds, so delays under 1 ms were yields too. It keeps microseconds.
+- `TimerQueue`'s thread waited with disruptorplus' spin strategy, which mostly
+  yields in a loop (~45% of a core). It polls with sleeps of up to 1 ms now: a
+  new timer is seen within 1 ms, a due one on time.
+
+The game's own spinning loops are hooked in the game (pc/src/frame_rate.cpp,
+pc/fixes/ring_wait_sleep.cpp). Together: the GPU command thread ~98% -> ~25%,
+the game's main thread 100% -> ~20%, its render thread 100% -> under 10%, the
+timer thread ~45% -> idle, at the same frame pacing.

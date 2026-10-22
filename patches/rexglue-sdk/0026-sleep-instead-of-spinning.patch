@@ -1,0 +1,160 @@
+diff --git a/src/core/threading_win.cpp b/src/core/threading_win.cpp
+index 896dfec..121ed3d 100644
+--- a/src/core/threading_win.cpp
++++ b/src/core/threading_win.cpp
+@@ -13,6 +13,12 @@ static_assert(REX_PLATFORM_WIN32, "This file is Windows-only");
+ 
+ #include "platform_win.h"
+ 
++#include <algorithm>
++
++#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
++#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
++#endif
++
+ #include <spdlog/spdlog.h>
+ 
+ #include <rex/assert.h>
+@@ -93,16 +99,52 @@ void SyncMemory() {
+   MemoryBarrier();
+ }
+ 
++namespace {
++
++// ::Sleep takes whole milliseconds, and 0 only yields: a 250 us poll became a
++// thread spinning a core at 100%, heating laptops at a fraction of the CPU's
++// total use. A high-resolution waitable timer (Windows 10 1803 and later)
++// sleeps for the time asked; one per thread, closed when the thread ends.
++struct HighResolutionTimer {
++  HANDLE handle = CreateWaitableTimerExW(nullptr, nullptr,
++                                         CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
++                                         TIMER_ALL_ACCESS);
++  ~HighResolutionTimer() {
++    if (handle) {
++      CloseHandle(handle);
++    }
++  }
++};
++
++// Sleeps `duration` (at least 100 us). Returns the wait's result
++// (WAIT_IO_COMPLETION if alertable and an APC came).
++DWORD SleepFor(std::chrono::microseconds duration, bool alertable) {
++  thread_local HighResolutionTimer timer;
++  if (timer.handle && duration < std::chrono::milliseconds(20)) {
++    LARGE_INTEGER due;
++    due.QuadPart = -int64_t(duration.count()) * 10;  // relative, 100 ns units
++    if (SetWaitableTimerEx(timer.handle, &due, 0, nullptr, nullptr, nullptr, 0)) {
++      return WaitForSingleObjectEx(timer.handle, INFINITE, alertable ? TRUE : FALSE);
++    }
++  }
++  // Rounded up: asking for 0 ms would only yield.
++  DWORD ms = DWORD(std::max<int64_t>(1, (duration.count() + 999) / 1000));
++  return SleepEx(ms, alertable ? TRUE : FALSE);
++}
++
++}  // namespace
++
+ void Sleep(std::chrono::microseconds duration) {
+   if (duration.count() < 100) {
+     MaybeYield();
+   } else {
+-    ::Sleep(static_cast<DWORD>(duration.count() / 1000));
++    SleepFor(duration, false);
+   }
+ }
+ 
+ SleepResult AlertableSleep(std::chrono::microseconds duration) {
+-  if (SleepEx(static_cast<DWORD>(duration.count() / 1000), TRUE) == WAIT_IO_COMPLETION) {
++  DWORD result = duration.count() < 100 ? SleepEx(0, TRUE) : SleepFor(duration, true);
++  if (result == WAIT_IO_COMPLETION) {
+     return SleepResult::kAlerted;
+   }
+   return SleepResult::kSuccess;
+diff --git a/src/core/timer_queue.cpp b/src/core/timer_queue.cpp
+index 5cfea05..b69230f 100644
+--- a/src/core/timer_queue.cpp
++++ b/src/core/timer_queue.cpp
+@@ -66,10 +66,27 @@ class TimerQueue {
+ 
+     while (!stop_token.stop_requested()) {
+       {
+-        // Consume new wait items and add them to sorted wait queue
+-        dp::sequence_t available = claim_strategy_.wait_until_published(
+-            next_sequence, next_sequence - 1,
+-            wait_queue_.empty() ? clock::time_point::max() : wait_queue_.front()->due_);
++        // Consume new wait items and add them to sorted wait queue. Polled with
++        // sleeps of up to 1 ms (the precise kind, rex::thread::Sleep) rather
++        // than the wait strategy's wait, which mostly yields in a loop and kept
++        // a core busy: a new item is seen within 1 ms, a due one on time.
++        dp::sequence_t available;
++        while (true) {
++          available = claim_strategy_.last_published_after(next_sequence - 1);
++          if (available != next_sequence - 1 || stop_token.stop_requested()) {
++            break;
++          }
++          auto now = clock::now();
++          auto wait = std::chrono::microseconds(1000);
++          if (!wait_queue_.empty()) {
++            if (wait_queue_.front()->due_ <= now) {
++              break;
++            }
++            wait = std::min(wait, std::chrono::duration_cast<std::chrono::microseconds>(
++                                      wait_queue_.front()->due_ - now));
++          }
++          rex::thread::Sleep(wait);
++        }
+ 
+         // Check for timeout
+         if (available != next_sequence - 1) {
+diff --git a/src/system/xthread.cpp b/src/system/xthread.cpp
+index c679a63..57bbde7 100644
+--- a/src/system/xthread.cpp
++++ b/src/system/xthread.cpp
+@@ -1003,22 +1003,23 @@ uint32_t XThread::SelfSuspend() {
+ 
+ X_STATUS XThread::Delay(uint32_t processor_mode, uint32_t alertable, uint64_t interval) {
+   int64_t timeout_ticks = interval;
+-  uint32_t timeout_ms;
++  // In microseconds: a delay under a millisecond (a common polling interval)
++  // used to become 0 ms, a yield, and the thread spun instead of sleeping.
++  uint64_t timeout_us;
+   if (timeout_ticks > 0) {
+     // Absolute time, based on January 1, 1601.
+     // TODO(benvanik): convert time to relative time.
+     assert_always();
+-    timeout_ms = 0;
++    timeout_us = 0;
+   } else if (timeout_ticks < 0) {
+-    // Relative time.
+-    timeout_ms = uint32_t(-timeout_ticks / 10000);  // Ticks -> MS
++    // Relative time, in 100 ns ticks.
++    timeout_us = uint64_t(-chrono::Clock::ScaleGuestDurationFileTime(timeout_ticks)) / 10;
+   } else {
+-    timeout_ms = 0;
++    timeout_us = 0;
+   }
+-  timeout_ms = chrono::Clock::ScaleGuestDurationMillis(timeout_ms);
+   CheckTitleTermination();
+   if (alertable) {
+-    auto result = rex::thread::AlertableSleep(std::chrono::milliseconds(timeout_ms));
++    auto result = rex::thread::AlertableSleep(std::chrono::microseconds(timeout_us));
+     CheckTitleTermination();
+     switch (result) {
+       default:
+@@ -1028,14 +1029,14 @@ X_STATUS XThread::Delay(uint32_t processor_mode, uint32_t alertable, uint64_t in
+         return X_STATUS_USER_APC;
+     }
+   } else {
+-    if (timeout_ms == 0) {
++    if (timeout_us == 0) {
+       if (priority_ <= rex::thread::ThreadPriority::kBelowNormal) {
+         rex::thread::Sleep(std::chrono::microseconds(100));
+       } else {
+         rex::thread::MaybeYield();
+       }
+     } else {
+-      rex::thread::Sleep(std::chrono::milliseconds(timeout_ms));
++      rex::thread::Sleep(std::chrono::microseconds(timeout_us));
+     }
+     CheckTitleTermination();
+   }
