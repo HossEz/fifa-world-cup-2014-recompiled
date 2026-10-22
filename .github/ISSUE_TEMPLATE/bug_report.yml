@@ -1,0 +1,115 @@
+name: Bug report
+description: "Report a problem with 2014 FIFA World Cup Brazil: Recompiled"
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use this form for problems with the Windows port. This is for bug reports only. For questions or ideas, open a discussion or a feature request instead.
+
+        Before you post:
+        - Update to the [latest release](https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases/latest) and check the problem still happens.
+        - Search the existing issues, open and closed.
+        - Check the **Known issues** in the README.
+        **Do not attach game disc images, XEX files, extracted game data, or generated game code, and do not ask where to get the game.**
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "The version shown in the launcher's About page. If it will not open, give the release filename you installed."
+      placeholder: "For example, 0.1.8"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does the problem occur?
+      options:
+        - Installing or updating
+        - Opening or using the launcher
+        - Finding or checking my game copy
+        - Starting or loading the game
+        - Crash or freeze while playing
+        - Graphics or performance
+        - Audio
+        - Controls or input
+        - Saves or settings
+        - Building from source
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed or portable?
+      options:
+        - Installed (setup.exe)
+        - Portable (zip)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: How do you load your game copy?
+      description: Choose the one that applies. Say in the description if you tried both and only one fails.
+      options:
+        - Disc image (.iso)
+        - Game folder (with default.xex)
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: system
+    attributes:
+      label: System details
+      description: Operating system, CPU, GPU and RAM. Mention if you use a laptop, an overclock or underclock, or a hybrid or integrated GPU.
+      placeholder: |
+        OS:
+        CPU:
+        GPU:
+        RAM:
+    validations:
+      required: true
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Launcher settings
+      description: Only if relevant to the problem, for example resolution, window mode, frame rate limit, upscaling, VSync. Say if you changed any setting from its default.
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, what did you expect to happen, and what happened instead? Include how often it occurs and whether it started after an update.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Attaching the full `fifawc14.log` is preferred (Settings → Data → Logs opens its folder). Reproduce the problem first so the log is from that run, because it is replaced on each launch. If you cannot attach a log, paste only the relevant excerpt.
+      placeholder: Attach the log file(s) here, or paste a relevant excerpt.
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or video
+      description: Genuine screenshots or a short clip, if they help show the problem. Drag and drop them here.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Anything you already tried, or what you noticed that might help.
