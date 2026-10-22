@@ -9,14 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases">
-    <img src="https://img.shields.io/github/downloads/HossEz/fifa-world-cup-2014-recompiled/total?style=flat-square&color=2ea44f&label=Downloads" alt="Total downloads">
-  </a>
-  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/stargazers">
-    <img src="https://img.shields.io/github/stars/HossEz/fifa-world-cup-2014-recompiled?style=flat-square&color=f1c40f&label=Stars" alt="GitHub stars">
-  </a>
-  <img src="https://img.shields.io/github/v/release/HossEz/fifa-world-cup-2014-recompiled?style=flat-square&color=0078d4&label=Version" alt="Latest version">
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4?style=flat-square" alt="Platform">
+  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases"><img src="https://img.shields.io/github/downloads/HossEz/fifa-world-cup-2014-recompiled/total?style=flat-square&color=2ea44f&label=Downloads" alt="Total downloads"></a>
+  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/stargazers"><img src="https://img.shields.io/github/stars/HossEz/fifa-world-cup-2014-recompiled?style=flat-square&color=f1c40f&label=Stars" alt="GitHub stars"></a>
+  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases/latest"><img src="https://img.shields.io/github/v/release/HossEz/fifa-world-cup-2014-recompiled?style=flat-square&color=0078d4&label=Version" alt="Latest version"></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4?style=flat-square" alt="Platform: Windows 10/11"></a>
 </p>
 
   An *unofficial* PC port of the Xbox 360 game **2014 FIFA World Cup Brazil**, by ***hosse***. The game's code was statically recompiled into C++ using [ReXGlue](https://github.com/rexglue/rexglue-sdk) and compiled for Windows, allowing it to run natively.
@@ -27,7 +23,8 @@
 
   </div>
   
-  <img width="1142" height="727" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/a6d5888c-c714-4fbb-8abd-91517fe4a54b" />
+  <img width="1100" height="700" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/b4625ef4-2b4c-4930-9465-ddfba3f16aa7" />
+
   <sub>Launcher preview · 2014 FIFA World Cup Brazil: Recompiled</sub>
 
   ## Playing
@@ -52,7 +49,8 @@
   (Xbox, PlayStation and others). The keyboard works too, and its keys are on the
   Controls page.
 
-  <img width="1920" height="1080" alt="fifawc14_GtHsVXXJIM" src="https://github.com/user-attachments/assets/416c4381-1563-47bc-a1b3-d5dd63544605" />
+  <img width="1920" height="1080" alt="An in-game screenshot" src="https://github.com/user-attachments/assets/416c4381-1563-47bc-a1b3-d5dd63544605" />
+
   <sub>In-game · 2014 FIFA World Cup Brazil: Recompiled</sub>
 
   ### Updates
