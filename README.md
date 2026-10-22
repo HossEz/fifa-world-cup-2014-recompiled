@@ -2,11 +2,24 @@
 
   # 2014 FIFA World Cup Brazil: Recompiled
 
-  [![Download](https://img.shields.io/badge/Download-latest%20release-2ea44f?style=for-the-badge)](https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases/latest)
-  [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4?style=for-the-badge)](#requirements)
+<p align="center">
+  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases/latest">
+    <img src="https://img.shields.io/badge/Download-latest%20release-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Download latest release">
+  </a>
+</p>
 
-  An *unofficial* PC port of the Xbox 360 game ***2014 FIFA World Cup Brazil***, by **hosse**. The game's code was translated into C++ with
-  [ReXGlue](https://github.com/rexglue/rexglue-sdk) and compiled for Windows, so it runs natively.
+<p align="center">
+  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases">
+    <img src="https://img.shields.io/github/downloads/HossEz/fifa-world-cup-2014-recompiled/total?style=flat-square&color=2ea44f&label=Downloads" alt="Total downloads">
+  </a>
+  <a href="https://github.com/HossEz/fifa-world-cup-2014-recompiled/stargazers">
+    <img src="https://img.shields.io/github/stars/HossEz/fifa-world-cup-2014-recompiled?style=flat-square&color=f1c40f&label=Stars" alt="GitHub stars">
+  </a>
+  <img src="https://img.shields.io/github/v/release/HossEz/fifa-world-cup-2014-recompiled?style=flat-square&color=0078d4&label=Version" alt="Latest version">
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d4?style=flat-square" alt="Platform">
+</p>
+
+  An *unofficial* PC port of the Xbox 360 game **2014 FIFA World Cup Brazil**, by ***hosse***. The game's code was statically recompiled into C++ using [ReXGlue](https://github.com/rexglue/rexglue-sdk) and compiled for Windows, allowing it to run natively.
 
   The only official download is this page's [Releases](https://github.com/HossEz/fifa-world-cup-2014-recompiled/releases).
 
