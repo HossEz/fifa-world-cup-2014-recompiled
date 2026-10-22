@@ -74,6 +74,8 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
         playstation_(REXCVAR_GET(quit_buttons) == "playstation"),
         words_{REXCVAR_GET(quit_hold) + " ", " " + REXCVAR_GET(quit_to_quit),
                REXCVAR_GET(quit_quitting), REXCVAR_GET(quit_create)} {}
+  // Drawn with each game frame, as the FPS counter (fps_counter.cpp).
+  bool WantsContinuousPaint() const override { return false; }
 
  protected:
   void OnDraw(ImGuiIO& io) override {

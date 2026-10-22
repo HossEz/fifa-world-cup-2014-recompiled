@@ -55,6 +55,9 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0020 the high-performance GPU first | laptops running the game on the integrated GPU |
 | 0021 the config file opened by its wide path | Play opening the launcher again, for players whose Documents path has letters outside the system code page |
 | 0022 why the guest stopped, logged | error 0x80000003 reports: the log (and the launcher's message) says which break it was |
+| 0023 vblanks from a 60 Hz display, presented with vsync (`vsync_to_display`) | constant tearing and occasional hitches on 60 Hz screens |
+| 0024 present spacing in the log | measuring how evenly frames reach the display |
+| 0025 overlays without continuous repaint (`ImGuiDialog::WantsContinuousPaint`) | micro-stutter with G-SYNC / FreeSync |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -337,3 +340,41 @@ is the thrown C++ type's decorated name, the exception code, or the bug check
 code and parameters. The launcher shows that reason in its "closed
 unexpectedly" message, since players send a screenshot of it more often than
 the log.
+
+## 0023-vsync-to-display
+
+The guest's vblanks came from a timer, and every frame was presented at once
+with tearing allowed (`Present(0, ALLOW_TEARING)`), which suits variable
+refresh and high refresh rates. On a plain 60 Hz screen it tore constantly,
+and the timer's 60 Hz and the display's (59.95, 60.02...) drifted apart, so
+now and then a frame was shown twice or skipped: a hitch with the FPS counter
+at 60. With `vsync_to_display` (default on) and the display within 1.5 Hz of
+the guest's refresh rate, the vblank thread waits for the display's own
+vertical blank (`IDXGIOutput::WaitForVBlank` on the swap chain's output) and
+the presenter presents with vsync. The output and its refresh rate are looked
+up every 120 presents, so moving the window or changing the mode switches
+over. At other refresh rates, or when the output can't be found (some hybrid
+laptops), it works as before. Present stall recovery (0011) skips presents
+made with vsync, which wait for the display by design.
+
+## 0024-present-spacing-log
+
+Logs the time between presents every 600 presents ("present spacing:"):
+p1, p50, p99, max, and how many were more than 2 ms off the median or over
+1.5 times it. With variable refresh the display follows presents, so this is
+what a player sees. A log of the old builds showed a 5.8 ms median: ~200
+presents a second for a 60 FPS game (0025).
+
+## 0025-overlays-without-continuous-repaint
+
+`ImGuiDrawer` asked for another paint after every paint while any dialog
+existed. The game always has three (its FPS counter and quit hint, and the
+SDK's achievement toast dialog), so the window was repainted at the display's
+full rate on top of the guest's 60 frames: ~200 presents a second at 144 Hz.
+With G-SYNC or FreeSync the display then ran near its maximum refresh and
+showed each guest frame for an uneven 2 or 3 refreshes, a micro-stutter with
+the FPS counter at 60. A dialog now says whether it needs continuous repaints
+(`WantsContinuousPaint`, default true); the achievement toast only while a
+toast is queued or showing, and the game's overlays never, as they're drawn
+with each guest frame. Measured at 144 Hz with FreeSync: the spacing median
+went from 5.8 ms to 16.7 ms, with almost none off by more than 2 ms.

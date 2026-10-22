@@ -1,0 +1,167 @@
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index 7a06456..e98630c 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -12,7 +12,9 @@
+ #pragma once
+ 
+ #include <array>
++#include <atomic>
+ #include <memory>
++#include <mutex>
+ #include <utility>
+ 
+ #include <rex/math.h>
+@@ -104,6 +106,21 @@ class D3D12Presenter final : public Presenter {
+ 
+   PaintResult PaintAndPresentImpl(bool execute_ui_drawers) override;
+ 
++ public:
++  bool WaitForDisplayVblank(double guest_refresh_hz) override;
++
++ private:
++  // The output the swap chain is on and its refresh rate in whole Hz, looked
++  // up by the painting thread every so often (the window may move), read by
++  // the guest's vblank thread (WaitForDisplayVblank).
++  void UpdateDisplay();
++  std::mutex display_mutex_;
++  Microsoft::WRL::ComPtr<IDXGIOutput> display_output_;
++  uint32_t display_refresh_hz_ = 0;
++  uint32_t display_update_countdown_ = 0;
++  // The guest's vblanks follow the display's: present with vsync.
++  std::atomic<bool> display_locked_{false};
++
+  private:
+   struct GuestOutputPaintRectangleConstants {
+     union {
+diff --git a/include/rex/ui/presenter.h b/include/rex/ui/presenter.h
+index afb4a30..ffa7173 100644
+--- a/include/rex/ui/presenter.h
++++ b/include/rex/ui/presenter.h
+@@ -362,6 +362,12 @@ class Presenter {
+   // multiple at the same time, and it should acquire the latest guest output
+   // image via ConsumeGuestOutput.
+   virtual bool CaptureGuestOutput(RawImage& image_out) = 0;
++  // With the display at a fixed refresh rate near the guest's, waits for its
++  // next vertical blank and returns true: the guest's vblanks then follow the
++  // display, and frames are presented in step with it (no tearing, no drift
++  // between two clocks). Otherwise returns false without waiting, and the
++  // caller keeps its own timer. Any thread.
++  virtual bool WaitForDisplayVblank([[maybe_unused]] double guest_refresh_hz) { return false; }
+   const GuestOutputPaintConfig& GetGuestOutputPaintConfigFromUIThread() const {
+     return guest_output_paint_config_;
+   }
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+index a147f0c..500f548 100644
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -164,6 +164,14 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+         uint64_t no_vsync_interval_ticks = std::max(uint64_t(1), guest_tick_frequency / 1000);
+         uint64_t last_frame_time = chrono::Clock::QueryGuestTickCount();
+         while (vsync_worker_running_) {
++          // A display at the guest's refresh rate gives the vblanks itself
++          // (vsync_to_display): one per display refresh, none drifting.
++          if (REXCVAR_GET(vsync) && presenter_ &&
++              presenter_->WaitForDisplayVblank(refresh_rate_hz)) {
++            MarkVblank();
++            last_frame_time = chrono::Clock::QueryGuestTickCount();
++            continue;
++          }
+           uint64_t current_time = chrono::Clock::QueryGuestTickCount();
+           uint64_t interval_ticks =
+               REXCVAR_GET(vsync) ? vsync_interval_ticks : no_vsync_interval_ticks;
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index fa663a4..91ea4c2 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -38,12 +38,56 @@ REXCVAR_DEFINE_BOOL(d3d12_present_waitable, true, "UI/D3D12",
+ 
+ REXCVAR_DEFINE_BOOL(d3d12_allow_variable_refresh_rate_and_tearing, true, "UI/D3D12",
+                     "Allow variable refresh rate and tearing");
++REXCVAR_DEFINE_BOOL(vsync_to_display, true, "UI/D3D12",
++                    "On a display at a fixed refresh rate near the game's (60 Hz), take the "
++                    "game's vblanks from the display and present with vsync: no tearing, and no "
++                    "frame shown twice or skipped where two clocks drift");
+ REXCVAR_DEFINE_BOOL(d3d12_present_stall_recovery, true, "UI/D3D12",
+                     "Recreate the swap chain when presents keep waiting for the display (after an "
+                     "overlay or a focus change)");
+ 
+ namespace rex::ui::d3d12 {
+ 
++void D3D12Presenter::UpdateDisplay() {
++  Microsoft::WRL::ComPtr<IDXGIOutput> output;
++  uint32_t refresh_hz = 0;
++  if (paint_context_.swap_chain &&
++      SUCCEEDED(paint_context_.swap_chain->GetContainingOutput(&output))) {
++    DXGI_OUTPUT_DESC desc;
++    DEVMODEW mode = {};
++    mode.dmSize = sizeof(mode);
++    if (SUCCEEDED(output->GetDesc(&desc)) &&
++        EnumDisplaySettingsW(desc.DeviceName, ENUM_CURRENT_SETTINGS, &mode)) {
++      refresh_hz = mode.dmDisplayFrequency;
++    }
++  }
++  std::lock_guard<std::mutex> lock(display_mutex_);
++  if (refresh_hz != display_refresh_hz_) {
++    REXLOG_INFO("D3D12Presenter: display at {} Hz", refresh_hz);
++  }
++  display_output_ = refresh_hz ? output : nullptr;
++  display_refresh_hz_ = refresh_hz;
++}
++
++bool D3D12Presenter::WaitForDisplayVblank(double guest_refresh_hz) {
++  Microsoft::WRL::ComPtr<IDXGIOutput> output;
++  {
++    std::lock_guard<std::mutex> lock(display_mutex_);
++    // 59 or 61 for a 59.94 or 60.0x Hz mode. At 120 Hz or more the display
++    // can't be followed one to one; there, as with variable refresh, the
++    // guest keeps its timer and frames go out as soon as they're ready.
++    if (REXCVAR_GET(vsync_to_display) && display_output_ &&
++        std::abs(double(display_refresh_hz_) - guest_refresh_hz) <= 1.5) {
++      output = display_output_;
++    }
++  }
++  bool locked = output && SUCCEEDED(output->WaitForVBlank());
++  if (locked != display_locked_.exchange(locked, std::memory_order_relaxed)) {
++    REXLOG_INFO("D3D12Presenter: guest vblanks {} the display", locked ? "follow" : "no longer follow");
++  }
++  return locked;
++}
++
+ // Generated with `xb buildshaders`.
+ namespace shaders {
+ #include "ui/shaders/bytecode/d3d12_5_1/guest_output_bilinear_dither_ps.h"
+@@ -1179,6 +1223,10 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   command_list->ResourceBarrier(1, &barrier_rtv_to_present);
+ 
+   // Execute and present.
++  if (display_update_countdown_-- == 0) {
++    UpdateDisplay();
++    display_update_countdown_ = 120;
++  }
+   command_list->Close();
+   ID3D12CommandList* execute_command_list = command_list;
+   provider_.GetDirectQueue()->ExecuteCommandLists(1, &execute_command_list);
+@@ -1198,11 +1246,19 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   // says nothing about the display.
+   bool gpu_behind = paint_context_.present_submission_tracker.GetCompletedSubmission() + 1 <
+                     paint_context_.present_submission_tracker.GetCurrentSubmission();
++  // Locked to the display (WaitForDisplayVblank), with vsync: this frame was
++  // made for the vblank that just passed, and is shown at the next one.
++  bool locked = display_locked_.load(std::memory_order_relaxed);
+   uint64_t present_start = chrono::Clock::QueryHostTickCount();
+-  HRESULT present_result = paint_context_.swap_chain->Present(
+-      0, DXGI_PRESENT_RESTART |
+-             (paint_context_.swap_chain_allows_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0));
++  HRESULT present_result =
++      locked ? paint_context_.swap_chain->Present(1, 0)
++             : paint_context_.swap_chain->Present(
++                   0, DXGI_PRESENT_RESTART | (paint_context_.swap_chain_allows_tearing
++                                                  ? DXGI_PRESENT_ALLOW_TEARING
++                                                  : 0));
++  // A present with vsync may wait for the display: that's not a stall.
+   bool recreate_swap_chain =
++      !locked &&
+       TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind);
+   // Even if presentation has failed, work might have been enqueued anyway
+   // internally before the failure according to Jesse Natalie from the DirectX

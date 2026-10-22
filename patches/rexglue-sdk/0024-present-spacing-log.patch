@@ -1,0 +1,71 @@
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index e98630c..75c23bc 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -357,6 +357,13 @@ class D3D12Presenter final : public Presenter {
+     bool in_background = false;
+   };
+   PresentStats present_stats_;
++  // The time between presents, which the display follows with variable
++  // refresh: logged every kSpacingPresents presents ("present spacing:").
++  void TrackPresentSpacing();
++  static constexpr uint32_t kSpacingPresents = 600;
++  std::array<float, kSpacingPresents> present_spacing_ms_{};
++  uint32_t present_spacing_count_ = 0;
++  uint64_t last_present_tick_ = 0;
+ 
+ #if defined(REX_HAS_FIDELITYFX_RUNTIME) && REX_HAS_FIDELITYFX_RUNTIME
+   void* temporal_upscaler_context_ = nullptr;
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index 91ea4c2..b33dfae 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -1260,6 +1260,7 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   bool recreate_swap_chain =
+       !locked &&
+       TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind);
++  TrackPresentSpacing();
+   // Even if presentation has failed, work might have been enqueued anyway
+   // internally before the failure according to Jesse Natalie from the DirectX
+   // Discord server.
+@@ -1282,6 +1283,40 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   }
+ }
+ 
++void D3D12Presenter::TrackPresentSpacing() {
++  uint64_t now = chrono::Clock::QueryHostTickCount();
++  uint64_t last = last_present_tick_;
++  last_present_tick_ = now;
++  if (!last) {
++    return;
++  }
++  double ms = double(now - last) * 1000.0 / double(chrono::Clock::QueryHostTickFrequency());
++  // A pause (loading, the window in the background) isn't a hitch.
++  if (ms > 250.0) {
++    return;
++  }
++  present_spacing_ms_[present_spacing_count_++] = float(ms);
++  if (present_spacing_count_ < kSpacingPresents) {
++    return;
++  }
++  present_spacing_count_ = 0;
++  std::array<float, kSpacingPresents> sorted = present_spacing_ms_;
++  std::sort(sorted.begin(), sorted.end());
++  float median = sorted[kSpacingPresents / 2];
++  // Off the median by more than 2 ms: a frame shown early or late, which with
++  // variable refresh the display shows as it is.
++  uint32_t uneven = 0, long_gaps = 0;
++  for (float spacing : present_spacing_ms_) {
++    uneven += std::abs(spacing - median) > 2.0f;
++    long_gaps += spacing > median * 1.5f;
++  }
++  REXLOG_INFO(
++      "present spacing: p1 {:.2f} ms, p50 {:.2f}, p99 {:.2f}, max {:.1f}; off by over 2 ms "
++      "{}, over 1.5x {}",
++      sorted[kSpacingPresents / 100], median, sorted[kSpacingPresents * 99 / 100],
++      sorted[kSpacingPresents - 1], uneven, long_gaps);
++}
++
+ bool D3D12Presenter::TrackPresentTime(uint64_t present_ticks, bool gpu_behind) {
+   // A present that doesn't wait for the display takes well under a
+   // millisecond. Most presents with the GPU not behind waiting longer, over a

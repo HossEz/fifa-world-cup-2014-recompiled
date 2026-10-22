@@ -24,6 +24,9 @@ constexpr ImU32 kCream = IM_COL32(244, 239, 200, 255);
 class FpsCounter : public rex::ui::ImGuiDialog {
  public:
   FpsCounter(rex::ui::ImGuiDrawer* drawer, ImFont* font) : ImGuiDialog(drawer), font_(font) {}
+  // Drawn with each game frame (SDK patch 0025): continuous repaints would
+  // present far more often than the game's 60 frames, unevenly.
+  bool WantsContinuousPaint() const override { return false; }
 
  protected:
   void OnDraw(ImGuiIO& io) override {
