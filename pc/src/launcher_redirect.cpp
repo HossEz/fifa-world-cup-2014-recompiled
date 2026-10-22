@@ -12,6 +12,14 @@ void OpenLauncherIfNoGame(const std::filesystem::path& game_data_root) {
   std::error_code ec;
   if (!game_data_root.empty() && std::filesystem::exists(game_data_root, ec)) return;
 #ifdef _WIN32
+  // Started by the launcher's Play (it sets FIFAWC14_FROM_LAUNCHER): it already
+  // found the game and is waiting for this process, so a second launcher only
+  // looked like Play opening the menu again. The exit code tells it what happened.
+  if (GetEnvironmentVariableW(L"FIFAWC14_FROM_LAUNCHER", nullptr, 0) != 0) {
+    REXLOG_ERROR("No game at game_data_root '{}' (from the config, or it couldn't be read)",
+                 rex::path_to_utf8(game_data_root));
+    ExitProcess(kNoGameExitCode);
+  }
   std::filesystem::path launcher = rex::filesystem::GetExecutableFolder() / "Launcher.exe";
   if (!std::filesystem::exists(launcher, ec)) return;
   ShellExecuteW(nullptr, L"open", launcher.c_str(), nullptr, launcher.parent_path().c_str(),

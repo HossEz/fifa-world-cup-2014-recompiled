@@ -1,0 +1,74 @@
+diff --git a/src/core/cvar.cpp b/src/core/cvar.cpp
+index 228728d..3bc9f21 100644
+--- a/src/core/cvar.cpp
++++ b/src/core/cvar.cpp
+@@ -20,6 +20,7 @@
+ #include <CLI/CLI.hpp>
+ 
+ #include <rex/cvar.h>
++#include <rex/filesystem.h>
+ #include <rex/logging.h>
+ #include <rex/platform/env.h>
+ 
+@@ -637,17 +638,26 @@ std::vector<std::string> Init(int argc, char** argv) {
+ }
+ 
+ void LoadConfig(const std::filesystem::path& config_path) {
++  // Opened by its wide path and named in UTF-8: path::string() is the system's
++  // code page, so under a folder with letters outside it (a user name in
++  // Cyrillic, say) the config couldn't be opened, or string() threw.
++  std::string name = rex::path_to_utf8(config_path);
+   if (!std::filesystem::exists(config_path)) {
+-    REXLOG_DEBUG("Config file not found: {}", config_path.string());
++    REXLOG_DEBUG("Config file not found: {}", name);
+     return;
+   }
+ 
+   try {
+-    auto config = toml::parse_file(config_path.string());
++    std::ifstream file(config_path, std::ios::binary);
++    if (!file) {
++      REXLOG_ERROR("Failed to open config {}", name);
++      return;
++    }
++    auto config = toml::parse(file, name);
+     ApplyTomlTable(config, "");
+-    REXLOG_DEBUG("Loaded config from {}", config_path.string());
++    REXLOG_DEBUG("Loaded config from {}", name);
+   } catch (const toml::parse_error& err) {
+-    REXLOG_ERROR("Failed to parse config {}: {}", config_path.string(), err.what());
++    REXLOG_ERROR("Failed to parse config {}: {}", name, err.what());
+   }
+ }
+ 
+diff --git a/src/core/logging.cpp b/src/core/logging.cpp
+index e8de147..c853929 100644
+--- a/src/core/logging.cpp
++++ b/src/core/logging.cpp
+@@ -13,6 +13,7 @@
+ #include <cctype>
+ #include <charconv>
+ #include <filesystem>
++#include <fstream>
+ #include <map>
+ #include <mutex>
+ #include <optional>
+@@ -26,6 +27,7 @@
+ #include <toml++/toml.hpp>
+ 
+ #include <rex/cvar.h>
++#include <rex/filesystem.h>
+ #include <rex/logging.h>
+ #include <rex/platform.h>
+ #include <rex/platform/env.h>
+@@ -594,7 +596,9 @@ std::map<std::string, std::string> ParseCategoryLevelsFromConfig(
+     return result;
+ 
+   try {
+-    auto config = toml::parse_file(config_path.string());
++    // By its wide path, as LoadConfig (cvar.cpp) reads the same file.
++    std::ifstream file(config_path, std::ios::binary);
++    auto config = toml::parse(file, rex::path_to_utf8(config_path));
+     auto* log_table = config["log"].as_table();
+     if (!log_table)
+       return result;

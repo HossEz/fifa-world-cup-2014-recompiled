@@ -1,0 +1,63 @@
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_debug.cpp b/src/kernel/xboxkrnl/xboxkrnl_debug.cpp
+index 670c446..7b8b77b 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_debug.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_debug.cpp
+@@ -25,10 +25,19 @@
+ namespace rex::kernel::xboxkrnl {
+ using namespace rex::system;
+ 
+-void DbgBreakPoint_entry() {
++// The break ends the process (exit code 0x80000003, nothing catches it): say
++// why first, and flush, so the log has it when a player only has that code.
++void BreakWithReason(const std::string& reason) {
++  auto* thread = XThread::GetCurrentThread();
++  REXKRNL_ERROR("Guest stopped: {} (thread {:08X})", reason, thread ? thread->thread_id() : 0);
++  rex::FlushLogging();
+   rex::debug::Break();
+ }
+ 
++void DbgBreakPoint_entry() {
++  BreakWithReason("DbgBreakPoint");
++}
++
+ // https://msdn.microsoft.com/en-us/library/xcb2z8hs.aspx
+ typedef struct {
+   rex::be<uint32_t> type;
+@@ -123,7 +132,17 @@ void HandleCppException(ppc_ptr_t<X_EXCEPTION_RECORD> record) {
+   auto catchable_types = REX_KERNEL_MEMORY()->TranslateVirtual<x_s__CatchableTypeArray*>(
+       throw_info->catchable_type_array_ptr);
+ 
+-  rex::debug::Break();
++  // The thrown type's decorated name (".?AVbad_alloc@std@@"), 8 bytes into its
++  // type descriptor.
++  std::string type = "?";
++  if (catchable_types && catchable_types->number_catchable_types > 0) {
++    auto catchable = REX_KERNEL_MEMORY()->TranslateVirtual<x_s__CatchableType*>(
++        catchable_types->catchable_type_ptrs[0]);
++    if (catchable && catchable->type_ptr) {
++      type = REX_KERNEL_MEMORY()->TranslateVirtual<const char*>(catchable->type_ptr + 8);
++    }
++  }
++  BreakWithReason(fmt::format("unhandled C++ exception {}", type));
+ }
+ 
+ void RtlRaiseException_entry(ppc_ptr_t<X_EXCEPTION_RECORD> record) {
+@@ -140,14 +159,13 @@ void RtlRaiseException_entry(ppc_ptr_t<X_EXCEPTION_RECORD> record) {
+ 
+   // TODO(benvanik): unwinding.
+   // This is going to suck.
+-  rex::debug::Break();
++  BreakWithReason(fmt::format("RtlRaiseException 0x{:08X}", uint32_t(record->code)));
+ }
+ 
+ void KeBugCheckEx_entry(u32 code, u32 param1, u32 param2, u32 param3, u32 param4) {
+-  REXKRNL_DEBUG("*** STOP: 0x{:08X} (0x{:08X}, 0x{:08X}, 0x{:08X}, 0x{:08X})", code, param1, param2,
+-                param3, param4);
+-  fflush(stdout);
+-  rex::debug::Break();
++  BreakWithReason(fmt::format("KeBugCheckEx 0x{:08X} (0x{:08X}, 0x{:08X}, 0x{:08X}, 0x{:08X})",
++                              uint32_t(code), uint32_t(param1), uint32_t(param2),
++                              uint32_t(param3), uint32_t(param4)));
+   assert_always();
+ }
+ 

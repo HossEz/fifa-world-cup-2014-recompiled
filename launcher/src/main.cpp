@@ -70,6 +70,10 @@ launcher::Setup* g_setup = nullptr;  // until the game is found
 launcher::Audio* g_audio = nullptr;
 HWND g_window = nullptr;
 HANDLE g_game_process = nullptr;
+// The game's log and its size when Play started it: the log is appended to, so
+// what this run wrote starts there.
+std::filesystem::path g_game_log;
+uintmax_t g_game_log_start = 0;
 
 // UTF-8 (the launcher's text) for Windows' own dialogs.
 std::wstring Wide(const char* text) {
@@ -182,6 +186,8 @@ fs::path GameDataRoot(const fs::path& data_folder) {
   return {};
 }
 
+fs::path DataFolder(const fs::path& game_folder);
+
 // Starts fifawc14.exe from the game folder. If it can't, says why (for the menu).
 std::string StartGame(const fs::path& game_folder) {
   if (g_game_process) return {};
@@ -193,6 +199,9 @@ std::string StartGame(const fs::path& game_folder) {
              "may have removed it. Restore it there, or download the release again.");
   }
   std::wstring command = L"\"" + exe.wstring() + L"\"";
+  // The game then ends with kNoGameExitCode if it can't find the game, instead
+  // of opening another launcher (pc/src/launcher_redirect.cpp).
+  SetEnvironmentVariableW(L"FIFAWC14_FROM_LAUNCHER", L"1");
   STARTUPINFOW startup = {sizeof(startup)};
   PROCESS_INFORMATION process = {};
   if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
@@ -205,8 +214,30 @@ std::string StartGame(const fs::path& game_folder) {
   }
   CloseHandle(process.hThread);
   g_game_process = process.hProcess;
+  g_game_log = DataFolder(game_folder) / "fifawc14.log";
+  g_game_log_start = fs::file_size(g_game_log, ec);
+  if (ec) g_game_log_start = 0;
   ShowWindow(g_window, SW_HIDE);
   return {};
+}
+
+// Why the game stopped, if it said: the SDK logs "Guest stopped: <reason>"
+// before the debugger break that ends it (error 0x80000003, SDK patch 0022).
+// Players send a screenshot of the message more often than the log.
+std::string GameStopReason() {
+  std::error_code ec;
+  uintmax_t size = fs::file_size(g_game_log, ec);
+  if (ec) return {};
+  std::ifstream log(g_game_log, std::ios::binary);
+  if (size >= g_game_log_start) log.seekg(std::streamoff(g_game_log_start));
+  std::string line, reason;
+  const std::string marker = "Guest stopped: ";
+  while (std::getline(log, line)) {
+    size_t at = line.find(marker);
+    if (at != std::string::npos) reason = line.substr(at + marker.size());
+  }
+  while (!reason.empty() && (reason.back() == '\r' || reason.back() == ' ')) reason.pop_back();
+  return reason;
 }
 
 // What to tell the player when the game ended with `code` (0 is a normal
@@ -220,11 +251,22 @@ std::string GameExitMessage(DWORD code) {
     return T("The game stopped: your processor doesn't support SSE4.2, which the game needs "
              "(Intel from 2008 on, AMD from 2011).");
   }
+  // The game found no game_data_root in fifawc14.toml, though the launcher saved
+  // it there (pc/src/launcher_redirect.h, kNoGameExitCode).
+  if (code == 0x0F140001) {
+    std::u8string folder = g_game_log.parent_path().u8string();
+    return launcher::Tf("The game couldn't read where the game files are from fifawc14.toml "
+                        "in {0}. Pick the game again in Settings, Data, Game.",
+                        {reinterpret_cast<const char*>(folder.c_str())});
+  }
   char text[16];
   std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(code));
-  return launcher::Tf("The game closed unexpectedly (error {0}). Please report it with "
+  std::string reason = GameStopReason();
+  if (!reason.empty()) launcher::Log("game stopped: %s", reason.c_str());
+  std::string message = launcher::Tf("The game closed unexpectedly (error {0}). Please report it with "
                       "fifawc14.log (Settings, Data, Logs opens its folder).",
                       {text});
+  return reason.empty() ? message : message + " [" + reason + "]";
 }
 
 void ToggleFullscreen();
@@ -460,13 +502,14 @@ fs::path PickLocation(bool iso) {
   return location;
 }
 
-// The game's folder or .iso, written to fifawc14.toml (game_data_root).
-void SaveGameLocation(const fs::path& data_folder, const fs::path& location) {
+// The game's folder or .iso, written to fifawc14.toml (game_data_root). False
+// if the file couldn't be written: the game reads it there, so Play would fail.
+bool SaveGameLocation(const fs::path& data_folder, const fs::path& location) {
   launcher::GameConfig config(data_folder / "fifawc14.toml");
   std::u8string utf8 = location.generic_u8string();
   config.Set("game_data_root",
              "\"" + std::string(reinterpret_cast<const char*>(utf8.c_str())) + "\"");
-  config.Save();
+  return config.Save();
 }
 
 // The launcher window's size and position, kept in launcher.toml.
@@ -1099,9 +1142,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         ui.reset();
         files.reset();
         source = std::move(chosen);
-        SaveGameLocation(data_folder, source->location());
-        launcher::Log("game chosen: %s", source->location().u8string().c_str());
+        bool saved = SaveGameLocation(data_folder, source->location());
+        launcher::Log("game chosen: %s%s", source->location().u8string().c_str(),
+                      saved ? "" : " (fifawc14.toml couldn't be written)");
         if (!load_menu()) return 2;
+        if (!saved) {
+          std::u8string folder = data_folder.u8string();
+          ui->ShowMessage(launcher::Tf(
+              "The game's location couldn't be saved to fifawc14.toml in {0}, so the game "
+              "won't find it. Windows' Controlled folder access or your antivirus may be "
+              "blocking the launcher from writing there.",
+              {reinterpret_cast<const char*>(folder.c_str())}));
+        }
         last = std::chrono::steady_clock::now();
       }
     } else if (black > 0) {

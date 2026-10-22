@@ -397,6 +397,21 @@ const Entry kEntries[] = {
      "desde 2008, AMD desde 2011).",
      "O jogo parou: seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a "
      "partir de 2008, AMD a partir de 2011)."},
+    {"The game couldn't read where the game files are from fifawc14.toml in {0}. Pick the game "
+     "again in Settings, Data, Game.",
+     "El juego no pudo leer dónde están sus archivos desde fifawc14.toml en {0}. Vuelve a elegir "
+     "el juego en Ajustes, Datos, Juego.",
+     "O jogo não conseguiu ler onde estão os arquivos do jogo a partir do fifawc14.toml em {0}. "
+     "Escolha o jogo de novo em Configurações, Dados, Jogo."},
+    {"The game's location couldn't be saved to fifawc14.toml in {0}, so the game won't find it. "
+     "Windows' Controlled folder access or your antivirus may be blocking the launcher from "
+     "writing there.",
+     "No se pudo guardar la ubicación del juego en fifawc14.toml en {0}, así que el juego no la "
+     "encontrará. El acceso controlado a carpetas de Windows o tu antivirus pueden estar "
+     "impidiendo que el launcher escriba ahí.",
+     "Não foi possível salvar o local do jogo no fifawc14.toml em {0}, então o jogo não vai "
+     "encontrá-lo. O acesso controlado a pastas do Windows ou seu antivírus podem estar "
+     "impedindo o launcher de gravar ali."},
     {"The game closed unexpectedly (error {0}). Please report it with fifawc14.log (Settings, "
      "Data, Logs opens its folder).",
      "El juego se cerró inesperadamente (error {0}). Repórtalo junto con fifawc14.log (Ajustes, "

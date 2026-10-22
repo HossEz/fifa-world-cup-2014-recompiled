@@ -202,7 +202,10 @@ class Ui {
   bool blocked_ = false;      // drawing the screen behind the popup: no mouse, no hints
   std::string message_;
   float message_left_ = 0.0f;  // seconds the message still shows
+  float message_shown_ = 0.0f;  // seconds since it came up
   bool message_ok_ = false;
+  bool message_stays_ = false;  // a problem: shown until the next input
+  void DismissMessage();
 };
 
 }  // namespace launcher

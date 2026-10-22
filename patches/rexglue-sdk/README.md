@@ -53,6 +53,8 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0018 the buttons the game last read (`InputSystem::GetLastGuestButtons`) | the game's quit shortcut |
 | 0019 UTF-8 path settings read as UTF-8 | game data (or saves, cache) under a path with letters like é, ö, Cyrillic |
 | 0020 the high-performance GPU first | laptops running the game on the integrated GPU |
+| 0021 the config file opened by its wide path | Play opening the launcher again, for players whose Documents path has letters outside the system code page |
+| 0022 why the guest stopped, logged | error 0x80000003 reports: the log (and the launcher's message) says which break it was |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -311,3 +313,27 @@ without `IDXGIFactory6` (before 10 1803) choose as before. The SDK's
 `NvOptimusEnablement` / `AmdPowerXpressRequestHighPerformance` exports are in
 the GPU plugin DLL, where the drivers don't look; the game exports its own
 (`pc/src/main.cpp`).
+
+## 0021-config-file-wide-path
+
+`LoadConfig` (`cvar.cpp`) and the log levels' read of the same file
+(`logging.cpp`) opened it with `toml::parse_file(path.string())`. On Windows
+`string()` is the system's code page, so with `fifawc14.toml` under a folder
+with letters outside it (the user's Documents, under a Cyrillic or Greek user
+name, say) the file couldn't be opened, or `string()` threw. The game then had
+no `game_data_root` and opened the launcher again: to the player, Play opened
+a second menu. 0019 fixed the paths read from the config; this one fixes how the
+file is opened. Both now open it with `std::ifstream` on the wide path and parse
+the stream, and log the path in UTF-8.
+
+## 0022-guest-break-reason
+
+The guest's `DbgBreakPoint`, a C++ exception it throws that nothing handles,
+any other `RtlRaiseException`, and `KeBugCheck(Ex)` all end in
+`rex::debug::Break()`, an `int3` nothing catches, so the process ends with
+0x80000003 and the log said nothing about which one it was. Each now logs
+`Guest stopped: <reason>` at error level and flushes the log first. The reason
+is the thrown C++ type's decorated name, the exception code, or the bug check
+code and parameters. The launcher shows that reason in its "closed
+unexpectedly" message, since players send a screenshot of it more often than
+the log.

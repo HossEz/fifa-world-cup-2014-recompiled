@@ -258,6 +258,7 @@ std::string Ui::OptionInfo(const Option& option) {
 
 void Ui::OnCommand(Command command, InputDevice device) {
   device_ = device;
+  DismissMessage();
   if (quit_asked_) {
     QuitCommand(command);
     return;
@@ -483,14 +484,28 @@ void Ui::ShowMessage(std::string text, bool ok) {
   message_ = std::move(text);
   message_ok_ = ok;
   message_left_ = 8.0f;
+  message_shown_ = 0.0f;
+  // A problem stays until the player presses or clicks something: they need
+  // time to read it (and to take a screenshot to report it).
+  message_stays_ = !ok;
+}
+
+// A problem's message fades out on the player's next input, but not one
+// that came with it (the press that showed it).
+void Ui::DismissMessage() {
+  if (!message_stays_ || message_shown_ < 0.5f) return;
+  message_stays_ = false;
+  message_left_ = std::min(message_left_, 0.4f);
 }
 
 // The message, bottom left (the hints are bottom right), on a dark band.
 void Ui::DrawMessage(float width, float height) {
-  message_left_ = std::max(0.0f, message_left_ - dt_);
+  message_shown_ += dt_;
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) DismissMessage();
+  if (!message_stays_) message_left_ = std::max(0.0f, message_left_ - dt_);
   if (message_left_ <= 0) return;
   float s = scale_, size = 21 * s;
-  float alpha = std::min({1.0f, message_left_ / 0.4f, (8.0f - message_left_) / 0.2f});
+  float alpha = std::min({1.0f, message_left_ / 0.4f, message_shown_ / 0.2f});
   float wrap = width * 0.5f;
   ImVec2 text = condensed_->CalcTextSizeA(size, FLT_MAX, wrap, message_.c_str());
   float x = 64 * s, y = height - 40 * s - text.y, pad = 12 * s;
