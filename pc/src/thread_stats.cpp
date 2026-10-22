@@ -23,7 +23,9 @@
 #include <rex/cvar.h>
 #include <rex/logging.h>
 
-REXCVAR_DEFINE_INT32(log_thread_cpu, 0, "Debug",
+// On by default (every 30 s): players send logs, and a thread pinned near 100%
+// (heat, low frame rates) is then in them.
+REXCVAR_DEFINE_INT32(log_thread_cpu, 30, "Debug",
                      "Every N seconds log the threads that used at least 10% of a core, by "
                      "name. 0 = off.")
     .range(0, 3600);
