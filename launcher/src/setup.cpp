@@ -75,6 +75,13 @@ bool Setup::Load() {
   regular_ = add("segoeui.ttf");
   semibold_ = add("seguisb.ttf");
   if (!semibold_) semibold_ = add("segoeuib.ttf");
+  // No Segoe UI under Wine / Proton (Steam Deck): its own Tahoma, a Windows
+  // font that may be there, or ImGui's built-in one, which always is.
+  if (!regular_) regular_ = add("tahoma.ttf");
+  if (!regular_) regular_ = add("arial.ttf");
+  if (!regular_) regular_ = io.Fonts->AddFontDefault();
+  if (!semibold_) semibold_ = add("tahomabd.ttf");
+  if (!semibold_) semibold_ = add("arialbd.ttf");
   if (!semibold_) semibold_ = regular_;
   return regular_ != nullptr;
 }
