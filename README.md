@@ -85,7 +85,7 @@
 
   ### Known issues
 
-  - 4K: pre-match scenes, replays and celebrations drop framrate, and can stutter at times.
+  - The pre-match training, cutscenes, replays and celebrations still drop below 60fps.
 
   ## Building from source
 
