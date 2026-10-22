@@ -457,10 +457,20 @@ void Ui::Frame(float width, float height, float dt) {
   if (!blocked_) {
     float s = scale_;
     ImDrawList* screen_draw = draw_;
-    if (language_.Frame(ImGui::GetForegroundDrawList(), condensed_, width - 40 * s, 24 * s, 21 * s,
-                        true)) {
+    // Off the home screen it fades back, so the section's art behind the corner
+    // shows; full again under the mouse or with its list open.
+    float target = screen_ == Screen::kHome || language_.Captures() ? 1.0f : 0.35f;
+    language_alpha_ += (target - language_alpha_) * std::min(1.0f, dt_ * 8.0f);
+    ImDrawList* foreground = ImGui::GetForegroundDrawList();
+    int first = foreground->VtxBuffer.Size;
+    if (language_.Frame(foreground, condensed_, width - 40 * s, 24 * s, 21 * s, true)) {
       Sound(Audio::Effect::kChange);
       SaveLanguage();
+    }
+    for (int i = first; i < foreground->VtxBuffer.Size; ++i) {
+      ImU32& col = foreground->VtxBuffer[i].col;
+      ImU32 a = uint32_t(float((col >> IM_COL32_A_SHIFT) & 0xFF) * language_alpha_ + 0.5f);
+      col = (col & ~IM_COL32_A_MASK) | (a << IM_COL32_A_SHIFT);
     }
     draw_ = screen_draw;
   } else {

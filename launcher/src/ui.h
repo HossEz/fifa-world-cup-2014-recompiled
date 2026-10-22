@@ -159,6 +159,7 @@ class Ui {
   std::vector<std::vector<uint8_t>> font_data_;  // ImGui reads the fonts in place
 
   Screen screen_ = Screen::kHome;
+  float language_alpha_ = 1.0f;  // the language picker's, dimmed off the home screen
   int home_focus_ = 0;
   float splash_appear_ = 1.0f;  // 0..1 since the focused item changed
 
