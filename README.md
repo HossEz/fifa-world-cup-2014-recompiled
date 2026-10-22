@@ -52,7 +52,8 @@
 
   ### Requirements
 
-  Older or low-end computers will lag.
+  The game is heavy on the graphics card, more than on the processor. Integrated
+  graphics will run it poorly, and 1440p or 4K needs a stronger card.
 
   | Requirement | Details |
   |---|---|
