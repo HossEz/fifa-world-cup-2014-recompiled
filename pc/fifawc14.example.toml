@@ -13,5 +13,6 @@ protect_zero = false                      # the game reads address 0 (allowed on
 execute_unclipped_draw_vs_on_cpu = true    # estimate the extent of unclipped draws from their vertices (Xenia default; the SDK turns it off): without it, stencil/depth buffers claim all of the render memory and wipe the EA logo and the menu backgrounds behind 3D players (black)
 async_shader_compilation = false          # a draw waits for its pipeline instead of being skipped while it compiles: skipped, textures the game renders once (the ground outside the stadium) stay black until the next run, when the shader cache has them
 d3d12_submit_on_primary_buffer_end = false # one GPU submission per frame: each submission waits while the GPU is busy and the game waits on it meanwhile (stutters at 4K)
+clear_memory_page_state = false            # keep track of the guest memory the GPU already has across frames: on, the SDK uploads it all again every frame in hundreds of small copies
 present_interval_cap = 1                  # the game holds cutscenes and many menus at 30 FPS (each frame shown for 2 refreshes, pc/fixes/present_interval.cpp); 1 lets them run at the refresh rate
 frame_rate_floor = 60                     # the game limits cutscenes (pre-match intro, goal celebrations) to 40 FPS (pc/src/frame_rate.cpp); 60 lifts that

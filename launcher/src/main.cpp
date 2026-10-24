@@ -437,6 +437,13 @@ void EnsureGameConfig(const fs::path& data_folder) {
   if (config.Get("swap_post_effect", "\"none\"") != "\"none\"") {
     config.Set("swap_post_effect", "\"none\"");
   }
+  // The SDK's clear_memory_page_state (on by default) forgets at the end of
+  // every frame which guest memory the GPU already has, so the next frame
+  // uploads it again in hundreds of small copies, each draining the GPU first.
+  // Measured 2026-10-24 (PIX replay, 720p, RX 6700 XT): pre-match 8.2 -> 6.1 ms
+  // of GPU time per frame, play 3.8 -> 2.2 ms, nothing looked different. Set
+  // in every config, also ones written before.
+  config.Set("clear_memory_page_state", "false");
   // The window's size moved from the SDK's window_width / window_height, which
   // also set the video mode the game is told about, to the game's own
   // windowed_width / windowed_height (pc/src/game_window.h).
