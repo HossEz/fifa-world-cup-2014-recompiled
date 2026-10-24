@@ -1,0 +1,17 @@
+diff --git a/src/graphics/d3d12/texture_cache.cpp b/src/graphics/d3d12/texture_cache.cpp
+index dc709a4..2d01221 100644
+--- a/src/graphics/d3d12/texture_cache.cpp
++++ b/src/graphics/d3d12/texture_cache.cpp
+@@ -2326,8 +2326,10 @@ bool D3D12TextureCache::IsResolveToTextureTarget(const TextureKey& key) const {
+       key.mip_max_level || !key.tiled || key.signed_separate) {
+     return false;
+   }
+-  auto it = resolve_records_.find(key.base_page << 12);
+-  return it != resolve_records_.end() && IsResolveToTextureEligible(it->second);
++  // Any texture whose memory a resolve has written (a record, eligible or
++  // not, or a scaled resolve): a texture created before its resolves became
++  // eligible can't be given UAV access later.
++  return key.scaled_resolve || resolve_records_.count(key.base_page << 12);
+ }
+ 
+ bool D3D12TextureCache::DoesTextureMatchResolve(const TextureKey& key,

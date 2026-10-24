@@ -62,6 +62,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0027 resolves written straight into the texture that reads them (`resolve_to_texture`) | less GPU work for the post-processing chain, mostly at 1440p and 4K |
 | 0028 textures placed in shared heaps (`texture_heaps`) | hitches when a new screen appears (kit select, pre-match, replays) |
 | 0029 8888 resolves read straight from the render target (`direct_resolve_32bpp`) | less GPU work in kit select, the pre-match and replays, mostly at 1440p and 4K |
+| 0030 every resolve target texture created ready for 0027 | 0027 also in kit select and the pre-match |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -478,4 +479,18 @@ Measured switching it live in the same scene (4K, `resolve_to_texture` off so
 the memory it writes is what the textures load): kit select 19.3 -> 17.3 ms of
 GPU time per frame (resolves 6.6 -> 5.2 ms), pre-match resolves ~6.5 -> ~4.4 ms;
 no visual difference. `direct_resolve_32bpp = false` restores the dump.
+
+## 0030-resolve-to-texture-uav-for-all-resolve-targets
+
+0027 writes into a texture only if it was created with UAV access, and gave it
+that only when an eligible resolve record for its address already existed. In
+kit select the textures had been created earlier (before their resolves were
+eligible, or for a resolve that wasn't), so they never got UAV access and were
+untiled from memory every frame as before. Now every k_8_8_8_8 single-level 2D
+texture whose memory a resolve has written (any record, or a scaled resolve) is
+created with UAV access; which of them 0027 writes is decided as before.
+
+Measured 2026-10-24 at 4K: textures written by resolves in kit select ~0 ->
+~440 per second, its texture loads 4.1 -> ~2.5 ms per frame (14 -> 8), GPU
+time per frame ~17.3 -> ~16.5 ms.
 
