@@ -84,6 +84,24 @@ namespace {
 std::atomic<uint64_t> g_untile_readbacks{0};
 }  // namespace
 
+// The game untiles a kit texture in strips of 32 rows (1024x32, 128 KB each),
+// and every readback waits for the GPU to finish all queued work: ~30 a second
+// in kit select and the training intro, the game thread waiting for over half
+// of the time at 4K (measured 2026-10-24). The strips of one surface are
+// contiguous (tiled 2D surfaces are stored in bands of 32 rows), so the first
+// strip reads back the whole run of GPU-newer pages from there, and the
+// following strips find their data already current: ~15x less waiting.
+template <typename Graphics>
+uint32_t UntileReadbackLength(Graphics* graphics, uint32_t start, uint32_t length) {
+  constexpr uint32_t kPage = 0x1000;
+  constexpr uint32_t kMaxRun = 0x1000000;
+  uint32_t end = (start + length + kPage - 1) & ~(kPage - 1);
+  while (end - start < kMaxRun && graphics->IsGpuMemoryNewer(end, kPage)) {
+    end += kPage;
+  }
+  return end - start;
+}
+
 REX_HOOK_RAW(sub_8242FE00) {
   uint32_t src = ctx.r6.u32;
   if (src >= kPhysicalViewsBase) {
@@ -94,7 +112,8 @@ REX_HOOK_RAW(sub_8242FE00) {
     uint32_t src_physical = REX_KERNEL_MEMORY()->GetPhysicalAddress(src);
     if (graphics && src_physical != UINT32_MAX && length && length <= 0x4000000 &&
         graphics->IsGpuMemoryNewer(src_physical, uint32_t(length)) &&
-        graphics->ReadbackGpuMemory(src_physical, uint32_t(length))) {
+        graphics->ReadbackGpuMemory(
+            src_physical, UntileReadbackLength(graphics, src_physical, uint32_t(length)))) {
       uint64_t count = g_untile_readbacks.fetch_add(1, std::memory_order_relaxed) + 1;
       if (count <= 20 || count % 500 == 0) {
         // First and middle words of the read-back source (comparing backends).
