@@ -61,6 +61,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0026 sleep instead of spinning | CPU running hot at a fraction of its total use |
 | 0027 resolves written straight into the texture that reads them (`resolve_to_texture`) | less GPU work for the post-processing chain, mostly at 1440p and 4K |
 | 0028 textures placed in shared heaps (`texture_heaps`) | hitches when a new screen appears (kit select, pre-match, replays) |
+| 0029 8888 resolves read straight from the render target (`direct_resolve_32bpp`) | less GPU work in kit select, the pre-match and replays, mostly at 1440p and 4K |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -450,4 +451,31 @@ fails, are committed resources as before.
 Measured: 166 textures created in 2.5 ms instead of ~55 ms; the 220-texture
 transition no longer shows up as a slow frame. `texture_heaps = false` restores
 committed resources.
+
+## 0029-direct-resolve-32bpp
+
+With host render targets a resolve is two compute passes: the render targets
+owning the resolved EDRAM range are dumped into the EDRAM buffer, then the copy
+shader reads the buffer and writes the destination in guest memory. The SDK's
+`direct_host_resolve` doesn't skip the dump yet (`TryResolveCopyDirectly` falls
+back to it). In kit select at 4K the dumps were 4.5 ms of the 6.8 ms of resolves
+in a 19.6 ms frame (PIX, RX 6700 XT, 2026-10-24).
+
+For the game's most common resolve (the fast 32bpp copy from an 8888 render
+target without MSAA, one render target owning the range, its origin the
+resolve's base tile) a variant of the fast copy shader reads the pixels from the
+render target itself: `resolve_direct_32bpp_1x.xesli`, Xenia's
+`resolve_fast_32bpp_1x2xmsaa` with the EDRAM buffer load replaced by a load from
+an R8G8B8A8_UINT view of the render target, packed as in the EDRAM. The R/B swap,
+the endian swap and the tiled destination address are Xenia's code unchanged.
+The SDK's resolve shaders are Xenia's XeSL shaders as of `dfa1b3f` (compiled from
+there they're identical to the SDK's bytecode), so the variant builds against
+those headers (`fxc /T cs_5_1 /D SHADING_LANGUAGE_HLSL_XE=1`, with
+`XE_RESOLVE_RESOLUTION_SCALED` for the scaled one). Same root signature and
+constants as the fast copy.
+
+Measured switching it live in the same scene (4K, `resolve_to_texture` off so
+the memory it writes is what the textures load): kit select 19.3 -> 17.3 ms of
+GPU time per frame (resolves 6.6 -> 5.2 ms), pre-match resolves ~6.5 -> ~4.4 ms;
+no visual difference. `direct_resolve_32bpp = false` restores the dump.
 
