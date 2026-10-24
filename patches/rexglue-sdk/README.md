@@ -515,3 +515,25 @@ what the resolves wrote): resolves in kit select ~5.2 ms (0029 alone) -> ~4.0
 ms, in the pre-match ~4.4 -> 3.4-4.0 ms; no visual difference, MSAA edges the
 same.
 
+
+## 0032-raise-host-thread-priority
+
+Every few minutes the game dropped to ~50 FPS for a second or two, with bursts
+of 50-120 ms frames. A system-wide trace showed the cause: background services
+and apps waking up all at once (here the network stack, Tailscale and VS Code
+reacting to Hyper-V rebuilding Windows Sandbox's container network every 2-5
+minutes) took all 12 cores for tens of milliseconds. The GPU command thread
+waits for the game's commands by yielding (`SwitchToThread`), and a thread
+that yields goes back in line at its base priority, normal, without the boost
+a thread woken from a wait gets; it sat ready but not running for up to 45 ms
+while threads at priority 9-13 ran, and each frame, which passes from the
+game's threads through it to the presenting thread, missed two or three
+refreshes.
+
+The process now runs at above-normal priority, and the presenting (main)
+thread, the GPU command thread and the vblank thread at the highest priority
+in it (12), above the normal-priority work of other programs and services.
+
+Measured 2026-10-25 with Windows Sandbox enabled: before, every container
+network rebuild during a match gave 5-20 frames over 40 ms; after, a 40 game
+minute match with rebuilds during play had none.

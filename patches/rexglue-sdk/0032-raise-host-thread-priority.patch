@@ -1,0 +1,71 @@
+diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
+index 4376d8d..27c6538 100644
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -152,6 +152,9 @@ bool CommandProcessor::Initialize() {
+       }));
+   worker_thread_->set_name("GPU Commands");
+   worker_thread_->Create();
++  // It waits for the game's commands by yielding, which puts it behind every
++  // other ready thread of its priority (see ReXApp::OnInitialize).
++  worker_thread_->thread()->set_priority(rex::thread::ThreadPriority::kHighest);
+ 
+   return true;
+ }
+diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
+index 500f548..84d335e 100644
+--- a/src/graphics/graphics_system.cpp
++++ b/src/graphics/graphics_system.cpp
+@@ -201,6 +201,7 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+   // vsync_worker_thread_->set_can_debugger_suspend(true);
+   vsync_worker_thread_->set_name("GPU VSync");
+   vsync_worker_thread_->Create();
++  vsync_worker_thread_->thread()->set_priority(rex::thread::ThreadPriority::kHighest);
+ 
+   return X_STATUS_SUCCESS;
+ }
+diff --git a/src/ui/rex_app.cpp b/src/ui/rex_app.cpp
+index ba6fdfc..9093b8d 100644
+--- a/src/ui/rex_app.cpp
++++ b/src/ui/rex_app.cpp
+@@ -22,6 +22,7 @@
+ #include <rex/filesystem.h>
+ #include <rex/logging/sink.h>
+ #include <rex/logging.h>
++#include <rex/platform.h>
+ #include <rex/ui/overlay/achievement_toast.h>
+ #include <rex/ui/overlay/achievements_overlay.h>
+ #include <rex/ui/overlay/console_overlay.h>
+@@ -48,6 +49,16 @@
+ #include <filesystem>
+ #include <string_view>
+ 
++#if REX_PLATFORM_WIN32
++#ifndef WIN32_LEAN_AND_MEAN
++#define WIN32_LEAN_AND_MEAN
++#endif
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif
++#include <windows.h>
++#endif
++
+ REXCVAR_DEFINE_STRING(gpu_plugin, "", "GPU",
+                       "GPU emulation plugin to load at startup (e.g. 'xenos'); empty disables "
+                       "GPU emulation")
+@@ -86,6 +97,15 @@ system::AchievementManager& ReXApp::achievements() const {
+ }
+ 
+ bool ReXApp::OnInitialize() {
++#if REX_PLATFORM_WIN32
++  // Above normal for the whole process, and highest for this thread, which
++  // presents the frames: background services and apps waking up all at once (a
++  // network change, for example) can take every core for tens of milliseconds,
++  // and the threads handing each frame on, which wait by yielding, would be the
++  // last to get one back.
++  SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
++  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
++#endif
+   if (!SetupEnvironment())
+     return false;
+   if (!SetupPresentation())
