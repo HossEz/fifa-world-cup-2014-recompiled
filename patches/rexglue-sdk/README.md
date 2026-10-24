@@ -63,6 +63,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0028 textures placed in shared heaps (`texture_heaps`) | hitches when a new screen appears (kit select, pre-match, replays) |
 | 0029 8888 resolves read straight from the render target (`direct_resolve_32bpp`) | less GPU work in kit select, the pre-match and replays, mostly at 1440p and 4K |
 | 0030 every resolve target texture created ready for 0027 | 0027 also in kit select and the pre-match |
+| 0031 the scene's 2x MSAA tiles resolved straight from the render target (`direct_resolve_32bpp`) | less GPU work for the 3D scene, mostly at 1440p and 4K |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -493,4 +494,24 @@ created with UAV access; which of them 0027 writes is decided as before.
 Measured 2026-10-24 at 4K: textures written by resolves in kit select ~0 ->
 ~440 per second, its texture loads 4.1 -> ~2.5 ms per frame (14 -> 8), GPU
 time per frame ~17.3 -> ~16.5 ms.
+
+## 0031-direct-resolve-full-32bpp-2x
+
+The game draws its 3D scene in two 640x720 tiles with 2x MSAA and resolves
+each tile averaging both samples, which the SDK does with the full 32bpp resolve
+(not the fast copy 0029 covers): the tiles were still dumped to the EDRAM buffer
+first. `resolve_direct_full_32bpp_2x.xesli` is Xenia's `resolve_full_32bpp`
+with the sample loads replaced by loads from the 8888 render target itself
+(Texture2DMS, R8G8B8A8_UINT view): the selected guest sample, plus the other one
+when averaging, as the host samples `GetD3D10SampleIndexForGuest2xMSAA` maps them
+to (native 2x, or 2x emulated with 4x: one variant each, picked like the render
+targets are). Averaging, exponent bias, R/B swap, packing to the destination
+format, endian swap and the tiled address are Xenia's code unchanged. Same
+conditions as 0029 otherwise (one render target owning the range, its origin
+the resolve's base tile), under the same `direct_resolve_32bpp` switch.
+
+Measured 2026-10-24 at 4K (live switch, `resolve_to_texture` off so the scene is
+what the resolves wrote): resolves in kit select ~5.2 ms (0029 alone) -> ~4.0
+ms, in the pre-match ~4.4 -> 3.4-4.0 ms; no visual difference, MSAA edges the
+same.
 
