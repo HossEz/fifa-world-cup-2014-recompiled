@@ -60,6 +60,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0025 overlays without continuous repaint (`ImGuiDialog::WantsContinuousPaint`) | micro-stutter with G-SYNC / FreeSync |
 | 0026 sleep instead of spinning | CPU running hot at a fraction of its total use |
 | 0027 resolves written straight into the texture that reads them (`resolve_to_texture`) | less GPU work for the post-processing chain, mostly at 1440p and 4K |
+| 0028 textures placed in shared heaps (`texture_heaps`) | hitches when a new screen appears (kit select, pre-match, replays) |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -430,4 +431,23 @@ and off in the same scene, GPU time went from 11.9 to 11.6 ms per frame, the
 texture loads from 19 to 9 per frame. No visual difference.
 `resolve_to_texture = false` restores the old path and can be switched while the
 game runs.
+
+## 0028-texture-heaps
+
+Every texture was a committed resource of its own, and creating one took
+~0.35 ms (RX 6700 XT). A new screen creates 100-220 textures in one frame, so
+the frame where kit select, the training intro or the pre-match appears spent
+35-84 ms just creating them (measured 2026-10-24 with a hitch log).
+
+Textures are now placed in 64 MB heaps (only non-render-target textures, not
+zeroed), with a first-fit allocator per heap that merges free neighbours when a
+texture is destroyed. The texture cache only destroys textures the GPU is done
+with, so their memory is reused right away, behind an aliasing barrier; every
+texture is written whole by its load before it's sampled. Empty heaps are
+released, except one. Textures larger than a heap, and any allocation that
+fails, are committed resources as before.
+
+Measured: 166 textures created in 2.5 ms instead of ~55 ms; the 220-texture
+transition no longer shows up as a slow frame. `texture_heaps = false` restores
+committed resources.
 
