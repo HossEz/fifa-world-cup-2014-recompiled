@@ -1,0 +1,645 @@
+diff --git a/include/rex/graphics/d3d12/texture_cache.h b/include/rex/graphics/d3d12/texture_cache.h
+index 4d845c7..b9486cc 100644
+--- a/include/rex/graphics/d3d12/texture_cache.h
++++ b/include/rex/graphics/d3d12/texture_cache.h
+@@ -13,6 +13,7 @@
+ 
+ #include <array>
+ #include <functional>
++#include <map>
+ #include <memory>
+ #include <unordered_map>
+ #include <utility>
+@@ -162,6 +163,33 @@ class D3D12TextureCache final : public TextureCache {
+                                      uint32_t* width_unscaled_out = nullptr,
+                                      uint32_t* height_unscaled_out = nullptr);
+ 
++  // What a resolve wrote to guest memory (resolve_to_texture).
++  struct ResolveRecord {
++    uint32_t dest_base;
++    uint32_t extent_start;
++    uint32_t extent_length;
++    reg::RB_COPY_DEST_INFO dest_info;
++    // In texels.
++    uint32_t pitch_aligned;
++    uint32_t offset_x;
++    uint32_t offset_y;
++    uint32_t width;
++    uint32_t height;
++    uint32_t source_format;
++    bool source_is_depth;
++    xenos::MsaaSamples source_msaa;
++  };
++  // Remembers the latest resolve into each destination address.
++  void RecordResolve(const ResolveRecord& record);
++  // resolve_to_texture: writes a resolve's source region (in
++  // NON_PIXEL_SHADER_RESOURCE state, 8888 color, no MSAA, at its origin) into
++  // the texture that loaded this resolve's output before, if there is one, and
++  // marks it up to date. Called after MarkRangeAsResolved.
++  void WriteResolveToTexture(const ResolveRecord& record, ID3D12Resource* source,
++                             uint32_t width_scaled, uint32_t height_scaled);
++  // Whether a resolve record allows resolve_to_texture.
++  static bool IsResolveToTextureEligible(const ResolveRecord& record);
++
+  protected:
+   bool IsSignedVersionSeparateForFormat(TextureKey key) const override;
+   bool IsScaledResolveSupportedForFormat(TextureKey key) const override;
+@@ -539,6 +567,17 @@ class D3D12TextureCache final : public TextureCache {
+   // Range used in the last successful MakeScaledResolveRangeCurrent call.
+   uint64_t scaled_resolve_current_range_start_scaled_;
+   uint64_t scaled_resolve_current_range_length_scaled_;
++
++  // resolve_to_texture.
++  // A texture that may be written by resolves (created with UAV access).
++  bool IsResolveToTextureTarget(const TextureKey& key) const;
++  bool DoesTextureMatchResolve(const TextureKey& key, const ResolveRecord& record) const;
++  // Remembers the texture loading a resolve's output, for the next resolve.
++  void LearnResolveTextureKey(const D3D12Texture& texture);
++  std::map<uint32_t, ResolveRecord> resolve_records_;
++  std::map<uint32_t, TextureKey> resolve_texture_keys_;
++  Microsoft::WRL::ComPtr<ID3D12RootSignature> resolve_to_texture_root_signature_;
++  Microsoft::WRL::ComPtr<ID3D12PipelineState> resolve_to_texture_pipeline_;
+ };
+ 
+ }  // namespace rex::graphics::d3d12
+diff --git a/src/graphics/d3d12/render_target_cache.cpp b/src/graphics/d3d12/render_target_cache.cpp
+index 3b6b17d..c1bca12 100644
+--- a/src/graphics/d3d12/render_target_cache.cpp
++++ b/src/graphics/d3d12/render_target_cache.cpp
+@@ -1309,9 +1309,59 @@ bool D3D12RenderTargetCache::Resolve(const memory::Memory& memory, D3D12SharedMe
+             shared_memory.MarkUAVWritesCommitNeeded();
+           }
+ 
++          const draw_util::ResolveEdramInfo& source_info = resolve_info.IsCopyingDepth()
++                                                               ? resolve_info.depth_edram_info
++                                                               : resolve_info.color_edram_info;
++          D3D12TextureCache::ResolveRecord record;
++          record.dest_base = resolve_info.copy_dest_base;
++          record.extent_start = resolve_info.copy_dest_extent_start;
++          record.extent_length = resolve_info.copy_dest_extent_length;
++          record.dest_info = resolve_info.copy_dest_info;
++          record.pitch_aligned = resolve_info.copy_dest_coordinate_info.pitch_aligned_div_32 * 32;
++          record.offset_x = resolve_info.copy_dest_coordinate_info.offset_x_div_8 * 8;
++          record.offset_y = resolve_info.copy_dest_coordinate_info.offset_y_div_8 * 8;
++          record.width = resolve_info.coordinate_info.width_div_8 * 8;
++          record.height = resolve_info.height_div_8 * 8;
++          record.source_format = source_info.format;
++          record.source_is_depth = source_info.is_depth != 0;
++          record.source_msaa = source_info.msaa_samples;
++          texture_cache.RecordResolve(record);
++
+           // Invalidate textures and mark the range as scaled if needed.
+           texture_cache.MarkRangeAsResolved(resolve_info.copy_dest_extent_start,
+                                             resolve_info.copy_dest_extent_length);
++
++          // resolve_to_texture: after the invalidation above, which marks the
++          // texture outdated. Only a single 8888 render target without MSAA
++          // whose origin is the resolve's (dump_rectangles_ is the resolve's
++          // source with host render targets).
++          uint32_t span_base, span_row_length, span_rows, span_pitch;
++          resolve_info.GetCopyEdramTileSpan(span_base, span_row_length, span_rows, span_pitch);
++          if (GetPath() == Path::kHostRenderTargets &&
++              D3D12TextureCache::IsResolveToTextureEligible(record) &&
++              dump_rectangles_.size() == 1 && !dump_rectangles_[0].row_first &&
++              !dump_rectangles_[0].row_first_start &&
++              !resolve_info.coordinate_info.edram_offset_x_div_8 &&
++              !resolve_info.coordinate_info.edram_offset_y_div_8) {
++            auto& source_rt = *static_cast<D3D12RenderTarget*>(dump_rectangles_[0].render_target);
++            RenderTargetKey source_key = source_rt.key();
++            uint32_t width_scaled = record.width * draw_resolution_scale_x();
++            uint32_t height_scaled = record.height * draw_resolution_scale_y();
++            D3D12_RESOURCE_DESC source_desc = source_rt.resource()->GetDesc();
++            if (!source_key.is_depth && source_key.base_tiles == span_base &&
++                source_key.msaa_samples == xenos::MsaaSamples::k1X &&
++                source_key.GetColorFormat() == xenos::ColorRenderTargetFormat::k_8_8_8_8 &&
++                (source_desc.Format == DXGI_FORMAT_R8G8B8A8_TYPELESS ||
++                 source_desc.Format == DXGI_FORMAT_R8G8B8A8_UNORM) &&
++                width_scaled <= source_desc.Width && height_scaled <= source_desc.Height) {
++              command_processor_.PushTransitionBarrier(
++                  source_rt.resource(),
++                  source_rt.SetResourceState(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
++                  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
++              texture_cache.WriteResolveToTexture(record, source_rt.resource(), width_scaled,
++                                                  height_scaled);
++            }
++          }
+           written_address_out = resolve_info.copy_dest_extent_start;
+           written_length_out = resolve_info.copy_dest_extent_length;
+           copied = true;
+diff --git a/src/graphics/d3d12/texture_cache.cpp b/src/graphics/d3d12/texture_cache.cpp
+index 2be0e8e..fdb1d9e 100644
+--- a/src/graphics/d3d12/texture_cache.cpp
++++ b/src/graphics/d3d12/texture_cache.cpp
+@@ -18,6 +18,7 @@
+ #include <utility>
+ 
+ #include <rex/assert.h>
++#include <rex/cvar.h>
+ #include <rex/dbg.h>
+ #include <rex/graphics/d3d12/command_processor.h>
+ #include <rex/graphics/d3d12/shared_memory.h>
+@@ -32,6 +33,12 @@
+ #include <rex/ui/d3d12/d3d12_upload_buffer_pool.h>
+ #include <rex/ui/d3d12/d3d12_util.h>
+ 
++REXCVAR_DEFINE_BOOL(resolve_to_texture, true, "GPU/D3D12",
++                    "Write an 8888 resolve's render target region straight into the texture that "
++                    "loaded that resolve's output before, instead of untiling the resolve's "
++                    "memory into it again")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++
+ namespace rex::graphics::d3d12 {
+ 
+ // Generated with `xb buildshaders`.
+@@ -45,6 +52,7 @@ namespace shaders {
+ #include "../shaders/bytecode/d3d12_5_1/texture_load_64bpb_cs.h"
+ #include "../shaders/bytecode/d3d12_5_1/texture_load_64bpb_scaled_cs.h"
+ #include "../shaders/bytecode/d3d12_5_1/texture_load_8bpb_cs.h"
++#include "../shaders/bytecode/d3d12_5_1/resolve_to_texture_cs.h"
+ #include "../shaders/bytecode/d3d12_5_1/texture_load_8bpb_scaled_cs.h"
+ #include "../shaders/bytecode/d3d12_5_1/texture_load_bgrg8_rgb8_cs.h"
+ #include "../shaders/bytecode/d3d12_5_1/texture_load_bgrg8_rgbg8_cs.h"
+@@ -642,6 +650,47 @@ bool D3D12TextureCache::Initialize() {
+       provider.OffsetViewDescriptor(null_srv_descriptor_heap_start_,
+                                     uint32_t(NullSRVDescriptorIndex::kCube)));
+ 
++  // resolve_to_texture: constants, the render target SRV, the texture UAV.
++  {
++    D3D12_ROOT_PARAMETER parameters[3];
++    parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
++    parameters[0].Constants.ShaderRegister = 0;
++    parameters[0].Constants.RegisterSpace = 0;
++    parameters[0].Constants.Num32BitValues = 3;
++    parameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
++    D3D12_DESCRIPTOR_RANGE ranges[2];
++    ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
++    ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
++    for (uint32_t i = 0; i < 2; ++i) {
++      ranges[i].NumDescriptors = 1;
++      ranges[i].BaseShaderRegister = 0;
++      ranges[i].RegisterSpace = 0;
++      ranges[i].OffsetInDescriptorsFromTableStart = 0;
++      parameters[1 + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
++      parameters[1 + i].DescriptorTable.NumDescriptorRanges = 1;
++      parameters[1 + i].DescriptorTable.pDescriptorRanges = &ranges[i];
++      parameters[1 + i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
++    }
++    D3D12_ROOT_SIGNATURE_DESC root_signature_desc;
++    root_signature_desc.NumParameters = 3;
++    root_signature_desc.pParameters = parameters;
++    root_signature_desc.NumStaticSamplers = 0;
++    root_signature_desc.pStaticSamplers = nullptr;
++    root_signature_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
++    *(resolve_to_texture_root_signature_.ReleaseAndGetAddressOf()) =
++        ui::d3d12::util::CreateRootSignature(provider, root_signature_desc);
++    if (resolve_to_texture_root_signature_) {
++      *(resolve_to_texture_pipeline_.ReleaseAndGetAddressOf()) =
++          ui::d3d12::util::CreateComputePipeline(device, shaders::resolve_to_texture_cs,
++                                                 sizeof(shaders::resolve_to_texture_cs),
++                                                 resolve_to_texture_root_signature_.Get());
++    }
++    if (!resolve_to_texture_pipeline_) {
++      resolve_to_texture_root_signature_.Reset();
++      REXGPU_WARN("D3D12TextureCache: resolve_to_texture is unavailable (pipeline creation failed)");
++    }
++  }
++
+   return true;
+ }
+ 
+@@ -1544,6 +1593,10 @@ std::unique_ptr<TextureCache::Texture> D3D12TextureCache::CreateTexture(TextureK
+   // Untiling through a buffer instead of using unordered access because copying
+   // is not done that often.
+   desc.Flags = D3D12_RESOURCE_FLAG_NONE;
++  if (IsResolveToTextureTarget(key)) {
++    // Written by the resolve_to_texture shader.
++    desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
++  }
+   const ui::d3d12::D3D12Provider& provider = command_processor_.GetD3D12Provider();
+   ID3D12Device* device = provider.GetDevice();
+   // Assuming untiling will be the next operation.
+@@ -1561,6 +1614,9 @@ bool D3D12TextureCache::LoadTextureDataFromResidentMemoryImpl(Texture& texture,
+                                                               bool load_mips) {
+   D3D12Texture& d3d12_texture = static_cast<D3D12Texture&>(texture);
+   TextureKey texture_key = d3d12_texture.key();
++  if (load_base) {
++    LearnResolveTextureKey(d3d12_texture);
++  }
+ 
+   DeferredCommandList& command_list = command_processor_.GetDeferredCommandList();
+   ID3D12Device* device = command_processor_.GetD3D12Provider().GetDevice();
+@@ -2204,4 +2260,129 @@ xenos::ClampMode D3D12TextureCache::NormalizeClampMode(xenos::ClampMode clamp_mo
+   return clamp_mode;
+ }
+ 
++void D3D12TextureCache::RecordResolve(const ResolveRecord& record) {
++  if (!record.extent_length) {
++    return;
++  }
++  // A newer resolve replaces any older one whose output it overlaps.
++  uint32_t end = record.extent_start + record.extent_length;
++  for (auto it = resolve_records_.begin(); it != resolve_records_.end();) {
++    const ResolveRecord& old = it->second;
++    if (old.extent_start < end && record.extent_start < old.extent_start + old.extent_length) {
++      it = resolve_records_.erase(it);
++    } else {
++      ++it;
++    }
++  }
++  resolve_records_[record.dest_base] = record;
++}
++
++bool D3D12TextureCache::IsResolveToTextureEligible(const ResolveRecord& record) {
++  return record.dest_info.copy_dest_format == xenos::ColorFormat::k_8_8_8_8 &&
++         uint32_t(record.dest_info.copy_dest_number) == 0 && !record.dest_info.copy_dest_exp_bias &&
++         !record.source_is_depth &&
++         record.source_format == uint32_t(xenos::ColorRenderTargetFormat::k_8_8_8_8) &&
++         record.source_msaa == xenos::MsaaSamples::k1X && !record.offset_x && !record.offset_y;
++}
++
++bool D3D12TextureCache::IsResolveToTextureTarget(const TextureKey& key) const {
++  // Independent of resolve_to_texture being on, so it can be switched while
++  // the game runs.
++  if (!resolve_to_texture_pipeline_ ||
++      key.format != xenos::TextureFormat::k_8_8_8_8 ||
++      key.dimension != xenos::DataDimension::k2DOrStacked || key.GetDepthOrArraySize() != 1 ||
++      key.mip_max_level || !key.tiled || key.signed_separate) {
++    return false;
++  }
++  auto it = resolve_records_.find(key.base_page << 12);
++  return it != resolve_records_.end() && IsResolveToTextureEligible(it->second);
++}
++
++bool D3D12TextureCache::DoesTextureMatchResolve(const TextureKey& key,
++                                                const ResolveRecord& record) const {
++  return IsResolveToTextureEligible(record) && bool(key.scaled_resolve) == IsDrawResolutionScaled() &&
++         key.GetWidth() <= record.width && key.GetHeight() <= record.height &&
++         key.pitch * 32 == record.pitch_aligned &&
++         uint32_t(key.endianness) == uint32_t(record.dest_info.copy_dest_endian);
++}
++
++void D3D12TextureCache::LearnResolveTextureKey(const D3D12Texture& texture) {
++  const TextureKey& key = texture.key();
++  if (!REXCVAR_GET(resolve_to_texture) || !IsResolveToTextureTarget(key) ||
++      !(texture.resource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)) {
++    return;
++  }
++  uint32_t base = key.base_page << 12;
++  auto record_it = resolve_records_.find(base);
++  if (record_it == resolve_records_.end() || !DoesTextureMatchResolve(key, record_it->second)) {
++    return;
++  }
++  resolve_texture_keys_[base] = key;
++}
++
++void D3D12TextureCache::WriteResolveToTexture(const ResolveRecord& record, ID3D12Resource* source,
++                                              uint32_t width_scaled, uint32_t height_scaled) {
++  if (!REXCVAR_GET(resolve_to_texture) || !resolve_to_texture_pipeline_) {
++    return;
++  }
++  auto key_it = resolve_texture_keys_.find(record.dest_base);
++  if (key_it == resolve_texture_keys_.end()) {
++    return;
++  }
++  TextureKey key = key_it->second;
++  if (!DoesTextureMatchResolve(key, record)) {
++    // The game resolves something else here now.
++    resolve_texture_keys_.erase(key_it);
++    return;
++  }
++  uint32_t texture_width_scaled = key.GetWidth();
++  uint32_t texture_height_scaled = key.GetHeight();
++  if (key.scaled_resolve) {
++    texture_width_scaled *= draw_resolution_scale_x();
++    texture_height_scaled *= draw_resolution_scale_y();
++  }
++  if (texture_width_scaled > width_scaled || texture_height_scaled > height_scaled) {
++    return;
++  }
++  auto* texture = static_cast<D3D12Texture*>(FindOrCreateTexture(key));
++  if (!texture ||
++      !(texture->resource()->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)) {
++    resolve_texture_keys_.erase(record.dest_base);
++    return;
++  }
++  ui::d3d12::util::DescriptorCpuGpuHandlePair descriptors[2];
++  if (!command_processor_.RequestOneUseSingleViewDescriptors(2, descriptors)) {
++    return;
++  }
++  ID3D12Device* device = command_processor_.GetD3D12Provider().GetDevice();
++  D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
++  srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
++  srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
++  srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
++  srv_desc.Texture2D.MipLevels = 1;
++  device->CreateShaderResourceView(source, &srv_desc, descriptors[0].first);
++  D3D12_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
++  uav_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
++  uav_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
++  device->CreateUnorderedAccessView(texture->resource(), nullptr, &uav_desc,
++                                    descriptors[1].first);
++  command_processor_.PushTransitionBarrier(
++      texture->resource(), texture->SetResourceState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
++      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
++  command_processor_.SubmitBarriers();
++  DeferredCommandList& command_list = command_processor_.GetDeferredCommandList();
++  command_list.D3DSetComputeRootSignature(resolve_to_texture_root_signature_.Get());
++  uint32_t constants[3] = {texture_width_scaled, texture_height_scaled,
++                           uint32_t(record.dest_info.copy_dest_swap)};
++  command_list.D3DSetComputeRoot32BitConstants(0, 3, constants, 0);
++  command_list.D3DSetComputeRootDescriptorTable(1, descriptors[0].second);
++  command_list.D3DSetComputeRootDescriptorTable(2, descriptors[1].second);
++  command_processor_.SetExternalPipeline(resolve_to_texture_pipeline_.Get());
++  command_list.D3DDispatch((texture_width_scaled + 7) / 8, (texture_height_scaled + 7) / 8, 1);
++  // The resolve's invalidation of the texture (MarkRangeAsResolved) has
++  // already happened: it holds the resolve's output now, no load needed.
++  texture->MakeUpToDateAndWatch(rex::thread::global_critical_region::AcquireDirect());
++  texture->MarkAsUsed();
++}
++
+ }  // namespace rex::graphics::d3d12
+diff --git a/src/graphics/shaders/bytecode/d3d12_5_1/resolve_to_texture_cs.h b/src/graphics/shaders/bytecode/d3d12_5_1/resolve_to_texture_cs.h
+new file mode 100644
+index 0000000..5276c54
+--- /dev/null
++++ b/src/graphics/shaders/bytecode/d3d12_5_1/resolve_to_texture_cs.h
+@@ -0,0 +1,252 @@
++#if 0
++//
++// Generated by Microsoft (R) HLSL Shader Compiler 10.1
++//
++//
++// Buffer Definitions: 
++//
++// cbuffer XeResolveToTextureConstants
++// {
++//
++//   uint xe_r2t_width;                 // Offset:    0 Size:     4
++//   uint xe_r2t_height;                // Offset:    4 Size:     4
++//   uint xe_r2t_swap_red_blue;         // Offset:    8 Size:     4
++//
++// }
++//
++//
++// Resource Bindings:
++//
++// Name                                 Type  Format         Dim      ID      HLSL Bind  Count
++// ------------------------------ ---------- ------- ----------- ------- -------------- ------
++// xe_r2t_source                     texture  float4          2d      T0             t0      1 
++// xe_r2t_dest                           UAV  unorm4          2d      U0             u0      1 
++// XeResolveToTextureConstants       cbuffer      NA          NA     CB0            cb0      1 
++//
++//
++//
++// Input signature:
++//
++// Name                 Index   Mask Register SysValue  Format   Used
++// -------------------- ----- ------ -------- -------- ------- ------
++// no Input
++//
++// Output signature:
++//
++// Name                 Index   Mask Register SysValue  Format   Used
++// -------------------- ----- ------ -------- -------- ------- ------
++// no Output
++cs_5_1
++dcl_globalFlags refactoringAllowed
++dcl_constantbuffer CB0[0:0][1], immediateIndexed, space=0
++dcl_resource_texture2d (float,float,float,float) T0[0:0], space=0
++dcl_uav_typed_texture2d (unorm,unorm,unorm,unorm) U0[0:0], space=0
++dcl_input vThreadID.xy
++dcl_temps 1
++dcl_thread_group 8, 8, 1
++uge r0.xy, vThreadID.xyxx, CB0[0][0].xyxx
++or r0.x, r0.y, r0.x
++if_nz r0.x
++  ret 
++endif 
++mov r0.xy, vThreadID.xyxx
++mov r0.zw, l(0,0,0,0)
++ld r0.xyzw, r0.xyzw, T0[0].xyzw
++movc r0.xyzw, CB0[0][0].zzzz, r0.zyxw, r0.xyzw
++store_uav_typed U0[0].xyzw, vThreadID.xyyy, r0.xyzw
++ret 
++// Approximately 11 instruction slots used
++#endif
++
++const BYTE resolve_to_texture_cs[] =
++{
++     68,  88,  66,  67,  36, 110, 
++     54, 112, 177, 213,  40, 184, 
++     13, 183, 134, 144, 180,   5, 
++    121, 244,   1,   0,   0,   0, 
++    108,   4,   0,   0,   5,   0, 
++      0,   0,  52,   0,   0,   0, 
++     60,   2,   0,   0,  76,   2, 
++      0,   0,  92,   2,   0,   0, 
++    208,   3,   0,   0,  82,  68, 
++     69,  70,   0,   2,   0,   0, 
++      1,   0,   0,   0, 236,   0, 
++      0,   0,   3,   0,   0,   0, 
++     60,   0,   0,   0,   1,   5, 
++     83,  67,   0, 133,   0,   0, 
++    215,   1,   0,   0,  19,  19, 
++     68,  37,  60,   0,   0,   0, 
++     24,   0,   0,   0,  40,   0, 
++      0,   0,  40,   0,   0,   0, 
++     36,   0,   0,   0,  12,   0, 
++      0,   0,   0,   0,   0,   0, 
++    180,   0,   0,   0,   2,   0, 
++      0,   0,   5,   0,   0,   0, 
++      4,   0,   0,   0, 255, 255, 
++    255, 255,   0,   0,   0,   0, 
++      1,   0,   0,   0,  12,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0, 194,   0, 
++      0,   0,   4,   0,   0,   0, 
++      1,   0,   0,   0,   4,   0, 
++      0,   0, 255, 255, 255, 255, 
++      0,   0,   0,   0,   1,   0, 
++      0,   0,  12,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0, 206,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   1,   0,   0,   0, 
++      1,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++    120, 101,  95, 114,  50, 116, 
++     95, 115, 111, 117, 114,  99, 
++    101,   0, 120, 101,  95, 114, 
++     50, 116,  95, 100, 101, 115, 
++    116,   0,  88, 101,  82, 101, 
++    115, 111, 108, 118, 101,  84, 
++    111,  84, 101, 120, 116, 117, 
++    114, 101,  67, 111, 110, 115, 
++    116,  97, 110, 116, 115,   0, 
++    171, 171, 206,   0,   0,   0, 
++      3,   0,   0,   0,   4,   1, 
++      0,   0,  16,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0, 124,   1,   0,   0, 
++      0,   0,   0,   0,   4,   0, 
++      0,   0,   2,   0,   0,   0, 
++    144,   1,   0,   0,   0,   0, 
++      0,   0, 255, 255, 255, 255, 
++      0,   0,   0,   0, 255, 255, 
++    255, 255,   0,   0,   0,   0, 
++    180,   1,   0,   0,   4,   0, 
++      0,   0,   4,   0,   0,   0, 
++      2,   0,   0,   0, 144,   1, 
++      0,   0,   0,   0,   0,   0, 
++    255, 255, 255, 255,   0,   0, 
++      0,   0, 255, 255, 255, 255, 
++      0,   0,   0,   0, 194,   1, 
++      0,   0,   8,   0,   0,   0, 
++      4,   0,   0,   0,   2,   0, 
++      0,   0, 144,   1,   0,   0, 
++      0,   0,   0,   0, 255, 255, 
++    255, 255,   0,   0,   0,   0, 
++    255, 255, 255, 255,   0,   0, 
++      0,   0, 120, 101,  95, 114, 
++     50, 116,  95, 119, 105, 100, 
++    116, 104,   0, 100, 119, 111, 
++    114, 100,   0, 171,   0,   0, 
++     19,   0,   1,   0,   1,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++    137,   1,   0,   0, 120, 101, 
++     95, 114,  50, 116,  95, 104, 
++    101, 105, 103, 104, 116,   0, 
++    120, 101,  95, 114,  50, 116, 
++     95, 115, 119,  97, 112,  95, 
++    114, 101, 100,  95,  98, 108, 
++    117, 101,   0,  77, 105,  99, 
++    114, 111, 115, 111, 102, 116, 
++     32,  40,  82,  41,  32,  72, 
++     76,  83,  76,  32,  83, 104, 
++     97, 100, 101, 114,  32,  67, 
++    111, 109, 112, 105, 108, 101, 
++    114,  32,  49,  48,  46,  49, 
++      0, 171,  73,  83,  71,  78, 
++      8,   0,   0,   0,   0,   0, 
++      0,   0,   8,   0,   0,   0, 
++     79,  83,  71,  78,   8,   0, 
++      0,   0,   0,   0,   0,   0, 
++      8,   0,   0,   0,  83,  72, 
++     69,  88, 108,   1,   0,   0, 
++     81,   0,   5,   0,  91,   0, 
++      0,   0, 106,   8,   0,   1, 
++     89,   0,   0,   7,  70, 142, 
++     48,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   1,   0,   0,   0, 
++      0,   0,   0,   0,  88,  24, 
++      0,   7,  70, 126,  48,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++     85,  85,   0,   0,   0,   0, 
++      0,   0, 156,  24,   0,   7, 
++     70, 238,  49,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,  17,  17, 
++      0,   0,   0,   0,   0,   0, 
++     95,   0,   0,   2,  50,   0, 
++      2,   0, 104,   0,   0,   2, 
++      1,   0,   0,   0, 155,   0, 
++      0,   4,   8,   0,   0,   0, 
++      8,   0,   0,   0,   1,   0, 
++      0,   0,  80,   0,   0,   8, 
++     50,   0,  16,   0,   0,   0, 
++      0,   0,  70,   0,   2,   0, 
++     70, 128,  48,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,  60,   0, 
++      0,   7,  18,   0,  16,   0, 
++      0,   0,   0,   0,  26,   0, 
++     16,   0,   0,   0,   0,   0, 
++     10,   0,  16,   0,   0,   0, 
++      0,   0,  31,   0,   4,   3, 
++     10,   0,  16,   0,   0,   0, 
++      0,   0,  62,   0,   0,   1, 
++     21,   0,   0,   1,  54,   0, 
++      0,   4,  50,   0,  16,   0, 
++      0,   0,   0,   0,  70,   0, 
++      2,   0,  54,   0,   0,   8, 
++    194,   0,  16,   0,   0,   0, 
++      0,   0,   2,  64,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,  45,   0, 
++      0,   8, 242,   0,  16,   0, 
++      0,   0,   0,   0,  70,  14, 
++     16,   0,   0,   0,   0,   0, 
++     70, 126,  32,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++     55,   0,   0,  11, 242,   0, 
++     16,   0,   0,   0,   0,   0, 
++    166, 138,  48,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0, 102,  12, 
++     16,   0,   0,   0,   0,   0, 
++     70,  14,  16,   0,   0,   0, 
++      0,   0, 164,   0,   0,   7, 
++    242, 224,  33,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++     70,   5,   2,   0,  70,  14, 
++     16,   0,   0,   0,   0,   0, 
++     62,   0,   0,   1,  83,  84, 
++     65,  84, 148,   0,   0,   0, 
++     11,   0,   0,   0,   1,   0, 
++      0,   0,   0,   0,   0,   0, 
++      1,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      2,   0,   0,   0,   2,   0, 
++      0,   0,   1,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      1,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   2,   0, 
++      0,   0,   1,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      0,   0,   0,   0,   0,   0, 
++      1,   0,   0,   0
++};
+diff --git a/src/graphics/shaders/resolve_to_texture.cs.hlsl b/src/graphics/shaders/resolve_to_texture.cs.hlsl
+new file mode 100644
+index 0000000..84ff300
+--- /dev/null
++++ b/src/graphics/shaders/resolve_to_texture.cs.hlsl
+@@ -0,0 +1,21 @@
++// Writes a resolved render target region straight into the texture that
++// samples the resolve's output (resolve_to_texture), instead of untiling the
++// resolve's guest memory into it. Red and blue are swapped when the resolve
++// swapped them in memory (RB_COPY_DEST_INFO copy_dest_swap).
++
++cbuffer XeResolveToTextureConstants : register(b0) {
++  uint xe_r2t_width;
++  uint xe_r2t_height;
++  uint xe_r2t_swap_red_blue;
++};
++
++Texture2D<float4> xe_r2t_source : register(t0);
++RWTexture2D<unorm float4> xe_r2t_dest : register(u0);
++
++[numthreads(8, 8, 1)] void main(uint3 xe_thread_id : SV_DispatchThreadID) {
++  if (xe_thread_id.x >= xe_r2t_width || xe_thread_id.y >= xe_r2t_height) {
++    return;
++  }
++  float4 color = xe_r2t_source[xe_thread_id.xy];
++  xe_r2t_dest[xe_thread_id.xy] = xe_r2t_swap_red_blue ? color.bgra : color;
++}

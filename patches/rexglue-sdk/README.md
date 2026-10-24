@@ -59,6 +59,7 @@ some of the SDK's start-up code is linked into the exe itself.
 | 0024 present spacing in the log | measuring how evenly frames reach the display |
 | 0025 overlays without continuous repaint (`ImGuiDialog::WantsContinuousPaint`) | micro-stutter with G-SYNC / FreeSync |
 | 0026 sleep instead of spinning | CPU running hot at a fraction of its total use |
+| 0027 resolves written straight into the texture that reads them (`resolve_to_texture`) | less GPU work for the post-processing chain, mostly at 1440p and 4K |
 
 ## 0001-gpu-resident-resolve-data
 
@@ -400,3 +401,33 @@ The game's own spinning loops are hooked in the game (pc/src/frame_rate.cpp,
 pc/fixes/ring_wait_sleep.cpp). Together: the GPU command thread ~98% -> ~25%,
 the game's main thread 100% -> ~20%, its render thread 100% -> under 10%, the
 timer thread ~45% -> idle, at the same frame pacing.
+
+## 0027-resolve-to-texture
+
+A resolve copies a render target into guest memory in the Xbox 360's tiled
+layout, and the texture that samples it is then untiled from that memory again
+and copied into place. At 4K that is four full-size passes per image: dump the
+render target to the EDRAM buffer, resolve it to memory, untile it, copy it. The
+game's post-processing chain (bloom, blur, the downsampled copies of the frame)
+resolves 8888 images and samples them right back, every frame, to the same
+addresses (counted in a test build: ~70% of the texture loads of resolved data
+matched one resolve exactly).
+
+The texture cache now keeps the latest resolve into each address. When a
+texture loads exactly one such resolve's output (8888 from an 8888 render target
+without MSAA, starting at its origin, same pitch and endianness, no larger than
+the resolve), it remembers that texture. At the next resolve to that address, a
+compute shader writes the render target region straight into the texture,
+swapping red and blue when the resolve swapped them, and the texture is marked
+up to date, so it isn't untiled again. The resolve to memory still happens, for
+the CPU and for any other texture reading that memory; a CPU write still
+invalidates the texture through its memory watch. Those textures are created
+with UAV access.
+
+Measured 2026-10-24 at 4K (RX 6700 XT): the 1280x720 8888 texture loads it
+replaces were ~2 ms of a 27 ms pre-match frame (PIX), and in play, switched on
+and off in the same scene, GPU time went from 11.9 to 11.6 ms per frame, the
+texture loads from 19 to 9 per frame. No visual difference.
+`resolve_to_texture = false` restores the old path and can be switched while the
+game runs.
+
