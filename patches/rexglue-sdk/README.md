@@ -537,3 +537,31 @@ in it (12), above the normal-priority work of other programs and services.
 Measured 2026-10-25 with Windows Sandbox enabled: before, every container
 network rebuild during a match gave 5-20 frames over 40 ms; after, a 40 game
 minute match with rebuilds during play had none.
+
+## 0033-early-readbacks
+
+FIFA builds each kit texture on the GPU, then reads it back and untiles it on
+the CPU (`pc/fixes/gpu_memcpy.cpp`). Each readback stopped the game thread for
+about 24 ms at 720p, twice a second while kits build (kit select, the training
+intro), so those screens dropped frames at every resolution. Two waits made up
+that time:
+
+- The GPU command thread only took queued readbacks between batches of guest
+  commands, ~13 ms later on average: it was usually inside a batch, waiting for
+  a vblank or a fence. It now also takes the readbacks at the front of the queue
+  during those waits (`ExecuteQueuedGpuMemoryReadbacks`). Readbacks only read
+  what the GPU has done; copies, and readbacks queued behind them, keep their
+  order.
+- The readback itself waited for all work queued on the GPU, which runs a frame
+  behind: 4-17 ms. The game reads each kit back a frame after resolving it, so a
+  resolve into memory the game has read back before is now copied to a readback
+  buffer right behind it, and that part of the frame is submitted at once
+  (`readback_prefetch`, on by default). The readback then waits only for that
+  submission and copies from its buffer. Any later GPU write to the range
+  (resolve, GPU memory copy, memexport) or CPU write drops the early copy, and
+  the readback falls back to the full wait.
+
+Measured 2026-10-26 at 720p in kit select: 37 of 40 readbacks came from the
+early copy, 0.8 ms each; the game thread's readback waiting went from 270-480 ms
+to ~55 ms per 10 seconds, the worst single wait from 28.6 to 9.9 ms. Kits are
+correct.
