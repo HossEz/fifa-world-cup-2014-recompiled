@@ -633,3 +633,24 @@ Tested 2026-10-26: unchanged picture on an RX 6700 XT. On an Intel HD 520 the
 device is no longer removed, but the host render target path still renders
 wrong there (black areas, old images) with or without 0027-0031, so Intel
 keeps the ROV path the SDK picks for it.
+
+## 0037-intel-arc-host-render-targets
+
+The SDK puts every Intel GPU on the ROV path, because in 2021 the "always"
+stencil comparison didn't work on a UHD 630, which breaks the Xbox 360's
+clears. That still holds for the Intel GPUs before Arc: the host render target
+path renders wrong on an HD 520 here (black areas, old images), and on Iris Xe
+for Xenia Canary's testers (black artifacts in every game, latest driver). On
+the Arc architecture it renders right and much faster, with stencil reference
+output on (Xenia Canary issue 542), so the ROV path made Arc cards slow for
+nothing.
+
+As Xenia Canary does since 2025, the Arc architecture's GPUs are recognized by
+the adapter name (`Intel(R) Arc(TM)`, or `Intel(R) Graphics` for the Core Ultra
+integrated GPUs with single-channel memory) and get the host render target path
+with stencil reference output, as AMD and Nvidia do. The other Intel GPUs keep
+ROV. `render_target_path_d3d12` still overrides it. Needs 0036, since the
+direct resolves' earlier view removed the device on Intel's driver.
+
+Not tested on an Arc GPU here. Other GPUs are unaffected: the HD 520 is named
+`Intel(R) HD Graphics 520`, Iris Xe `Intel(R) Iris(R) Xe Graphics`.

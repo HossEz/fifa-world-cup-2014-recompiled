@@ -1,0 +1,78 @@
+diff --git a/include/rex/ui/d3d12/d3d12_provider.h b/include/rex/ui/d3d12/d3d12_provider.h
+index 35035a4..a4d79ad 100644
+--- a/include/rex/ui/d3d12/d3d12_provider.h
++++ b/include/rex/ui/d3d12/d3d12_provider.h
+@@ -80,6 +80,10 @@ class D3D12Provider : public GraphicsProvider {
+ 
+   // Adapter info.
+   GpuVendorID GetAdapterVendorID() const { return adapter_vendor_id_; }
++  // Intel's Arc architecture (Arc cards and the Core Ultra integrated GPUs),
++  // which has neither the stencil nor the stencil reference output problem of
++  // the earlier Intel GPUs.
++  bool IsIntelArcGpu() const { return adapter_intel_arc_; }
+ 
+   // Device features.
+   D3D12_HEAP_FLAGS GetHeapFlagCreateNotZeroed() const { return heap_flag_create_not_zeroed_; }
+@@ -158,6 +162,7 @@ class D3D12Provider : public GraphicsProvider {
+   uint32_t descriptor_sizes_[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+ 
+   GpuVendorID adapter_vendor_id_;
++  bool adapter_intel_arc_ = false;
+ 
+   D3D12_HEAP_FLAGS heap_flag_create_not_zeroed_;
+   D3D12_PROGRAMMABLE_SAMPLE_POSITIONS_TIER programmable_sample_positions_tier_;
+diff --git a/src/graphics/d3d12/render_target_cache.cpp b/src/graphics/d3d12/render_target_cache.cpp
+index 8d464e8..9f7db64 100644
+--- a/src/graphics/d3d12/render_target_cache.cpp
++++ b/src/graphics/d3d12/render_target_cache.cpp
+@@ -191,13 +191,15 @@ bool D3D12RenderTargetCache::Initialize() {
+     // As of April 2021 (driver version 27.20.0100.9316), on Intel (tested on
+     // UHD Graphics 630), the "always" stencil comparison function isn't working
+     // properly, so clears in the Xbox 360's Direct3D 9 don't work. Forcing ROV
+-    // there.
++    // there. Still so on the HD 520 and Iris Xe in 2025-2026, but not on the
++    // Arc architecture, which takes the faster host render target path.
+ #if 1
+     // The ROV path is currently much slower generally.
+     // TODO(Triang3l): Make ROV the default when it's optimized better (for
+     // instance, using static shader modifications to pass render target
+     // parameters).
+-    path_ = provider.GetAdapterVendorID() == ui::GraphicsProvider::GpuVendorID::kIntel
++    path_ = provider.GetAdapterVendorID() == ui::GraphicsProvider::GpuVendorID::kIntel &&
++                    !provider.IsIntelArcGpu()
+                 ? Path::kPixelShaderInterlock
+                 : Path::kHostRenderTargets;
+ #else
+@@ -392,7 +394,7 @@ bool D3D12RenderTargetCache::Initialize() {
+   use_stencil_reference_output_ =
+       REXCVAR_GET(native_stencil_value_output) &&
+       provider.IsPSSpecifiedStencilReferenceSupported() &&
+-      (REXCVAR_GET(native_stencil_value_output_d3d12_intel) ||
++      (REXCVAR_GET(native_stencil_value_output_d3d12_intel) || provider.IsIntelArcGpu() ||
+        provider.GetAdapterVendorID() != ui::GraphicsProvider::GpuVendorID::kIntel);
+ 
+   if (path_ == Path::kHostRenderTargets) {
+diff --git a/src/ui/d3d12/d3d12_provider.cpp b/src/ui/d3d12/d3d12_provider.cpp
+index be97893..9152a93 100644
+--- a/src/ui/d3d12/d3d12_provider.cpp
++++ b/src/ui/d3d12/d3d12_provider.cpp
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <cstdlib>
++#include <cwchar>
+ 
+ #include <rex/cvar.h>
+ #include <rex/logging.h>
+@@ -318,6 +319,11 @@ bool D3D12Provider::Initialize() {
+     return false;
+   }
+   adapter_vendor_id_ = GpuVendorID(adapter_desc.VendorId);
++  // By name, as Xenia Canary does: the Arc architecture's GPUs are named
++  // "Arc" or, for integrated ones with single-channel memory, "Graphics" alone.
++  adapter_intel_arc_ = adapter_vendor_id_ == GpuVendorID::kIntel &&
++                       (std::wcsncmp(adapter_desc.Description, L"Intel(R) Arc(TM)", 16) == 0 ||
++                        std::wcsncmp(adapter_desc.Description, L"Intel(R) Graphics", 17) == 0);
+   int adapter_name_mb_size =
+       WideCharToMultiByte(CP_UTF8, 0, adapter_desc.Description, -1, nullptr, 0, nullptr, nullptr);
+   if (adapter_name_mb_size != 0) {
