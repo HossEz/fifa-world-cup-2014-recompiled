@@ -76,6 +76,8 @@ class Ui {
   void SetUpdateJob(const UpdateJob* job) { update_job_ = job; }
   // Set by the host: the player chose Update (and again after a failure).
   std::function<void()> on_update;
+  // Opens a release page in the browser (the update popup's "more" line).
+  std::function<void(const std::string&)> on_open_page;
 
  private:
   enum class Screen { kHome, kSettings, kControls, kAbout, kNotice };

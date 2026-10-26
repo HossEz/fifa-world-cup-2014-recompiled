@@ -819,6 +819,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       return Screenshot([&](float w, float h, float dt) { setup.Frame(w, h, dt); }, screenshot)
                  ? 0 : 3;
     }
+    ui.on_open_page = [](const std::string&) {};  // links drawn as links
     if (update_feed_given) {
       // With a test feed, the update popup it would offer.
       if (auto release = launcher::CheckForUpdate(update_feed, "0.0.0")) ui.ShowUpdate(*release);
@@ -956,6 +957,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     };
     ui->on_quit = [] { PostQuitMessage(0); };
     ui->on_change_game = [&] { change_game = true; };
+    ui->on_open_page = [](const std::string& url) {
+      // Only the project's own pages (the feed is GitHub's).
+      if (!url.starts_with("https://github.com/")) return;
+      std::wstring wide(url.begin(), url.end());
+      ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    };
     ui->on_update = [&] {
       update_job.reset();  // a failed one, if any
       update_job = std::make_unique<launcher::UpdateJob>(*update_release, install_kind, game_folder);

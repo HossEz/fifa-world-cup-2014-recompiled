@@ -1194,6 +1194,24 @@ void Ui::AboutScreen(float width, float height) {
   float text_size = 19 * s, text_x = bx + 48 * s + 24 * s, wrap = bw - 48 * s * 2 - 40 * s;
   float ty = by + 64 * s + 90 * s;
   for (const std::string& paragraph : topic.paragraphs) {
+    if (paragraph.starts_with("github.com/") && on_open_page) {
+      // The project's page, as a link: brighter and underlined under the mouse.
+      ImVec2 size = book_->CalcTextSizeA(text_size, FLT_MAX, 0.0f, paragraph.c_str());
+      bool over = MouseIn(text_x, ty, text_x + size.x, ty + size.y);
+      draw_->AddText(book_, text_size, ImVec2(text_x, ty), over ? kCream : kCreamDim,
+                     paragraph.c_str());
+      draw_->AddLine(ImVec2(text_x, ty + size.y), ImVec2(text_x + size.x, ty + size.y),
+                     WithAlpha(kCream, over ? 0.9f : 0.35f), std::max(1.0f, s));
+      if (over) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          Sound(Audio::Effect::kSelect);
+          on_open_page("https://" + paragraph);
+        }
+      }
+      ty += text_size * 1.4f + text_size * 0.6f;
+      continue;
+    }
     ty += DrawWrapped(book_, text_size, text_x, ty, wrap, kCreamDim, paragraph) + text_size * 0.6f;
   }
   if (topic.build) {
@@ -1301,7 +1319,8 @@ void Ui::UpdatePopup(float width, float height) {
   // when the download starts), then a line counting the rest.
   float fixed_h = 38 * s * 1.2f + 24 * s * 1.5f + 22 * s;
   if (update_job_ && state == State::kFailed) fixed_h += 18 * s * 2.6f;
-  float buttons_h = 2 * (32 * s * 1.35f + 6 * s);
+  // Update now, and Later a size smaller.
+  float buttons_h = (32 * s * 1.35f + 6 * s) + (26 * s * 1.35f + 6 * s);
   float more_h = 18 * s * 1.4f + 6 * s;
   float room = panel_h * 0.9f - 56 * s - 16 * s - fixed_h - buttons_h;
   std::vector<float> change_h;
@@ -1332,9 +1351,26 @@ void Ui::UpdatePopup(float width, float height) {
          6 * s;
   }
   if (shown < update_->changes.size()) {
+    // A link to the release page: brighter and underlined under the mouse.
     std::string more = Tf("+ {0} more on the release page",
                           {std::to_string(update_->changes.size() - shown)});
-    draw_->AddText(book_, 18 * s, ImVec2(x + 18 * s, y), WithAlpha(kInk, 0.5f * t), more.c_str());
+    ImVec2 size = book_->CalcTextSizeA(18 * s, FLT_MAX, 0.0f, more.c_str());
+    float link_x = x + 18 * s;
+    bool link = !update_->page_url.empty() && on_open_page;
+    bool over = link && MouseIn(link_x, y, link_x + size.x, y + size.y);
+    ImU32 link_color = WithAlpha(kInk, (over ? 0.9f : 0.5f) * t);
+    draw_->AddText(book_, 18 * s, ImVec2(link_x, y), link_color, more.c_str());
+    if (link) {
+      draw_->AddLine(ImVec2(link_x, y + size.y), ImVec2(link_x + size.x, y + size.y),
+                     WithAlpha(kInk, (over ? 0.9f : 0.3f) * t), std::max(1.0f, s));
+    }
+    if (over) {
+      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        Sound(Audio::Effect::kSelect);
+        on_open_page(update_->page_url);
+      }
+    }
     y += more_h;
   }
   y += 22 * s;
@@ -1347,7 +1383,7 @@ void Ui::UpdatePopup(float width, float height) {
     for (int i = 0; i < 2; ++i) {
       float focus = Anim("update" + std::to_string(i), i == update_focus_ ? 1.0f : 0.0f, 0.2f);
       float top = y;
-      y = DrawItem(x, y, labels[i], bold_, 32 * s, focus * t, 0.0f, soft);
+      y = DrawItem(x, y, labels[i], bold_, (i == 0 ? 32 : 26) * s, focus * t, 0.0f, soft);
       if (MouseIn(x - 20 * s, top, x + 320 * s, y)) {
         if (mouse_moved_ && update_focus_ != i) {
           update_focus_ = i;
