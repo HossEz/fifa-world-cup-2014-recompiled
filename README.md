@@ -85,7 +85,8 @@
 
   ### Known issues
 
-  - The pre-match training, cutscenes, replays and celebrations still drop below 60fps.
+  - Cutscenes, replays and celebrations can still drop below 60fps at high resolutions.
+  - Intel UHD and Iris Xe graphics still run matches well below 60fps. The game doesn't draw correctly on these GPUs due to an issue on Intel's side, so they use a slower mode that draws correctly but costs significantly more performance.
 
   ## Building from source
 
