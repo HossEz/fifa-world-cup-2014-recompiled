@@ -341,6 +341,8 @@ const Entry kEntries[] = {
     {"Update available", "Actualización disponible", "Atualização disponível"},
     {"Version {0}   \xC2\xB7   you have {1}", "Versión {0}   \xC2\xB7   tienes la {1}",
      "Versão {0}   \xC2\xB7   você tem a {1}"},
+    {"+ {0} more on the release page", "+ {0} más en la página de la versión",
+     "+ {0} mais na página da versão"},
     {"Try again", "Reintentar", "Tentar de novo"},
     {"Update now", "Actualizar ahora", "Atualizar agora"},
     {"Downloading   {0} of {1} MB", "Descargando   {0} de {1} MB", "Baixando   {0} de {1} MB"},

@@ -1296,13 +1296,29 @@ void Ui::UpdatePopup(float width, float height) {
   float x = px + 62 * s, wrap = panel_w - 140 * s;
   State state = update_job_ ? update_job_->state() : State::kFailed;
   bool choosing = !update_job_ || state == State::kFailed;
-  // The content's height, to centre it in the panel's painted area.
-  float content_h = 38 * s * 1.2f + 24 * s * 1.5f + 22 * s;
+  // The content's height, to centre it in the panel's painted area. As many of
+  // the changes as fit (with the buttons' height, so the list doesn't change
+  // when the download starts), then a line counting the rest.
+  float fixed_h = 38 * s * 1.2f + 24 * s * 1.5f + 22 * s;
+  if (update_job_ && state == State::kFailed) fixed_h += 18 * s * 2.6f;
+  float buttons_h = 2 * (32 * s * 1.35f + 6 * s);
+  float more_h = 18 * s * 1.4f + 6 * s;
+  float room = panel_h * 0.9f - 56 * s - 16 * s - fixed_h - buttons_h;
+  std::vector<float> change_h;
   for (const std::string& change : update_->changes) {
-    content_h += book_->CalcTextSizeA(18 * s, FLT_MAX, wrap - 18 * s, change.c_str()).y * 1.4f + 6 * s;
+    change_h.push_back(
+        book_->CalcTextSizeA(18 * s, FLT_MAX, wrap - 18 * s, change.c_str()).y * 1.4f + 6 * s);
   }
-  if (update_job_ && state == State::kFailed) content_h += 18 * s * 2.6f;
-  content_h += choosing ? 2 * (32 * s * 1.35f + 6 * s) : 24 * s * 1.5f + 12 * s;
+  size_t shown = change_h.size();
+  for (;;) {
+    float list_h = shown < change_h.size() ? more_h : 0.0f;
+    for (size_t i = 0; i < shown; ++i) list_h += change_h[i];
+    if (shown == 0 || list_h <= room) break;
+    --shown;
+  }
+  float content_h = fixed_h + (choosing ? buttons_h : 24 * s * 1.5f + 12 * s);
+  for (size_t i = 0; i < shown; ++i) content_h += change_h[i];
+  if (shown < change_h.size()) content_h += more_h;
   float y = py + std::max(56 * s, (panel_h * 0.9f - content_h) * 0.5f);
   draw_->AddText(bold_, 38 * s, ImVec2(x, y), ink, T("Update available"));
   y += 38 * s * 1.2f;
@@ -1310,9 +1326,16 @@ void Ui::UpdatePopup(float width, float height) {
                             {update_->version, *LauncherVersion() ? LauncherVersion() : "?"});
   draw_->AddText(condensed_, 24 * s, ImVec2(x, y), soft, versions.c_str());
   y += 24 * s * 1.5f;
-  for (const std::string& change : update_->changes) {
+  for (size_t i = 0; i < shown; ++i) {
     draw_->AddText(book_, 18 * s, ImVec2(x, y), soft, "\xE2\x80\xA2");
-    y += DrawWrapped(book_, 18 * s, x + 18 * s, y, wrap - 18 * s, soft, change) + 6 * s;
+    y += DrawWrapped(book_, 18 * s, x + 18 * s, y, wrap - 18 * s, soft, update_->changes[i]) +
+         6 * s;
+  }
+  if (shown < update_->changes.size()) {
+    std::string more = Tf("+ {0} more on the release page",
+                          {std::to_string(update_->changes.size() - shown)});
+    draw_->AddText(book_, 18 * s, ImVec2(x + 18 * s, y), WithAlpha(kInk, 0.5f * t), more.c_str());
+    y += more_h;
   }
   y += 22 * s;
   if (update_job_ && state == State::kFailed) {

@@ -819,6 +819,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       return Screenshot([&](float w, float h, float dt) { setup.Frame(w, h, dt); }, screenshot)
                  ? 0 : 3;
     }
+    if (update_feed_given) {
+      // With a test feed, the update popup it would offer.
+      if (auto release = launcher::CheckForUpdate(update_feed, "0.0.0")) ui.ShowUpdate(*release);
+    }
     return Screenshot([&](float w, float h, float dt) { ui.Frame(w, h, dt); }, screenshot) ? 0 : 3;
   }
 

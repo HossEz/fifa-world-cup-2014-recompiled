@@ -229,10 +229,11 @@ std::optional<Release> CheckForUpdate(const std::string& feed_url,
   }
   // The release text's bullet points ("- ..." / "* ..."), as the summary: the
   // first list only, up to the first heading after it, so a later section's
-  // bullets (Known issues) aren't shown as changes.
+  // bullets (Known issues) aren't shown as changes. The popup shows as many as
+  // fit and counts the rest.
   std::istringstream lines(feed.value("body", ""));
   std::string line;
-  while (std::getline(lines, line) && release.changes.size() < 4) {
+  while (std::getline(lines, line) && release.changes.size() < 20) {
     while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
     size_t start = line.find_first_not_of(' ');
     if (start == std::string::npos) continue;
