@@ -1,0 +1,298 @@
+diff --git a/include/rex/graphics/d3d12/pipeline_cache.h b/include/rex/graphics/d3d12/pipeline_cache.h
+index 7a9d6a2..2c35764 100644
+--- a/include/rex/graphics/d3d12/pipeline_cache.h
++++ b/include/rex/graphics/d3d12/pipeline_cache.h
+@@ -394,6 +394,24 @@ class PipelineCache {
+   bool storage_write_thread_shutdown_ = false;
+   std::unique_ptr<rex::thread::Thread> storage_write_thread_;
+ 
++  // d3d12_pipeline_library: the driver's compiled pipelines, kept in
++  // shaders/local between runs (ID3D12PipelineLibrary). Without it, every start
++  // compiles all the stored pipelines again: 2.5 minutes on an Intel HD 520.
++  // The driver rejects a library from another driver or GPU, and a pipeline
++  // whose description changed has another name, so stale entries aren't used.
++  void InitializePipelineLibrary(const std::filesystem::path& path);
++  // Saves the library if pipelines were added (from the storage write thread:
++  // the process may exit without shutting down).
++  void SavePipelineLibrary();
++  std::mutex pipeline_library_mutex_;
++  Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> pipeline_library_;
++  // The serialized library it was created from, which must outlive it.
++  std::vector<uint8_t> pipeline_library_data_;
++  std::filesystem::path pipeline_library_path_;
++  std::atomic<bool> pipeline_library_dirty_{false};
++  std::atomic<uint32_t> pipeline_library_loaded_{0};
++  std::atomic<uint32_t> pipeline_library_compiled_{0};
++
+   // Pipeline creation threads.
+   void CreationThread(size_t thread_index);
+   void CreateQueuedPipelinesOnProcessorThread();
+diff --git a/src/graphics/d3d12/pipeline_cache.cpp b/src/graphics/d3d12/pipeline_cache.cpp
+index 8e6b854..7ca8ac7 100644
+--- a/src/graphics/d3d12/pipeline_cache.cpp
++++ b/src/graphics/d3d12/pipeline_cache.cpp
+@@ -12,6 +12,8 @@
+ #include "thirdparty/dxbc/DXBCChecksum.h"
+ 
+ #include <algorithm>
++#include <chrono>
++#include <fstream>
+ #include <atomic>
+ #include <cinttypes>
+ #include <cmath>
+@@ -54,6 +56,10 @@ REXCVAR_DEFINE_BOOL(d3d12_dxbc_disasm, false, "GPU/D3D12", "Dump DXBC disassembl
+ REXCVAR_DEFINE_BOOL(d3d12_dxbc_disasm_dxilconv, false, "GPU/D3D12",
+                     "Dump DXIL conversion disassembly");
+ 
++REXCVAR_DEFINE_BOOL(d3d12_pipeline_library, true, "GPU/D3D12",
++                    "Keep the driver's compiled pipelines between runs, so starting the game "
++                    "doesn't compile them all again")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+ REXCVAR_DEFINE_INT32(d3d12_pipeline_creation_threads, -1, "GPU/D3D12",
+                      "Number of pipeline creation threads (-1 for auto)")
+     .range(-1, 32)
+@@ -152,7 +158,12 @@ bool PipelineCache::Initialize() {
+   if (REXCVAR_GET(d3d12_pipeline_creation_threads) != 0) {
+     size_t creation_thread_count;
+     if (REXCVAR_GET(d3d12_pipeline_creation_threads) < 0) {
+-      creation_thread_count = std::max(logical_processor_count * 3 / 4, uint32_t(1));
++      // Three quarters of the logical processors, but two left free on small
++      // CPUs: the GPU command thread creates pipelines too, and with every
++      // thread compiling a 2-core laptop stopped responding for minutes.
++      creation_thread_count =
++          std::max(std::min(logical_processor_count * 3 / 4, logical_processor_count - 2),
++                   uint32_t(1));
+     } else {
+       creation_thread_count =
+           std::min(uint32_t(REXCVAR_GET(d3d12_pipeline_creation_threads)), logical_processor_count);
+@@ -162,6 +173,9 @@ bool PipelineCache::Initialize() {
+           rex::thread::Thread::Create({}, [this, i]() { CreationThread(i); });
+       assert_not_null(creation_thread);
+       creation_thread->set_name("D3D12 Pipelines");
++      // Background work: below the game's other threads, which run above
++      // normal (ReXApp::OnInitialize), so the rest of Windows keeps up.
++      creation_thread->set_priority(rex::thread::ThreadPriority::kLowest);
+       creation_threads_.push_back(std::move(creation_thread));
+     }
+   }
+@@ -243,6 +257,12 @@ void PipelineCache::InitializeShaderStorage(const std::filesystem::path& cache_r
+   bool edram_rov_used =
+       render_target_cache_.GetPath() == RenderTargetCache::Path::kPixelShaderInterlock;
+ 
++  if (REXCVAR_GET(d3d12_pipeline_library)) {
++    InitializePipelineLibrary(
++        shader_storage_root / "local" /
++        fmt::format("{:08X}.{}.d3d12.plib", title_id, edram_rov_used ? "rov" : "rtv"));
++  }
++
+   // Initialize the pipeline storage stream - read pipeline descriptions and
+   // collect used shader modifications to translate.
+   std::vector<PipelineStoredDescription> pipeline_stored_descriptions;
+@@ -480,6 +500,7 @@ void PipelineCache::InitializeShaderStorage(const std::filesystem::path& cache_r
+         auto thread = rex::thread::Thread::Create({}, shader_translation_thread_function);
+         assert_not_null(thread);
+         thread->set_name("Shader Translation");
++        thread->set_priority(rex::thread::ThreadPriority::kLowest);
+         shader_translation_threads.push_back(std::move(thread));
+       }
+       // Request ucode information gathering and translation of all the needed
+@@ -538,6 +559,9 @@ void PipelineCache::InitializeShaderStorage(const std::filesystem::path& cache_r
+           {}, [this, creation_thread_index]() { CreationThread(creation_thread_index); });
+       assert_not_null(creation_thread);
+       creation_thread->set_name("D3D12 Pipelines");
++      // Background work: below the game's other threads, which run above
++      // normal (ReXApp::OnInitialize), so the rest of Windows keeps up.
++      creation_thread->set_priority(rex::thread::ThreadPriority::kLowest);
+       creation_threads_.push_back(std::move(creation_thread));
+     }
+ 
+@@ -731,6 +755,14 @@ void PipelineCache::ShutdownShaderStorage() {
+   storage_write_shader_queue_.clear();
+   storage_write_pipeline_queue_.clear();
+ 
++  SavePipelineLibrary();
++  {
++    std::lock_guard lock(pipeline_library_mutex_);
++    pipeline_library_.Reset();
++    pipeline_library_data_.clear();
++    pipeline_library_path_.clear();
++  }
++
+   if (pipeline_storage_file_) {
+     fclose(pipeline_storage_file_);
+     pipeline_storage_file_ = nullptr;
+@@ -3026,10 +3058,45 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
+     state_desc.DepthStencilState.StencilEnable = FALSE;
+   }
+ 
+-  // Create the D3D12 pipeline state object.
++  // Create the D3D12 pipeline state object, or load it from the pipeline
++  // library. Its name there covers the whole description: the fixed state
++  // (pointers cleared) and every shader's bytecode.
+   ID3D12Device* device = command_processor_.GetD3D12Provider().GetDevice();
+-  ID3D12PipelineState* state;
+-  if (FAILED(device->CreateGraphicsPipelineState(&state_desc, IID_PPV_ARGS(&state)))) {
++  ID3D12PipelineState* state = nullptr;
++  wchar_t library_name[24] = {};
++  bool library_used;
++  {
++    std::lock_guard lock(pipeline_library_mutex_);
++    library_used = pipeline_library_ != nullptr;
++  }
++  if (library_used) {
++    D3D12_GRAPHICS_PIPELINE_STATE_DESC fixed = state_desc;
++    fixed.pRootSignature = nullptr;
++    fixed.VS.pShaderBytecode = fixed.PS.pShaderBytecode = fixed.DS.pShaderBytecode = nullptr;
++    fixed.HS.pShaderBytecode = fixed.GS.pShaderBytecode = nullptr;
++    fixed.StreamOutput = {};
++    fixed.InputLayout.pInputElementDescs = nullptr;
++    fixed.CachedPSO = {};
++    XXH3_state_t hash_state;
++    XXH3_64bits_reset(&hash_state);
++    XXH3_64bits_update(&hash_state, &fixed, sizeof(fixed));
++    for (const D3D12_SHADER_BYTECODE* bytecode :
++         {&state_desc.VS, &state_desc.PS, &state_desc.DS, &state_desc.HS, &state_desc.GS}) {
++      if (bytecode->pShaderBytecode) {
++        XXH3_64bits_update(&hash_state, bytecode->pShaderBytecode, bytecode->BytecodeLength);
++      }
++    }
++    std::swprintf(library_name, std::size(library_name), L"%016llX",
++                  static_cast<unsigned long long>(XXH3_64bits_digest(&hash_state)));
++    std::lock_guard lock(pipeline_library_mutex_);
++    if (pipeline_library_ && FAILED(pipeline_library_->LoadGraphicsPipeline(
++                                 library_name, &state_desc, IID_PPV_ARGS(&state)))) {
++      state = nullptr;
++    }
++  }
++  if (state) {
++    pipeline_library_loaded_.fetch_add(1, std::memory_order_relaxed);
++  } else if (FAILED(device->CreateGraphicsPipelineState(&state_desc, IID_PPV_ARGS(&state)))) {
+     if (runtime_description.pixel_shader != nullptr) {
+       REXGPU_ERROR("Failed to create graphics pipeline with VS {:016X}, PS {:016X}",
+                    runtime_description.vertex_shader->shader().ucode_data_hash(),
+@@ -3039,6 +3106,12 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
+                    runtime_description.vertex_shader->shader().ucode_data_hash());
+     }
+     return nullptr;
++  } else if (library_used) {
++    pipeline_library_compiled_.fetch_add(1, std::memory_order_relaxed);
++    std::lock_guard lock(pipeline_library_mutex_);
++    if (pipeline_library_ && SUCCEEDED(pipeline_library_->StorePipeline(library_name, state))) {
++      pipeline_library_dirty_.store(true, std::memory_order_relaxed);
++    }
+   }
+   std::u16string name;
+   if (runtime_description.pixel_shader != nullptr) {
+@@ -3053,6 +3126,82 @@ ID3D12PipelineState* PipelineCache::CreateD3D12Pipeline(
+   return state;
+ }
+ 
++void PipelineCache::InitializePipelineLibrary(const std::filesystem::path& path) {
++  Microsoft::WRL::ComPtr<ID3D12Device1> device;
++  if (FAILED(command_processor_.GetD3D12Provider().GetDevice()->QueryInterface(
++          IID_PPV_ARGS(&device)))) {
++    return;
++  }
++  std::error_code error;
++  std::filesystem::create_directories(path.parent_path(), error);
++  std::lock_guard lock(pipeline_library_mutex_);
++  pipeline_library_path_ = path;
++  pipeline_library_data_.clear();
++  {
++    std::ifstream file(path, std::ios::binary);
++    if (file) {
++      pipeline_library_data_.assign(std::istreambuf_iterator<char>(file),
++                                    std::istreambuf_iterator<char>());
++    }
++  }
++  HRESULT result = E_FAIL;
++  if (!pipeline_library_data_.empty()) {
++    result = device->CreatePipelineLibrary(pipeline_library_data_.data(),
++                                           pipeline_library_data_.size(),
++                                           IID_PPV_ARGS(&pipeline_library_));
++    if (SUCCEEDED(result)) {
++      REXGPU_INFO("Pipeline library: {} KB from {}", pipeline_library_data_.size() >> 10,
++                  rex::path_to_utf8(path));
++    } else {
++      // Another driver or GPU: compiled again, into a new library.
++      REXGPU_INFO("Pipeline library: {} not usable ({:08X}), starting a new one",
++                  rex::path_to_utf8(path), uint32_t(result));
++    }
++  }
++  if (FAILED(result)) {
++    pipeline_library_data_.clear();
++    if (FAILED(device->CreatePipelineLibrary(nullptr, 0, IID_PPV_ARGS(&pipeline_library_)))) {
++      pipeline_library_.Reset();
++      REXGPU_WARN("Pipeline library: not supported, pipelines are compiled at every start");
++    }
++  }
++  pipeline_library_dirty_.store(false, std::memory_order_relaxed);
++  pipeline_library_loaded_.store(0, std::memory_order_relaxed);
++  pipeline_library_compiled_.store(0, std::memory_order_relaxed);
++}
++
++void PipelineCache::SavePipelineLibrary() {
++  std::vector<uint8_t> data;
++  std::filesystem::path path;
++  {
++    std::lock_guard lock(pipeline_library_mutex_);
++    if (!pipeline_library_ || !pipeline_library_dirty_.exchange(false)) {
++      return;
++    }
++    data.resize(pipeline_library_->GetSerializedSize());
++    if (data.empty() || FAILED(pipeline_library_->Serialize(data.data(), data.size()))) {
++      return;
++    }
++    path = pipeline_library_path_;
++  }
++  // Written beside it and then renamed, so the game exiting meanwhile can't
++  // leave a broken library.
++  std::filesystem::path temporary = path;
++  temporary += ".tmp";
++  {
++    std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
++    if (!file.write(reinterpret_cast<const char*>(data.data()), std::streamsize(data.size()))) {
++      return;
++    }
++  }
++  std::error_code error;
++  std::filesystem::rename(temporary, path, error);
++  if (error) {
++    REXGPU_WARN("Pipeline library: couldn't save {}: {}", rex::path_to_utf8(path),
++                error.message());
++  }
++}
++
+ void PipelineCache::StorageWriteThread() {
+   ShaderStoredHeader shader_header;
+   // Don't leak anything in unused bits.
+@@ -3063,6 +3212,7 @@ void PipelineCache::StorageWriteThread() {
+ 
+   bool flush_shaders = false;
+   bool flush_pipelines = false;
++  auto library_saved = std::chrono::steady_clock::now();
+ 
+   while (true) {
+     if (flush_shaders) {
+@@ -3101,7 +3251,20 @@ void PipelineCache::StorageWriteThread() {
+         flush_pipelines = true;
+       }
+       if (!shader && !write_pipeline) {
+-        storage_write_request_cond_.wait(lock);
++        if (pipeline_library_dirty_.load(std::memory_order_relaxed)) {
++          // New pipelines in the library: saved once a few seconds pass, so a
++          // burst of them is written once.
++          auto due = library_saved + std::chrono::seconds(5);
++          if (std::chrono::steady_clock::now() >= due) {
++            lock.unlock();
++            SavePipelineLibrary();
++            library_saved = std::chrono::steady_clock::now();
++          } else {
++            storage_write_request_cond_.wait_until(lock, due);
++          }
++        } else {
++          storage_write_request_cond_.wait(lock);
++        }
+         continue;
+       }
+     }

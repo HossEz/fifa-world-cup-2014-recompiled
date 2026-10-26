@@ -565,3 +565,28 @@ Measured 2026-10-26 at 720p in kit select: 37 of 40 readbacks came from the
 early copy, 0.8 ms each; the game thread's readback waiting went from 270-480 ms
 to ~55 ms per 10 seconds, the worst single wait from 28.6 to 9.9 ms. Kits are
 correct.
+
+## 0034-pipeline-loading
+
+On a Dell Latitude E7470 (Intel HD 520, 2 cores / 4 threads) the game showed a
+black screen for 2-2.5 minutes at every start while it created the 190-odd
+pipelines stored from earlier runs, and Windows itself stopped responding.
+
+- The pipeline creation and shader translation threads run at the lowest
+  priority within the game, whose other threads run above normal since 0032,
+  so the rest of Windows keeps up with them. Three quarters of the logical
+  processors still compile, but two are left free on small CPUs (the GPU
+  command thread creates pipelines too): 2 threads instead of 3 on 4.
+- `d3d12_pipeline_library` (on by default): the driver's compiled pipelines
+  are kept between runs in an `ID3D12PipelineLibrary`, in
+  `shaders/local/<title>.<rov|rtv>.d3d12.plib` beside the shareable storage.
+  Each pipeline is named by an XXH3 of its whole description (the fixed state
+  with pointers cleared, and every shader's bytecode), so one whose shaders or
+  state changed gets a new entry instead of failing to load. The driver
+  rejects a library from another driver or GPU; a new one is started then. It
+  is saved from the storage write thread a few seconds after pipelines were
+  added (the process can exit without shutting down), written beside the file
+  and renamed over it.
+
+Measured 2026-10-26 on the E7470: first start 2:40 (the library being built,
+desktop responsive), later starts about 5 seconds of black screen.
