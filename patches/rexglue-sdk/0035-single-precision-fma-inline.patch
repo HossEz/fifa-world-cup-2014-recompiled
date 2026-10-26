@@ -1,0 +1,49 @@
+diff --git a/src/codegen/builders/floating_point.cpp b/src/codegen/builders/floating_point.cpp
+index 1702241..791c735 100644
+--- a/src/codegen/builders/floating_point.cpp
++++ b/src/codegen/builders/floating_point.cpp
+@@ -205,9 +205,16 @@ bool build_fmadd(BuilderContext& ctx) {
+   return true;
+ }
+ 
++// The single-precision forms (fmadds and the others below) multiply and add in
++// double: their operands are single-precision values, so the double product is
++// exact, and rounding the double sum to float gives the fused result except in
++// a rounding tie about once in 2^29. std::fma would be a call into the C
++// library (the game is built for SSE4.2, without the FMA instruction), about
++// twice the cost: 30% of the game's audio mixer thread, which then couldn't
++// keep up on a 2-core laptop (robotic, slowed audio).
+ bool build_fmadds(BuilderContext& ctx) {
+   ctx.emit_set_flush_mode(false);
+-  ctx.println("\t{}.f64 = double(float(std::fma({}.f64, {}.f64, {}.f64)));",
++  ctx.println("\t{}.f64 = double(float({}.f64 * {}.f64 + {}.f64));",
+               ctx.f(ctx.insn.operands[0]), ctx.f(ctx.insn.operands[1]), ctx.f(ctx.insn.operands[2]),
+               ctx.f(ctx.insn.operands[3]));
+   return true;
+@@ -223,7 +230,7 @@ bool build_fmsub(BuilderContext& ctx) {
+ 
+ bool build_fmsubs(BuilderContext& ctx) {
+   ctx.emit_set_flush_mode(false);
+-  ctx.println("\t{}.f64 = double(float(std::fma({}.f64, {}.f64, -{}.f64)));",
++  ctx.println("\t{}.f64 = double(float({}.f64 * {}.f64 - {}.f64));",
+               ctx.f(ctx.insn.operands[0]), ctx.f(ctx.insn.operands[1]), ctx.f(ctx.insn.operands[2]),
+               ctx.f(ctx.insn.operands[3]));
+   return true;
+@@ -239,7 +246,7 @@ bool build_fnmadd(BuilderContext& ctx) {
+ 
+ bool build_fnmadds(BuilderContext& ctx) {
+   ctx.emit_set_flush_mode(false);
+-  ctx.println("\t{}.f64 = double(float(-std::fma({}.f64, {}.f64, {}.f64)));",
++  ctx.println("\t{}.f64 = double(float(-({}.f64 * {}.f64 + {}.f64)));",
+               ctx.f(ctx.insn.operands[0]), ctx.f(ctx.insn.operands[1]), ctx.f(ctx.insn.operands[2]),
+               ctx.f(ctx.insn.operands[3]));
+   return true;
+@@ -255,7 +262,7 @@ bool build_fnmsub(BuilderContext& ctx) {
+ 
+ bool build_fnmsubs(BuilderContext& ctx) {
+   ctx.emit_set_flush_mode(false);
+-  ctx.println("\t{}.f64 = double(float(-std::fma({}.f64, {}.f64, -{}.f64)));",
++  ctx.println("\t{}.f64 = double(float(-({}.f64 * {}.f64 - {}.f64)));",
+               ctx.f(ctx.insn.operands[0]), ctx.f(ctx.insn.operands[1]), ctx.f(ctx.insn.operands[2]),
+               ctx.f(ctx.insn.operands[3]));
+   return true;

@@ -590,3 +590,23 @@ pipelines stored from earlier runs, and Windows itself stopped responding.
 
 Measured 2026-10-26 on the E7470: first start 2:40 (the library being built,
 desktop responsive), later starts about 5 seconds of black screen.
+
+## 0035-single-precision-fma-inline
+
+The code generator wrote PowerPC's single-precision multiply-adds (fmadds,
+fmsubs, fnmadds, fnmsubs) as `double(float(std::fma(a, b, c)))`. The game is
+built for SSE4.2 (`-march=x86-64-v2`), without the FMA instruction, so every
+one of them became a call into the C library's `fma`. In the game's audio
+mixer thread that was about 30% of its time, and on a 2-core laptop (i5-6300U)
+the thread, at 76-88% of a core, couldn't keep up in a match: the audio came
+out robotic and slowed, with silence between its frames.
+
+They're now `double(float(a * b + c))`. Their operands are single-precision
+values, so the double product is exact, and rounding the double sum to float
+gives the fused result except in a rounding tie (about once in 2^29). The
+double-precision forms keep `std::fma`, where a plain multiply-add would round
+differently.
+
+Measured 2026-10-26 on a Dell Latitude E7470 at 720p: the audio thread 76-88%
+-> 52-67% of a core in a match; audio smooth in play, still slowed in the
+heaviest moments (a goal's crowd and commentary together).
