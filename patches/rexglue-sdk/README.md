@@ -610,3 +610,26 @@ differently.
 Measured 2026-10-26 on a Dell Latitude E7470 at 720p: the audio thread 76-88%
 -> 52-67% of a core in a match; audio smooth in play, still slowed in the
 heaviest moments (a goal's crowd and commentary together).
+
+## 0036-direct-resolve-unorm-view
+
+The direct resolves of 0029 and 0031 read the 8888 render target through an
+`R8G8B8A8_UINT` view. Those render targets are created fully typed
+(`R8G8B8A8_UNORM`), and a fully typed resource can't be viewed in another
+format, even one of the same family. AMD and Nvidia accept it; Intel's driver
+treats it as an invalid call and removes the device (`DXGI_ERROR_INVALID_CALL`)
+on the first frame of the host render target path.
+
+The view is now `R8G8B8A8_UNORM`, the render target's own format (as the SDK's
+own resolve-to-texture and transfer paths read it), and the shaders turn each
+value back into its byte with `value * 255 + 0.5`, which recovers it exactly;
+the 2x MSAA one then unpacks the bytes as the EDRAM path does, so the averaging
+is unchanged. Only typeless or UNORM render targets qualify. The bytecode is
+built from the sources with Xenia's XeSL headers as for 0029
+(`fxc /T cs_5_1 /E main /O3 /D SHADING_LANGUAGE_HLSL_XE=1`), which reproduces
+the earlier bytecode exactly from the earlier sources.
+
+Tested 2026-10-26: unchanged picture on an RX 6700 XT. On an Intel HD 520 the
+device is no longer removed, but the host render target path still renders
+wrong there (black areas, old images) with or without 0027-0031, so Intel
+keeps the ROV path the SDK picks for it.
