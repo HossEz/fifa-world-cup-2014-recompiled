@@ -303,10 +303,26 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     Option rate;
     rate.label = T("Frame rate");
     rate.help = T("The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "
-                  "60 everywhere lifts both limits.");
-    rate.choices = {{T("60 everywhere"), {{"present_interval_cap", "1"}, {"frame_rate_floor", "60"}}, {}},
-                    {T("As on console"), {{"present_interval_cap", "0"}, {"frame_rate_floor", "0"}}, {}}};
-    rate.defaults = {{"present_interval_cap", "0"}, {"frame_rate_floor", "0"}};
+                  "These rates lift both limits. Above 60 needs a faster PC, and heavy scenes may "
+                  "run below the rate you pick.");
+    for (int fps : {60, 120, 144, 165, 240}) {
+      rate.choices.push_back({std::to_string(fps) + " FPS",
+                              {{"present_interval_cap", "1"},
+                               {"frame_rate_floor", std::to_string(fps)},
+                               {"video_mode_refresh_rate", std::to_string(fps)},
+                               {"present_late_tolerance", fps > 60 ? "100" : "0"}},
+                              {}});
+    }
+    rate.choices.push_back({T("As on console"),
+                            {{"present_interval_cap", "0"},
+                             {"frame_rate_floor", "0"},
+                             {"video_mode_refresh_rate", "60"},
+                             {"present_late_tolerance", "0"}},
+                            {}});
+    rate.defaults = {{"present_interval_cap", "0"},
+                     {"frame_rate_floor", "0"},
+                     {"video_mode_refresh_rate", "60"},
+                     {"present_late_tolerance", "0"}};
     display.options.push_back(rate);
 
     display.options.push_back(OnOff("Show FPS", "show_fps", "false",

@@ -14,6 +14,12 @@
 // intervals are counted and logged every 10 s, and every frame is counted for
 // the PC version's frame-rate display (present_interval.h).
 //
+// The tolerance is how far into a vblank period, in percent, a late frame may
+// still flip right away. Past it, the frame waits for the next vblank and the
+// game waits with it, so frames just over the period run at half the rate: 72
+// FPS at 144 Hz. present_late_tolerance replaces it; 100 flips every late frame
+// at once, which suits the short periods above 60 Hz.
+//
 // Measured with the game's own frame limiter (sub_82366AB0) for comparison: it is
 // called with 200 and 40 FPS targets only, so it isn't what holds menus at 30.
 
@@ -36,6 +42,11 @@ REXCVAR_DEFINE_INT32(present_interval_cap, 0, "Game",
                      "0 keeps the game's interval.")
     .range(0, 15);
 
+REXCVAR_DEFINE_INT32(present_late_tolerance, 0, "Game",
+                     "How far into a vblank period, in percent, a late frame may still flip right "
+                     "away instead of waiting for the next vblank. 0 keeps the game's value.")
+    .range(0, 100);
+
 REX_EXTERN(__imp__sub_82453028);
 
 namespace {
@@ -43,6 +54,7 @@ namespace {
 std::array<std::atomic<uint32_t>, 16> g_interval_counts{};
 std::atomic<uint64_t> g_frames_queued{0};
 std::atomic<uint32_t> g_capped{0};
+std::atomic<uint32_t> g_game_tolerance{0};
 std::atomic<int64_t> g_last_report_ms{0};
 
 void MaybeReport() {
@@ -63,8 +75,9 @@ void MaybeReport() {
   }
   uint32_t capped = g_capped.exchange(0, std::memory_order_relaxed);
   if (!text.empty()) {
-    REXLOG_INFO("present intervals in the last 10 s:{} ({} capped to {})", text, capped,
-                REXCVAR_GET(present_interval_cap));
+    REXLOG_INFO("present intervals in the last 10 s:{} ({} capped to {}), game's late tolerance {}",
+                text, capped, REXCVAR_GET(present_interval_cap),
+                g_game_tolerance.load(std::memory_order_relaxed));
   }
 }
 
@@ -80,6 +93,11 @@ REX_HOOK_RAW(sub_82453028) {
   if (cap && interval > cap) {
     ctx.r3.u64 = (ctx.r3.u32 & ~uint32_t(0xF00)) | (cap << 8);
     g_capped.fetch_add(1, std::memory_order_relaxed);
+  }
+  g_game_tolerance.store(ctx.r3.u32 & 0xFF, std::memory_order_relaxed);
+  uint32_t tolerance = uint32_t(REXCVAR_GET(present_late_tolerance));
+  if (tolerance) {
+    ctx.r3.u64 = (ctx.r3.u32 & ~uint32_t(0xFF)) | tolerance;
   }
   MaybeReport();
   __imp__sub_82453028(ctx, base);

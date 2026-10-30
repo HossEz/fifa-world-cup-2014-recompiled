@@ -81,13 +81,15 @@ const Entry kEntries[] = {
      "Mostra cada quadro assim que fica pronto, o que fica fluido em telas G-Sync / FreeSync. "
      "Desligado espera a atualização da tela: sem tearing em telas sem taxa variável."},
     {"Frame rate", "Tasa de fotogramas", "Taxa de quadros"},
-    {"The game holds cutscenes at 40 FPS and many menus at 30, as on the console. 60 everywhere "
-     "lifts both limits.",
-     "El juego limita las escenas a 40 FPS y muchos menús a 30, como en la consola. 60 en todo "
-     "quita ambos límites.",
-     "O jogo limita as cenas a 40 FPS e muitos menus a 30, como no console. 60 em tudo tira os "
-     "dois limites."},
-    {"60 everywhere", "60 en todo", "60 em tudo"},
+    {"The game holds cutscenes at 40 FPS and many menus at 30, as on the console. These rates "
+     "lift both limits. Above 60 needs a faster PC, and heavy scenes may run below the rate you "
+     "pick.",
+     "El juego limita las escenas a 40 FPS y muchos menús a 30, como en la consola. Estas tasas "
+     "quitan ambos límites. Más de 60 requiere un PC más rápido, y las escenas exigentes pueden "
+     "ir por debajo de la tasa elegida.",
+     "O jogo limita as cenas a 40 FPS e muitos menus a 30, como no console. Estas taxas tiram os "
+     "dois limites. Acima de 60 exige um PC mais rápido, e cenas pesadas podem rodar abaixo da "
+     "taxa escolhida."},
     {"As on console", "Como en consola", "Como no console"},
     {"Show FPS", "Mostrar FPS", "Mostrar FPS"},
     {"The frame rate in the top left corner of the game.",
