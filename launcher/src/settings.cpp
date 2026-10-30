@@ -296,10 +296,15 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
       display.options.push_back(monitor);
     }
 
-    display.options.push_back(OnOff(
-        "Variable refresh", "d3d12_allow_variable_refresh_rate_and_tearing", "true",
-        T("Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens. "
-          "Off waits for the screen's refresh: no tearing on screens without variable refresh.")));
+    Option sync;
+    sync.label = T("Screen sync");
+    sync.help = T("G-Sync / FreeSync shows each frame the moment it's ready, but can tear on other "
+                  "screens. VSync never tears. When Frame rate equals your screen's refresh rate, "
+                  "the game syncs to the screen with either choice.");
+    sync.choices = {{"G-Sync / FreeSync", {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"}}, {}},
+                    {"VSync", {{"d3d12_allow_variable_refresh_rate_and_tearing", "false"}}, {}}};
+    sync.defaults = {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"}};
+    display.options.push_back(sync);
     Option rate;
     rate.label = T("Frame rate");
     rate.help = T("The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "

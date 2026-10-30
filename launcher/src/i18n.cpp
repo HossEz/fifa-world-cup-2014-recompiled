@@ -72,24 +72,24 @@ const Entry kEntries[] = {
      "A tela em que o jogo abre."},
     {"Main", "Principal", "Principal"},
     {"Monitor {0}", "Monitor {0}", "Monitor {0}"},
-    {"Variable refresh", "Frecuencia variable", "Taxa variável"},
-    {"Shows each frame the moment it's ready, which is smooth on G-Sync / FreeSync screens. Off "
-     "waits for the screen's refresh: no tearing on screens without variable refresh.",
-     "Muestra cada fotograma en cuanto está listo, lo que se ve fluido en pantallas G-Sync / "
-     "FreeSync. Desactivado espera el refresco de la pantalla: sin tearing en pantallas sin "
-     "frecuencia variable.",
-     "Mostra cada quadro assim que fica pronto, o que fica fluido em telas G-Sync / FreeSync. "
-     "Desligado espera a atualização da tela: sem tearing em telas sem taxa variável."},
+    {"Screen sync", "Sincronización", "Sincronização"},
+    {"G-Sync / FreeSync shows each frame the moment it's ready, but can tear on other screens. "
+     "VSync never tears. When Frame rate equals your screen's refresh rate, the game syncs to the "
+     "screen with either choice.",
+     "G-Sync / FreeSync muestra cada fotograma al instante, pero puede haber tearing en otras "
+     "pantallas. VSync nunca tiene tearing. Si la tasa es igual a la de tu pantalla, ambas "
+     "opciones se sincronizan con ella.",
+     "G-Sync / FreeSync mostra cada quadro na hora, mas pode haver tearing em outras telas. VSync "
+     "nunca tem tearing. Se a taxa for igual à da sua tela, as duas opções sincronizam com ela."},
     {"Frame rate", "Tasa de fotogramas", "Taxa de quadros"},
     {"The game holds cutscenes at 40 FPS and many menus at 30, as on the console. These rates "
      "lift both limits. Above 60 needs a faster PC, and heavy scenes may run below the rate you "
      "pick.",
      "El juego limita las escenas a 40 FPS y muchos menús a 30, como en la consola. Estas tasas "
      "quitan ambos límites. Más de 60 requiere un PC más rápido, y las escenas exigentes pueden "
-     "ir por debajo de la tasa elegida.",
+     "ir más lentas.",
      "O jogo limita as cenas a 40 FPS e muitos menus a 30, como no console. Estas taxas tiram os "
-     "dois limites. Acima de 60 exige um PC mais rápido, e cenas pesadas podem rodar abaixo da "
-     "taxa escolhida."},
+     "dois limites. Acima de 60 exige um PC mais rápido, e cenas pesadas podem ficar abaixo."},
     {"As on console", "Como en consola", "Como no console"},
     {"Show FPS", "Mostrar FPS", "Mostrar FPS"},
     {"The frame rate in the top left corner of the game.",
