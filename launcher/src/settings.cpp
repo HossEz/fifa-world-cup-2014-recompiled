@@ -297,13 +297,25 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     }
 
     Option sync;
-    sync.label = T("Screen sync");
-    sync.help = T("G-Sync / FreeSync shows each frame the moment it's ready, but can tear on other "
-                  "screens. VSync never tears. When Frame rate equals your screen's refresh rate, "
-                  "the game syncs to the screen with either choice.");
-    sync.choices = {{"G-Sync / FreeSync", {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"}}, {}},
-                    {"VSync", {{"d3d12_allow_variable_refresh_rate_and_tearing", "false"}}, {}}};
-    sync.defaults = {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"}};
+    sync.label = "VSync";
+    sync.help = T("Automatic suits most screens, including G-Sync and FreeSync, which work on "
+                  "their own. On stops tearing if you still see it. Off shows every frame right "
+                  "away, and can tear.");
+    // Automatic syncs only when the screen's refresh rate equals the Frame rate.
+    sync.choices = {{T("Automatic"),
+                     {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"},
+                      {"vsync_to_display", "true"}},
+                     {}},
+                    {T("On"),
+                     {{"d3d12_allow_variable_refresh_rate_and_tearing", "false"},
+                      {"vsync_to_display", "true"}},
+                     {}},
+                    {T("Off"),
+                     {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"},
+                      {"vsync_to_display", "false"}},
+                     {}}};
+    sync.defaults = {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"},
+                     {"vsync_to_display", "true"}};
     display.options.push_back(sync);
     Option rate;
     rate.label = T("Frame rate");
