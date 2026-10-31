@@ -675,3 +675,17 @@ Depth-only draws with no offset of their own now get a slope-scaled bias of 2
 pixels (`shadow_slope_bias`, 0 turns it off), scaled with the resolution like any
 other. User-tested at 4K: fewer lines, though some remain from the shadow of the
 hair.
+
+## 0040-resolve-downscale-average
+
+At 1440p and 4K, a resolve the game reads on the CPU is shrunk back to its own
+resolution first (0009), and the `resolve_downscale` shader kept the top-left
+pixel of each block. FIFA builds its stadium light maps this way during loading,
+so at 4K the roof's shadow on the pitch came out harsher and blotchier than at
+720p. 8888 color resolves now average the block (`resolve_downscale_average`).
+Depth and other formats still keep one pixel. The shader's half-pixel constant
+carries this as its bit 1, so the root signature is unchanged, and the bytecode is
+built with `fxc /T cs_5_1 /E main /O3 /D SHADING_LANGUAGE_HLSL_XE=1`.
+
+Measured on Maracana's pitch map, 4K against 720p: 99.5th percentile of the
+difference between neighbouring pixels 119 before, 83 after, 98 at 720p.
