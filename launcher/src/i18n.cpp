@@ -72,14 +72,12 @@ const Entry kEntries[] = {
      "A tela em que o jogo abre."},
     {"Main", "Principal", "Principal"},
     {"Monitor {0}", "Monitor {0}", "Monitor {0}"},
-    {"Automatic suits most screens, including G-Sync and FreeSync, which work on their own. On "
-     "stops tearing if you still see it. Off shows every frame right away, and can tear.",
-     "Automático sirve para casi todas las pantallas, incluidas G-Sync y FreeSync, que funcionan "
-     "solas. Activado evita el tearing si aún lo ves. Desactivado muestra cada fotograma al "
-     "instante y puede haber tearing.",
-     "Automático serve para quase todas as telas, inclusive G-Sync e FreeSync, que funcionam "
-     "sozinhas. Ligado evita o tearing se ainda houver. Desligado mostra cada quadro na hora e "
-     "pode ter tearing."},
+    {"On stops tearing and keeps the game at your screen's refresh rate or below. Off lets Frame "
+     "rate go higher, but can tear.",
+     "Activado evita el tearing y mantiene el juego a la frecuencia de tu pantalla o menos. "
+     "Desactivado permite una tasa más alta, pero puede haber tearing.",
+     "Ligado evita o tearing e mantém o jogo na taxa da sua tela ou abaixo. Desligado permite uma "
+     "taxa maior, mas pode ter tearing."},
     {"Frame rate", "Tasa de fotogramas", "Taxa de quadros"},
     {"The game holds cutscenes at 40 FPS and many menus at 30, as on the console. These rates "
      "lift both limits. Above 60 needs a faster PC, and heavy scenes may run below the rate you "

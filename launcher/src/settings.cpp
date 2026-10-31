@@ -298,15 +298,10 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option sync;
     sync.label = "VSync";
-    sync.help = T("Automatic suits most screens, including G-Sync and FreeSync, which work on "
-                  "their own. On stops tearing if you still see it. Off shows every frame right "
-                  "away, and can tear.");
-    // Automatic syncs only when the screen's refresh rate equals the Frame rate.
-    sync.choices = {{T("Automatic"),
-                     {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"},
-                      {"vsync_to_display", "true"}},
-                     {}},
-                    {T("On"),
+    sync.help = T("On stops tearing and keeps the game at your screen's refresh rate or below. "
+                  "Off lets Frame rate go higher, but can tear.");
+    // At Play, On also lowers the game's rate to the screen's (main.cpp).
+    sync.choices = {{T("On"),
                      {{"d3d12_allow_variable_refresh_rate_and_tearing", "false"},
                       {"vsync_to_display", "true"}},
                      {}},
@@ -314,7 +309,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
                      {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"},
                       {"vsync_to_display", "false"}},
                      {}}};
-    sync.defaults = {{"d3d12_allow_variable_refresh_rate_and_tearing", "true"},
+    sync.defaults = {{"d3d12_allow_variable_refresh_rate_and_tearing", "false"},
                      {"vsync_to_display", "true"}};
     display.options.push_back(sync);
     Option rate;
@@ -326,19 +321,16 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
       rate.choices.push_back({std::to_string(fps) + " FPS",
                               {{"present_interval_cap", "1"},
                                {"frame_rate_floor", std::to_string(fps)},
-                               {"video_mode_refresh_rate", std::to_string(fps)},
                                {"present_late_tolerance", "100"}},
                               {}});
     }
     rate.choices.push_back({T("As on console"),
                             {{"present_interval_cap", "0"},
                              {"frame_rate_floor", "0"},
-                             {"video_mode_refresh_rate", "60"},
                              {"present_late_tolerance", "0"}},
                             {}});
     rate.defaults = {{"present_interval_cap", "0"},
                      {"frame_rate_floor", "0"},
-                     {"video_mode_refresh_rate", "60"},
                      {"present_late_tolerance", "100"}};
     display.options.push_back(rate);
 

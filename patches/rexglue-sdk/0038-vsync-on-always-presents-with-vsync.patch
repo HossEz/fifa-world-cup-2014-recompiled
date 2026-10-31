@@ -1,0 +1,30 @@
+diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
+index b33dfae..daff844 100644
+--- a/src/ui/d3d12/d3d12_presenter.cpp
++++ b/src/ui/d3d12/d3d12_presenter.cpp
+@@ -1249,16 +1249,19 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+   // Locked to the display (WaitForDisplayVblank), with vsync: this frame was
+   // made for the vblank that just passed, and is shown at the next one.
+   bool locked = display_locked_.load(std::memory_order_relaxed);
++  // Tearing not allowed (the launcher's VSync On): vsync at any refresh rate, the
++  // present G-Sync and FreeSync expect below the screen's top rate.
++  bool vsync = locked || !REXCVAR_GET(d3d12_allow_variable_refresh_rate_and_tearing);
+   uint64_t present_start = chrono::Clock::QueryHostTickCount();
+   HRESULT present_result =
+-      locked ? paint_context_.swap_chain->Present(1, 0)
+-             : paint_context_.swap_chain->Present(
+-                   0, DXGI_PRESENT_RESTART | (paint_context_.swap_chain_allows_tearing
+-                                                  ? DXGI_PRESENT_ALLOW_TEARING
+-                                                  : 0));
++      vsync ? paint_context_.swap_chain->Present(1, 0)
++            : paint_context_.swap_chain->Present(
++                  0, DXGI_PRESENT_RESTART | (paint_context_.swap_chain_allows_tearing
++                                                 ? DXGI_PRESENT_ALLOW_TEARING
++                                                 : 0));
+   // A present with vsync may wait for the display: that's not a stall.
+   bool recreate_swap_chain =
+-      !locked &&
++      !vsync &&
+       TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind);
+   TrackPresentSpacing();
+   // Even if presentation has failed, work might have been enqueued anyway

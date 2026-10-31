@@ -654,3 +654,13 @@ direct resolves' earlier view removed the device on Intel's driver.
 
 Not tested on an Arc GPU here. Other GPUs are unaffected: the HD 520 is named
 `Intel(R) HD Graphics 520`, Iris Xe `Intel(R) Iris(R) Xe Graphics`.
+
+## 0038-vsync-on-always-presents-with-vsync
+
+With tearing not allowed (`d3d12_allow_variable_refresh_rate_and_tearing = false`,
+the launcher's VSync On), a frame was presented with vsync only when the guest's
+vblanks followed the display (0023). At any other rate it used `Present(0)`, which
+doesn't tear but discards frames, and the game can't check whether G-Sync and
+FreeSync follow it. Now it's always `Present(1)`, the present they expect below the
+screen's top rate. The stall recovery (0011) stays off for these presents, since
+waiting for the display is what they do.

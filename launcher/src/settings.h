@@ -2,8 +2,8 @@
 // they're written to.
 //
 // A value option steps through choices; each choice is a set of game settings
-// (cvars) it writes, so one choice can set several ("120 FPS" sets both caps
-// and the guest's refresh rate). The current choice is the one whose settings all match the file,
+// (cvars) it writes, so one choice can set several ("120 FPS" sets both
+// caps). The current choice is the one whose settings all match the file,
 // with the game's own default for settings the file doesn't name. An action
 // option runs something (open a folder, clear the shader cache).
 

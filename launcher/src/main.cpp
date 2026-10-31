@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -28,6 +29,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <imgui.h>
 
@@ -187,6 +189,34 @@ fs::path GameDataRoot(const fs::path& data_folder) {
 }
 
 fs::path DataFolder(const fs::path& game_folder);
+
+// The refresh rate of the screen the game opens on (the `monitor` setting: 0 the
+// main one, otherwise its place with the main one first, as the game counts), or
+// 0 if Windows doesn't say.
+int ScreenRefreshHz(int monitor) {
+  std::vector<std::wstring> devices;
+  EnumDisplayMonitors(
+      nullptr, nullptr,
+      [](HMONITOR handle, HDC, LPRECT, LPARAM list) -> BOOL {
+        auto& names = *reinterpret_cast<std::vector<std::wstring>*>(list);
+        MONITORINFOEXW info = {};
+        info.cbSize = sizeof(info);
+        if (GetMonitorInfoW(handle, &info)) {
+          names.insert(info.dwFlags & MONITORINFOF_PRIMARY ? names.begin() : names.end(),
+                       info.szDevice);
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&devices));
+  size_t index = monitor >= 1 && size_t(monitor) <= devices.size() ? size_t(monitor - 1) : 0;
+  DEVMODEW mode = {};
+  mode.dmSize = sizeof(mode);
+  if (devices.empty() ||
+      !EnumDisplaySettingsW(devices[index].c_str(), ENUM_CURRENT_SETTINGS, &mode)) {
+    return 0;
+  }
+  return mode.dmDisplayFrequency > 1 ? int(mode.dmDisplayFrequency) : 0;
+}
 
 // Starts fifawc14.exe from the game folder. If it can't, says why (for the menu).
 std::string StartGame(const fs::path& game_folder) {
@@ -416,6 +446,12 @@ void EnsureGameConfig(const fs::path& data_folder) {
   auto require = [&](const char* key, const char* value) {
     if (config.Get(key, "").empty()) config.Set(key, value);
   };
+  // VSync On by default, in configs from before the setting too: none of them has
+  // vsync_to_display.
+  if (config.Get("vsync_to_display", "").empty()) {
+    config.Set("d3d12_allow_variable_refresh_rate_and_tearing", "false");
+    config.Set("vsync_to_display", "true");
+  }
   require("gpu_plugin", "\"xenos\"");
   require("gpu_allow_invalid_fetch_constants", "true");
   require("readback_resolve", "\"none\"");
@@ -466,9 +502,7 @@ void EnsureGameConfig(const fs::path& data_folder) {
   if (created) {
     // A new install's defaults: 60 FPS everywhere, 16x texture filtering, a
     // modest log. Resolution stays the console's 720p (1440p and 4K cost a lot
-    // in cutscenes so far) and variable refresh stays on (the SDK's defaults):
-    // off, every frame waits for the screen's refresh, which beats against the
-    // game's own 60 Hz pacing and drops it to 30-45 FPS (measured 2026-10-16).
+    // in cutscenes so far).
     config.Set("present_interval_cap", "1");
     config.Set("frame_rate_floor", "60");
     config.Set("anisotropic_override", "5");
@@ -948,6 +982,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       config.Set("quit_to_quit", quoted(T("to quit")));
       config.Set("quit_quitting", quoted(T("Quitting")));
       config.Set("quit_create", quoted(T("Create")));
+      // The rate the game runs at: Frame rate, and with VSync on no more than the
+      // screen shows. The game then takes its vblanks from a screen at that rate
+      // (SDK vsync_to_display), which caps it there without tearing.
+      int rate = std::atoi(config.Get("frame_rate_floor", "0").c_str());
+      if (rate <= 0) rate = 60;
+      int screen = ScreenRefreshHz(std::atoi(config.Get("monitor", "0").c_str()));
+      if (config.Get("vsync_to_display", "true") == "true" && screen > 0) {
+        rate = std::min(rate, screen);
+      }
+      config.Set("video_mode_refresh_rate", std::to_string(rate));
+      launcher::Log("play: %d FPS on a %d Hz screen", rate, screen);
       config.Save();
       std::string problem = StartGame(game_folder);
       if (!problem.empty()) {
