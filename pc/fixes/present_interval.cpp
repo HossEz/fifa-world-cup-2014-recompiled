@@ -17,8 +17,10 @@
 // The tolerance is how far into a vblank period, in percent, a late frame may
 // still flip right away. Past it, the frame waits for the next vblank and the
 // game waits with it, so frames just over the period run at half the rate: 72
-// FPS at 144 Hz. present_late_tolerance replaces it; 100 flips every late frame
-// at once, which suits the short periods above 60 Hz.
+// FPS at 144 Hz. The game passes 0, so every late frame waited.
+// present_late_tolerance replaces it; 100 flips every late frame at once. Measured
+// at 60 FPS and 4K: frames over 1.5x the median 291 -> 35 per 2.5 min with FreeSync
+// and 102 -> 81 at 60 Hz without it, at the same average frame rate or better.
 //
 // Measured with the game's own frame limiter (sub_82366AB0) for comparison: it is
 // called with 200 and 40 FPS targets only, so it isn't what holds menus at 30.
@@ -42,7 +44,7 @@ REXCVAR_DEFINE_INT32(present_interval_cap, 0, "Game",
                      "0 keeps the game's interval.")
     .range(0, 15);
 
-REXCVAR_DEFINE_INT32(present_late_tolerance, 0, "Game",
+REXCVAR_DEFINE_INT32(present_late_tolerance, 100, "Game",
                      "How far into a vblank period, in percent, a late frame may still flip right "
                      "away instead of waiting for the next vblank. 0 keeps the game's value.")
     .range(0, 100);

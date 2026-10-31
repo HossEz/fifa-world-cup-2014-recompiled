@@ -315,7 +315,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
                               {{"present_interval_cap", "1"},
                                {"frame_rate_floor", std::to_string(fps)},
                                {"video_mode_refresh_rate", std::to_string(fps)},
-                               {"present_late_tolerance", fps > 60 ? "100" : "0"}},
+                               {"present_late_tolerance", "100"}},
                               {}});
     }
     rate.choices.push_back({T("As on console"),
@@ -327,7 +327,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     rate.defaults = {{"present_interval_cap", "0"},
                      {"frame_rate_floor", "0"},
                      {"video_mode_refresh_rate", "60"},
-                     {"present_late_tolerance", "0"}};
+                     {"present_late_tolerance", "100"}};
     display.options.push_back(rate);
 
     display.options.push_back(OnOff("Show FPS", "show_fps", "false",
