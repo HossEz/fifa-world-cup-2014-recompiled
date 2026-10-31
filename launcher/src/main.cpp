@@ -452,6 +452,13 @@ void EnsureGameConfig(const fs::path& data_folder) {
     config.Set("d3d12_allow_variable_refresh_rate_and_tearing", "false");
     config.Set("vsync_to_display", "true");
   }
+  // A config from before present_late_tolerance on As on console keeps the game's
+  // own behaviour (and shows as that choice).
+  if (!created && config.Get("present_late_tolerance", "").empty() &&
+      config.Get("present_interval_cap", "0") == "0" &&
+      config.Get("frame_rate_floor", "0") == "0") {
+    config.Set("present_late_tolerance", "0");
+  }
   require("gpu_plugin", "\"xenos\"");
   require("gpu_allow_invalid_fetch_constants", "true");
   require("readback_resolve", "\"none\"");
