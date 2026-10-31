@@ -78,6 +78,15 @@ const Entry kEntries[] = {
      "Desactivado permite una tasa más alta, pero puede haber tearing.",
      "Ligado evita o tearing e mantém o jogo na taxa da sua tela ou abaixo. Desligado permite uma "
      "taxa maior, mas pode ter tearing."},
+    {"Picture", "Imagen", "Imagem"},
+    {"Fit keeps the right shape, with black bars on screens wider than 16:9. Stretch fills the "
+     "screen, but players and the HUD look wider.",
+     "Ajustar mantiene la forma correcta, con barras negras en pantallas más anchas que 16:9. "
+     "Estirar llena la pantalla, pero los jugadores y el HUD se ven más anchos.",
+     "Ajustar mantém a forma correta, com barras pretas em telas mais largas que 16:9. Esticar "
+     "preenche a tela, mas os jogadores e o HUD ficam mais largos."},
+    {"Fit", "Ajustar", "Ajustar"},
+    {"Stretch", "Estirar", "Esticar"},
     {"Frame rate", "Tasa de fotogramas", "Taxa de quadros"},
     {"The game holds cutscenes at 40 FPS and many menus at 30, as on the console. These rates "
      "lift both limits. Above 60 needs a faster PC, and heavy scenes may run below the rate you "

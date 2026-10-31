@@ -360,6 +360,15 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     upscaling.defaults = {{"present_effect", "\"bilinear\""}};
     graphics.options.push_back(upscaling);
 
+    Option picture;
+    picture.label = T("Picture");
+    picture.help = T("Fit keeps the right shape, with black bars on screens wider than 16:9. "
+                     "Stretch fills the screen, but players and the HUD look wider.");
+    picture.choices = {{T("Fit"), {{"present_letterbox", "true"}}, {}},
+                       {T("Stretch"), {{"present_letterbox", "false"}}, {}}};
+    picture.defaults = {{"present_letterbox", "true"}};
+    graphics.options.push_back(picture);
+
     Option filtering;
     filtering.label = T("Texture filtering");
     filtering.help = T("Keeps the pitch markings and the stands sharp at shallow angles. Costs "
