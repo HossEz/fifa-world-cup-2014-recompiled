@@ -1,8 +1,21 @@
+diff --git a/include/rex/ui/d3d12/d3d12_presenter.h b/include/rex/ui/d3d12/d3d12_presenter.h
+index 75c23bc..0259383 100644
+--- a/include/rex/ui/d3d12/d3d12_presenter.h
++++ b/include/rex/ui/d3d12/d3d12_presenter.h
+@@ -341,7 +341,7 @@ class D3D12Presenter final : public Presenter {
+   // keep the swap chain on a path where every present waits for the display,
+   // which slows the guest down until the swap chain is recreated (as
+   // minimizing and restoring does). Returns whether to recreate it now.
+-  bool TrackPresentTime(uint64_t present_ticks, bool gpu_behind);
++  bool TrackPresentTime(uint64_t present_ticks, bool gpu_behind, bool vsync);
+   struct PresentStats {
+     // Per block of kBlockPresents presents.
+     uint32_t count = 0;
 diff --git a/src/ui/d3d12/d3d12_presenter.cpp b/src/ui/d3d12/d3d12_presenter.cpp
-index b33dfae..daff844 100644
+index b33dfae..47c9d7d 100644
 --- a/src/ui/d3d12/d3d12_presenter.cpp
 +++ b/src/ui/d3d12/d3d12_presenter.cpp
-@@ -1249,16 +1249,19 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
+@@ -1249,17 +1249,18 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
    // Locked to the display (WaitForDisplayVblank), with vsync: this frame was
    // made for the vblank that just passed, and is shown at the next one.
    bool locked = display_locked_.load(std::memory_order_relaxed);
@@ -16,15 +29,36 @@ index b33dfae..daff844 100644
 -                   0, DXGI_PRESENT_RESTART | (paint_context_.swap_chain_allows_tearing
 -                                                  ? DXGI_PRESENT_ALLOW_TEARING
 -                                                  : 0));
+-  // A present with vsync may wait for the display: that's not a stall.
 +      vsync ? paint_context_.swap_chain->Present(1, 0)
 +            : paint_context_.swap_chain->Present(
 +                  0, DXGI_PRESENT_RESTART | (paint_context_.swap_chain_allows_tearing
 +                                                 ? DXGI_PRESENT_ALLOW_TEARING
 +                                                 : 0));
-   // A present with vsync may wait for the display: that's not a stall.
    bool recreate_swap_chain =
 -      !locked &&
-+      !vsync &&
-       TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind);
+-      TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind);
++      TrackPresentTime(chrono::Clock::QueryHostTickCount() - present_start, gpu_behind, vsync);
    TrackPresentSpacing();
    // Even if presentation has failed, work might have been enqueued anyway
+   // internally before the failure according to Jesse Natalie from the DirectX
+@@ -1317,7 +1318,7 @@ void D3D12Presenter::TrackPresentSpacing() {
+       sorted[kSpacingPresents - 1], uneven, long_gaps);
+ }
+ 
+-bool D3D12Presenter::TrackPresentTime(uint64_t present_ticks, bool gpu_behind) {
++bool D3D12Presenter::TrackPresentTime(uint64_t present_ticks, bool gpu_behind, bool vsync) {
+   // A present that doesn't wait for the display takes well under a
+   // millisecond. Most presents with the GPU not behind waiting longer, over a
+   // block of presents, means they wait for the display. Normally a few percent
+@@ -1363,6 +1364,10 @@ bool D3D12Presenter::TrackPresentTime(uint64_t present_ticks, bool gpu_behind) {
+     REXLOG_INFO("D3D12Presenter: back in the foreground, recreating the swap chain");
+     return true;
+   }
++  // A present with vsync may wait for the display: that's not a stall.
++  if (vsync) {
++    return false;
++  }
+ 
+   double ms = double(present_ticks) * 1000.0 / double(frequency);
+   ++stats.count;

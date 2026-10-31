@@ -662,5 +662,7 @@ the launcher's VSync On), a frame was presented with vsync only when the guest's
 vblanks followed the display (0023). At any other rate it used `Present(0)`, which
 doesn't tear but discards frames, and the game can't check whether G-Sync and
 FreeSync follow it. Now it's always `Present(1)`, the present they expect below the
-screen's top rate. The stall recovery (0011) stays off for these presents, since
-waiting for the display is what they do.
+screen's top rate. The stall recovery (0011) doesn't count these presents, since
+waiting for the display is what they do, but the new swap chain on coming back to
+the foreground (0017) now applies to them too: Windows can leave a vsync swap chain
+on the slow path after an alt-tab as well.
