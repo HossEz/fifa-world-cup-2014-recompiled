@@ -1,0 +1,27 @@
+diff --git a/src/graphics/d3d12/pipeline_cache.cpp b/src/graphics/d3d12/pipeline_cache.cpp
+index 7ca8ac7..0a0675a 100644
+--- a/src/graphics/d3d12/pipeline_cache.cpp
++++ b/src/graphics/d3d12/pipeline_cache.cpp
+@@ -51,6 +51,8 @@
+ #include <rex/types.h>
+ #include <rex/ui/d3d12/d3d12_util.h>
+ 
++REXCVAR_DEFINE_DOUBLE(shadow_slope_bias, 2.0, "GPU/D3D12",
++                      "Slope-scaled depth bias, in pixels, for depth-only draws without one");
+ REXCVAR_DEFINE_BOOL(d3d12_dxbc_disasm, false, "GPU/D3D12", "Dump DXBC disassembly");
+ 
+ REXCVAR_DEFINE_BOOL(d3d12_dxbc_disasm_dxilconv, false, "GPU/D3D12",
+@@ -1456,6 +1458,13 @@ bool PipelineCache::GetCurrentStateDescription(
+         regs.Get<reg::RB_DEPTH_INFO>().depth_format, polygon_offset);
+     description_out.depth_bias_slope_scaled =
+         polygon_offset_scale * xenos::kPolygonOffsetScaleSubpixelUnit;
++    // Depth-only draws with no bias of their own, FIFA's player shadow map: without
++    // one, players shadow themselves in streaks across faces and shirts.
++    if (REXCVAR_GET(shadow_slope_bias) > 0.0 && normalized_color_mask == 0 &&
++        polygon_offset_scale == 0.0f && polygon_offset == 0.0f &&
++        normalized_depth_control.z_write_enable) {
++      description_out.depth_bias_slope_scaled = float(REXCVAR_GET(shadow_slope_bias));
++    }
+   }
+   if (tessellated && REXCVAR_GET(d3d12_tessellation_wireframe)) {
+     description_out.fill_mode_wireframe = 1;

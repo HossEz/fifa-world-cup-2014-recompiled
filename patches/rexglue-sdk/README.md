@@ -666,3 +666,12 @@ screen's top rate. The stall recovery (0011) doesn't count these presents, since
 waiting for the display is what they do, but the new swap chain on coming back to
 the foreground (0017) now applies to them too: Windows can leave a vsync swap chain
 on the slow path after an alt-tab as well.
+
+## 0039-shadow-slope-bias
+
+FIFA draws its player shadow map with no polygon offset, so players shadow
+themselves in streaks across faces and shirts, most visibly at 1440p and 4K.
+Depth-only draws with no offset of their own now get a slope-scaled bias of 2
+pixels (`shadow_slope_bias`, 0 turns it off), scaled with the resolution like any
+other. User-tested at 4K: fewer lines, though some remain from the shadow of the
+hair.
