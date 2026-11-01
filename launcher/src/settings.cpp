@@ -288,7 +288,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
       Option monitor;
       monitor.label = T("Monitor");
       monitor.help = T("The screen the game opens on.");
-      monitor.choices = {{T("Main"), {{"monitor", "0"}}, {}}};
+      monitor.choices = {{Tf("Monitor {0}", {"1"}), {{"monitor", "0"}}, {}}};
       for (int i = 2; i <= monitors; ++i) {
         monitor.choices.push_back({Tf("Monitor {0}", {std::to_string(i)}), {{"monitor", std::to_string(i)}}, {}});
       }
@@ -342,9 +342,10 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   Section graphics{T("Graphics"), 1, {}};
   {
     Option resolution;
-    resolution.label = T("Resolution");
-    resolution.help = T("What the game draws at. 720p is the console's own. 1440p is sharp on a "
-                        "1080p screen. 4K needs a fast graphics card.");
+    resolution.label = T("Render resolution");
+    resolution.help = T("What the game draws at, then fits to your screen, so any of these works "
+                        "on any screen. 720p is the console's own. 1440p is sharp on a 1080p "
+                        "screen. 4K needs a fast graphics card.");
     resolution.choices = {{"720p", {{"resolution_scale", "1"}}, {}},
                           {"1440p", {{"resolution_scale", "2"}}, {}},
                           {"4K", {{"resolution_scale", "3"}}, {}}};
@@ -406,13 +407,13 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
                                    "this menu."));
     music.local = true;
     sound.options.push_back(music);
-    sound.options.push_back(percent("Music volume", "music_volume", "50",
+    sound.options.push_back(percent("Music volume", "music_volume", "100",
                                     only_here("How loud this menu's music is.")));
     Option sounds = OnOff("Sounds", "menu_sounds", "true",
                           only_here("The game's menu sounds as you move, select and go back."));
     sounds.local = true;
     sound.options.push_back(sounds);
-    sound.options.push_back(percent("Sounds volume", "sounds_volume", "80",
+    sound.options.push_back(percent("Sounds volume", "sounds_volume", "100",
                                     only_here("How loud this menu's sounds are.")));
   }
   sections.push_back(sound);

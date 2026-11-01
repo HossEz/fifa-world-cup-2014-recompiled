@@ -70,7 +70,6 @@ const Entry kEntries[] = {
     {"Monitor", "Monitor", "Monitor"},
     {"The screen the game opens on.", "La pantalla en la que se abre el juego.",
      "A tela em que o jogo abre."},
-    {"Main", "Principal", "Principal"},
     {"Monitor {0}", "Monitor {0}", "Monitor {0}"},
     {"On stops tearing and keeps the game at your screen's refresh rate or below. Off lets Frame "
      "rate go higher, but can tear.",
@@ -101,13 +100,15 @@ const Entry kEntries[] = {
     {"The frame rate in the top left corner of the game.",
      "Los FPS en la esquina superior izquierda del juego.",
      "Os FPS no canto superior esquerdo do jogo."},
-    {"Resolution", "Resolución", "Resolução"},
-    {"What the game draws at. 720p is the console's own. 1440p is sharp on a 1080p screen. 4K "
-     "needs a fast graphics card.",
-     "La resolución a la que dibuja el juego. 720p es la de la consola. 1440p se ve nítido en "
-     "una pantalla 1080p. 4K necesita una tarjeta gráfica potente.",
-     "A resolução em que o jogo desenha. 720p é a do console. 1440p fica nítido numa tela "
-     "1080p. 4K precisa de uma placa de vídeo potente."},
+    {"Render resolution", "Resolución de renderizado", "Resolução de renderização"},
+    {"What the game draws at, then fits to your screen, so any of these works on any screen. "
+     "720p is the console's own. 1440p is sharp on a 1080p screen. 4K needs a fast graphics card.",
+     "La resolución a la que dibuja el juego antes de ajustarla a tu pantalla, así que cualquiera "
+     "funciona en cualquier pantalla. 720p es la de la consola. 1440p se ve nítido en una "
+     "pantalla 1080p. 4K necesita una tarjeta gráfica potente.",
+     "A resolução em que o jogo desenha antes de ajustar à sua tela, então qualquer uma funciona "
+     "em qualquer tela. 720p é a do console. 1440p fica nítido numa tela 1080p. 4K precisa de uma "
+     "placa de vídeo potente."},
     {"Upscaling", "Escalado", "Escala"},
     {"FSR sharpens the picture as it's fitted to your screen, most of all at 720p on a 1080p "
      "screen. It can look a bit artificial.",

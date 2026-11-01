@@ -312,6 +312,9 @@ const std::map<std::string, Song> kTracks = {
 const char* kEffectSounds[] = {"wc_fe_lrscroll.wav",   "wc_fe_lrscroll.wav", "wc_fe_lrscroll.wav",
                                "wc_fe_mainselect.wav", "wc_fe_back.wav",
                                "38_g3_general_nav_lrb.wav"};
+// The back and bumper sounds are mastered far louder than the scroll sound that
+// plays beside them (RMS 4954 and 3820 against 1636, the bumpers peaking at full scale).
+const float kEffectGains[] = {1.0f, 1.0f, 1.0f, 1.0f, 0.5f, 0.45f};
 
 std::string Lower(std::string text) {
   std::transform(text.begin(), text.end(), text.begin(),
@@ -352,7 +355,7 @@ struct Audio::Impl {
   Pcm music_pcm;  // the song playing (its samples must outlive the voice)
   Song current;
   bool music_enabled = true;
-  float music_volume = 0.5f;
+  float music_volume = 0.6f;
 
   std::thread worker;
   std::mutex mutex;
@@ -466,7 +469,8 @@ void Audio::Play(Effect effect) {
   buffer.AudioBytes = UINT32(pcm.samples.size() * 2);
   buffer.pAudioData = reinterpret_cast<const BYTE*>(pcm.samples.data());
   buffer.Flags = XAUDIO2_END_OF_STREAM;
-  voice->SetVolume(sounds_volume_ * sounds_volume_);  // the same squared curve as the music
+  // The same squared curve as the music.
+  voice->SetVolume(sounds_volume_ * sounds_volume_ * kEffectGains[size_t(effect)]);
   voice->SubmitSourceBuffer(&buffer);
   voice->Start();
   s.playing_effects.push_back(voice);

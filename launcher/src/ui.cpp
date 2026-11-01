@@ -225,9 +225,10 @@ void Ui::ApplySoundSettings() {
   if (!audio_) return;
   const GameConfig& config = *launcher_config_;
   audio_->SetSoundsEnabled(config.Get("menu_sounds", "true") == "true");
-  audio_->SetSoundsVolume(std::stoi(config.Get("sounds_volume", "80")) / 100.0f);
+  // 100% in the settings is a comfortable level below full volume.
+  audio_->SetSoundsVolume(std::stoi(config.Get("sounds_volume", "100")) / 100.0f * 0.8f);
   audio_->SetMusic(config.Get("menu_music", "true") == "true",
-                   std::stoi(config.Get("music_volume", "50")) / 100.0f);
+                   std::stoi(config.Get("music_volume", "100")) / 100.0f * 0.6f);
 }
 
 void Ui::Sound(Audio::Effect effect) {
