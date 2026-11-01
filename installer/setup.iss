@@ -83,7 +83,9 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 [Icons]
 Name: "{autoprograms}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{#UserFolder}\icon.ico"
-Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{#UserFolder}\icon.ico"
+; Not on an update (a silent install): the player's shortcut stays where they put
+; it, or stays gone if they removed it. The uninstall log keeps it from the first install.
+Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\Launcher.exe"; IconFilename: "{#UserFolder}\icon.ico"; Check: not WizardSilent
 
 [Run]
 ; As the player, not as the installer's admin: an elevated window couldn't
