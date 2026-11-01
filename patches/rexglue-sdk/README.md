@@ -689,3 +689,16 @@ built with `fxc /T cs_5_1 /E main /O3 /D SHADING_LANGUAGE_HLSL_XE=1`.
 
 Measured on Maracana's pitch map, 4K against 720p: 99.5th percentile of the
 difference between neighbouring pixels 119 before, 83 after, 98 at 720p.
+
+## 0041-first-pad-is-player-one
+
+Only guest user 0 is signed in, and guest users followed connection order. With
+anything connected ahead of the player's pad (a second pad, a wheel, a virtual
+pad), pressing Start put them on an unsigned user, and the game offered only
+retry, sign in (which does nothing here) or continue without saving. The first
+device to press a button now swaps into user 0 with whatever was there, once per
+run. Later pads keep their slots and play unsigned, as a second player does on
+the console. If the keyboard presses first, the pads stay where they are, since
+it always feeds user 0. The game has four users, so with five or more pads, a pad
+past the fourth that presses first takes user 0 and the pad it replaces gets no
+user, as a pad past the fourth had before.

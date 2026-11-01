@@ -1,0 +1,94 @@
+diff --git a/include/rex/input/input_system.h b/include/rex/input/input_system.h
+--- a/include/rex/input/input_system.h
++++ b/include/rex/input/input_system.h
+@@ -81,6 +81,8 @@ class InputSystem : public system::IInputSystem {
+   /// The device that speaks for a user, preferring the one most recently in
+   /// the player's hands.
+   DeviceId ChooseDeviceForUser(uint32_t user_index) const;
++  /// Swaps the first pad to press a button into user 0, the signed-in user.
++  void ChooseFirstPlayer();
+ 
+   void UpdateConnectedUser(uint32_t user_index, bool connected);
+   void AdjustDeadzoneLevels(uint32_t user_index, X_INPUT_GAMEPAD* gamepad) const;
+@@ -99,6 +101,7 @@ class InputSystem : public system::IInputSystem {
+   std::vector<InputDriver*> device_owners_;
+ 
+   std::bitset<kMaxGuestUsers> connected_users_;
++  bool first_player_chosen_ = false;
+   uint32_t last_used_user_ = 0;
+   // {left, right} stick maxima, scaling the deadzone percentages.
+   std::array<std::pair<JoystickValue, JoystickValue>, kMaxGuestUsers> user_max_joystick_value_ = {};
+diff --git a/src/input/input_system.cpp b/src/input/input_system.cpp
+--- a/src/input/input_system.cpp
++++ b/src/input/input_system.cpp
+@@ -298,6 +298,60 @@ X_RESULT InputSystem::GetState(uint32_t user_index, X_INPUT_STATE* out_state) {
+   return result;
+ }
+ 
++void InputSystem::ChooseFirstPlayer() {
++  // Sorted by ordinal, so if several devices have a button down, the lowest wins.
++  for (const auto& device : devices_) {
++    auto* driver = DriverForDevice(device.id);
++    X_INPUT_STATE state = {};
++    if (!driver || driver->GetDeviceState(device.id, &state) != X_ERROR_SUCCESS ||
++        state.gamepad.buttons == 0) {
++      continue;
++    }
++    first_player_chosen_ = true;
++    // The keyboard always feeds user 0, whichever pad is there.
++    const uint32_t ordinal = device.ordinal;
++    if (device.synthetic || ordinal == 0) {
++      return;
++    }
++
++    for (auto& other : devices_) {
++      if (other.synthetic) {
++        continue;
++      }
++      if (other.ordinal == 0) {
++        other.ordinal = ordinal;
++      } else if (other.ordinal == ordinal) {
++        other.ordinal = 0;
++      }
++    }
++    if (ordinal < kMaxGuestUsers) {
++      std::swap(user_max_joystick_value_[0], user_max_joystick_value_[ordinal]);
++    } else {
++      // A pad past the last user has no stick maxima yet: the next poll reads them.
++      connected_users_.reset(0);
++    }
++
++    std::vector<size_t> order(devices_.size());
++    for (size_t i = 0; i < order.size(); i++) {
++      order[i] = i;
++    }
++    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
++      return devices_[a].ordinal < devices_[b].ordinal;
++    });
++    std::vector<DeviceInfo> sorted_devices;
++    std::vector<InputDriver*> sorted_owners;
++    for (size_t i : order) {
++      sorted_devices.push_back(devices_[i]);
++      sorted_owners.push_back(device_owners_[i]);
++    }
++    devices_ = std::move(sorted_devices);
++    device_owners_ = std::move(sorted_owners);
++    assignment_->OnDevicesChanged(devices_);
++    REXLOG_INFO("Controller {} pressed a button first and is now slot 0.", ordinal);
++    return;
++  }
++}
++
+ X_RESULT InputSystem::GetStateForUI(uint32_t user_index, X_INPUT_STATE* out_state) {
+   SCOPE_profile_cpu_f("hid");
+   if (!assignment_) {
+@@ -305,6 +359,9 @@ X_RESULT InputSystem::GetStateForUI(uint32_t user_index, X_INPUT_STATE* out_stat
+   }
+ 
+   RefreshDevices();
++  if (!first_player_chosen_) {
++    ChooseFirstPlayer();
++  }
+   std::vector<DeviceId> ids;
+   assignment_->DevicesForUser(user_index, ids);
+ 
