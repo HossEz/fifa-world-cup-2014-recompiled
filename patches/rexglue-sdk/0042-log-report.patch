@@ -1,0 +1,339 @@
+diff --git a/include/rex/graphics/d3d12/command_processor.h b/include/rex/graphics/d3d12/command_processor.h
+index a8016df..10394e3 100644
+--- a/include/rex/graphics/d3d12/command_processor.h
++++ b/include/rex/graphics/d3d12/command_processor.h
+@@ -500,6 +500,22 @@ class D3D12CommandProcessor : public CommandProcessor {
+ 
+   bool submission_open_ = false;
+   // Values of submission_fence_.
++  // GPU time per frame and video memory, logged every 10 s ("gpu load:"): whether
++  // the graphics card limits the frame rate, in the logs players send.
++  static constexpr uint32_t kGpuLoadSlots = 32;
++  bool EnsureGpuLoadResources();
++  void UpdateGpuLoadLog();
++  Microsoft::WRL::ComPtr<ID3D12QueryHeap> gpu_load_query_heap_;
++  Microsoft::WRL::ComPtr<ID3D12Resource> gpu_load_readback_;
++  Microsoft::WRL::ComPtr<IDXGIAdapter3> gpu_load_adapter_;
++  const uint64_t* gpu_load_mapping_ = nullptr;
++  bool gpu_load_failed_ = false;
++  uint64_t gpu_load_frequency_ = 0;
++  uint64_t gpu_load_read_submission_ = UINT64_MAX;
++  uint64_t gpu_load_busy_ticks_ = 0;
++  uint64_t gpu_load_last_log_ = 0;
++  uint32_t gpu_load_frames_ = 0;
++
+   uint64_t submission_current_ = 1;
+   uint64_t submission_completed_ = 0;
+   ID3D12Fence* submission_fence_ = nullptr;
+diff --git a/src/audio/sdl/sdl_audio_driver.cpp b/src/audio/sdl/sdl_audio_driver.cpp
+index 20a2cd8..466e379 100644
+--- a/src/audio/sdl/sdl_audio_driver.cpp
++++ b/src/audio/sdl/sdl_audio_driver.cpp
+@@ -96,9 +96,9 @@ bool SDLAudioDriver::Initialize() {
+   // The endpoint layout decides which mix the callback runs, and it is the
+   // first thing worth knowing when a report says the balance is wrong on one
+   // speaker setup and right on another.
+-  const char* device_name = SDL_GetAudioDeviceName(sdl_device);
+-  REXAPU_INFO("audio endpoint '{}': {} ch, {} Hz, format 0x{:04X}; submitting {} ch",
+-              device_name ? device_name : "?", obtained_spec.channels, obtained_spec.freq,
++  // Not the device's name: those can hold a person's ("Sam's AirPods").
++  REXAPU_INFO("audio endpoint: {} ch, {} Hz, format 0x{:04X}; submitting {} ch",
++              obtained_spec.channels, obtained_spec.freq,
+               static_cast<uint32_t>(obtained_spec.format), static_cast<int>(sdl_device_channels_));
+ 
+   if (!SDL_ResumeAudioDevice(sdl_device)) {
+diff --git a/src/core/logging.cpp b/src/core/logging.cpp
+index c853929..0b986b6 100644
+--- a/src/core/logging.cpp
++++ b/src/core/logging.cpp
+@@ -58,6 +58,61 @@ namespace rex {
+ namespace {
+ 
+ std::vector<LogCategoryEntry> g_registry;
++// Players post their logs in public. A path's user folder never reaches the file,
++// whichever code logged the path: C:\Users\Name\... becomes C:\Users\<user>\...
++std::string HideUserFolders(std::string_view text) {
++  std::string result;
++  size_t copied = 0;
++  for (size_t i = 0; i + 7 <= text.size(); ++i) {
++    char separator = text[i];
++    if ((separator != '\\' && separator != '/') || text[i + 6] != separator) {
++      continue;
++    }
++    static const char kUsers[] = "users";
++    bool match = true;
++    for (size_t j = 0; j < 5 && match; ++j) {
++      match = (text[i + 1 + j] | 0x20) == kUsers[j];
++    }
++    if (!match) {
++      continue;
++    }
++    size_t name = i + 7;
++    size_t end = name;
++    while (end < text.size() && text[end] != '\\' && text[end] != '/' && text[end] != '\'' &&
++           text[end] != '"') {
++      ++end;
++    }
++    result.append(text.substr(copied, name - copied));
++    result += "<user>";
++    copied = end;
++    i = end > 0 ? end - 1 : 0;
++  }
++  if (copied == 0) {
++    return std::string(text);
++  }
++  result.append(text.substr(copied));
++  return result;
++}
++
++class PrivateFileSink final : public spdlog::sinks::sink {
++ public:
++  explicit PrivateFileSink(spdlog::sink_ptr file) : file_(std::move(file)) {}
++  void log(const spdlog::details::log_msg& msg) override {
++    std::string text = HideUserFolders(std::string_view(msg.payload.data(), msg.payload.size()));
++    spdlog::details::log_msg clean = msg;
++    clean.payload = spdlog::string_view_t(text.data(), text.size());
++    file_->log(clean);
++  }
++  void flush() override { file_->flush(); }
++  void set_pattern(const std::string& pattern) override { file_->set_pattern(pattern); }
++  void set_formatter(std::unique_ptr<spdlog::formatter> formatter) override {
++    file_->set_formatter(std::move(formatter));
++  }
++
++ private:
++  spdlog::sink_ptr file_;
++};
++
+ spdlog::sink_ptr g_console_sink;
+ spdlog::sink_ptr g_file_sink;
+ spdlog::sink_ptr g_early_sink;
+@@ -273,7 +328,7 @@ void InitLogging(const LogConfig& config) {
+     auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(resolved_path.string(), false);
+     sink->set_level(spdlog::level::trace);
+     sink->set_pattern(config.file_pattern);
+-    g_file_sink = sink;
++    g_file_sink = std::make_shared<PrivateFileSink>(sink);
+   }
+ 
+   g_extra_sinks = config.extra_sinks;
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index b10c702..40207ee 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -39,6 +39,9 @@
+ REXCVAR_DEFINE_BOOL(d3d12_bindless, true, "GPU/D3D12", "Use bindless resources where available")
+     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+ 
++REXCVAR_DEFINE_BOOL(log_gpu_load, true, "GPU/D3D12",
++                    "Every 10 s log the GPU time per frame and the video memory in use");
++
+ REXCVAR_DEFINE_BOOL(d3d12_readback_memexport, false, "GPU/D3D12",
+                     "Read data written by memory export in shaders on the CPU")
+     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+@@ -1658,6 +1661,10 @@ bool D3D12CommandProcessor::SetupContext() {
+ 
+ void D3D12CommandProcessor::ShutdownContext() {
+   AwaitAllQueueOperationsCompletion();
++  gpu_load_mapping_ = nullptr;
++  gpu_load_readback_.Reset();
++  gpu_load_query_heap_.Reset();
++  gpu_load_adapter_.Reset();
+   InvalidateAllVertexBufferResidency();
+   ShutdownOcclusionQueryResources();
+ 
+@@ -2325,6 +2332,95 @@ void D3D12CommandProcessor::IssueSwap(uint32_t frontbuffer_ptr, uint32_t frontbu
+   // End the frame even if did not present for any reason (the image refresher
+   // was not called), to prevent leaking per-frame resources.
+   EndSubmission(true);
++  UpdateGpuLoadLog();
++}
++
++bool D3D12CommandProcessor::EnsureGpuLoadResources() {
++  if (gpu_load_mapping_) {
++    return true;
++  }
++  if (gpu_load_failed_) {
++    return false;
++  }
++  gpu_load_failed_ = true;
++  const ui::d3d12::D3D12Provider& provider = GetD3D12Provider();
++  ID3D12Device* device = provider.GetDevice();
++  if (FAILED(provider.GetDirectQueue()->GetTimestampFrequency(&gpu_load_frequency_)) ||
++      !gpu_load_frequency_) {
++    return false;
++  }
++  D3D12_QUERY_HEAP_DESC heap_desc = {};
++  heap_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
++  heap_desc.Count = kGpuLoadSlots * 2;
++  if (FAILED(device->CreateQueryHeap(&heap_desc, IID_PPV_ARGS(&gpu_load_query_heap_)))) {
++    return false;
++  }
++  D3D12_RESOURCE_DESC buffer_desc;
++  ui::d3d12::util::FillBufferResourceDesc(buffer_desc, sizeof(uint64_t) * kGpuLoadSlots * 2,
++                                          D3D12_RESOURCE_FLAG_NONE);
++  if (FAILED(device->CreateCommittedResource(
++          &ui::d3d12::util::kHeapPropertiesReadback, provider.GetHeapFlagCreateNotZeroed(),
++          &buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
++          IID_PPV_ARGS(&gpu_load_readback_)))) {
++    return false;
++  }
++  D3D12_RANGE read_range = {0, sizeof(uint64_t) * kGpuLoadSlots * 2};
++  void* mapping = nullptr;
++  if (FAILED(gpu_load_readback_->Map(0, &read_range, &mapping))) {
++    return false;
++  }
++  Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
++  if (SUCCEEDED(provider.GetDXGIFactory()->QueryInterface(IID_PPV_ARGS(&factory)))) {
++    factory->EnumAdapterByLuid(device->GetAdapterLuid(), IID_PPV_ARGS(&gpu_load_adapter_));
++  }
++  gpu_load_mapping_ = static_cast<const uint64_t*>(mapping);
++  gpu_load_failed_ = false;
++  return true;
++}
++
++void D3D12CommandProcessor::UpdateGpuLoadLog() {
++  if (!gpu_load_mapping_ || gpu_load_read_submission_ == UINT64_MAX) {
++    return;
++  }
++  ++gpu_load_frames_;
++  // Slots overwritten since the last read are skipped.
++  if (submission_completed_ + 1 > gpu_load_read_submission_ + kGpuLoadSlots) {
++    gpu_load_read_submission_ = submission_completed_ + 1 - kGpuLoadSlots;
++  }
++  for (; gpu_load_read_submission_ <= submission_completed_; ++gpu_load_read_submission_) {
++    uint32_t slot = uint32_t(gpu_load_read_submission_ % kGpuLoadSlots) * 2;
++    uint64_t begin = gpu_load_mapping_[slot];
++    uint64_t end = gpu_load_mapping_[slot + 1];
++    if (end > begin) {
++      gpu_load_busy_ticks_ += end - begin;
++    }
++  }
++  uint64_t now = chrono::Clock::QueryHostTickCount();
++  uint64_t frequency = chrono::Clock::QueryHostTickFrequency();
++  if (!gpu_load_last_log_) {
++    gpu_load_last_log_ = now;
++    gpu_load_frames_ = 0;
++    gpu_load_busy_ticks_ = 0;
++    return;
++  }
++  if (now - gpu_load_last_log_ < frequency * 10) {
++    return;
++  }
++  double seconds = double(now - gpu_load_last_log_) / double(frequency);
++  double busy_seconds = double(gpu_load_busy_ticks_) / double(gpu_load_frequency_);
++  std::string memory;
++  DXGI_QUERY_VIDEO_MEMORY_INFO memory_info;
++  if (gpu_load_adapter_ && SUCCEEDED(gpu_load_adapter_->QueryVideoMemoryInfo(
++                               0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memory_info))) {
++    memory = fmt::format("; video memory {} of {} MB", memory_info.CurrentUsage >> 20,
++                         memory_info.Budget >> 20);
++  }
++  REXGPU_INFO("gpu load: busy {:.0f}% of the time, {:.1f} ms per frame, {} frames in {:.1f} s{}",
++              busy_seconds * 100.0 / seconds, busy_seconds * 1000.0 / std::max(gpu_load_frames_, 1u),
++              gpu_load_frames_, seconds, memory);
++  gpu_load_last_log_ = now;
++  gpu_load_frames_ = 0;
++  gpu_load_busy_ticks_ = 0;
+ }
+ 
+ void D3D12CommandProcessor::OnPrimaryBufferEnd() {
+@@ -4221,7 +4317,23 @@ bool D3D12CommandProcessor::EndSubmission(bool is_swap) {
+         command_allocator_writable_first_->command_allocator;
+     command_allocator->Reset();
+     command_list_->Reset(command_allocator, nullptr);
++    bool gpu_load = REXCVAR_GET(log_gpu_load) && EnsureGpuLoadResources();
++    UINT gpu_load_slot = UINT(submission_current_ % kGpuLoadSlots) * 2;
++    if (gpu_load) {
++      if (gpu_load_read_submission_ == UINT64_MAX) {
++        gpu_load_read_submission_ = submission_current_;
++      }
++      command_list_->EndQuery(gpu_load_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
++                              gpu_load_slot);
++    }
+     deferred_command_list_.Execute(command_list_, command_list_1_);
++    if (gpu_load) {
++      command_list_->EndQuery(gpu_load_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
++                              gpu_load_slot + 1);
++      command_list_->ResolveQueryData(gpu_load_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
++                                      gpu_load_slot, 2, gpu_load_readback_.Get(),
++                                      sizeof(uint64_t) * gpu_load_slot);
++    }
+     command_list_->Close();
+     ID3D12CommandList* execute_command_lists[] = {command_list_};
+     direct_queue->ExecuteCommandLists(1, execute_command_lists);
+diff --git a/src/graphics/d3d12/pipeline_cache.cpp b/src/graphics/d3d12/pipeline_cache.cpp
+index 0a0675a..f788ea4 100644
+--- a/src/graphics/d3d12/pipeline_cache.cpp
++++ b/src/graphics/d3d12/pipeline_cache.cpp
+@@ -3160,11 +3160,11 @@ void PipelineCache::InitializePipelineLibrary(const std::filesystem::path& path)
+                                            IID_PPV_ARGS(&pipeline_library_));
+     if (SUCCEEDED(result)) {
+       REXGPU_INFO("Pipeline library: {} KB from {}", pipeline_library_data_.size() >> 10,
+-                  rex::path_to_utf8(path));
++                  rex::path_to_utf8(path.filename()));
+     } else {
+       // Another driver or GPU: compiled again, into a new library.
+       REXGPU_INFO("Pipeline library: {} not usable ({:08X}), starting a new one",
+-                  rex::path_to_utf8(path), uint32_t(result));
++                  rex::path_to_utf8(path.filename()), uint32_t(result));
+     }
+   }
+   if (FAILED(result)) {
+@@ -3206,7 +3206,7 @@ void PipelineCache::SavePipelineLibrary() {
+   std::error_code error;
+   std::filesystem::rename(temporary, path, error);
+   if (error) {
+-    REXGPU_WARN("Pipeline library: couldn't save {}: {}", rex::path_to_utf8(path),
++    REXGPU_WARN("Pipeline library: couldn't save {}: {}", rex::path_to_utf8(path.filename()),
+                 error.message());
+   }
+ }
+diff --git a/src/graphics/d3d12/render_target_cache.cpp b/src/graphics/d3d12/render_target_cache.cpp
+index 9f7db64..88528fa 100644
+--- a/src/graphics/d3d12/render_target_cache.cpp
++++ b/src/graphics/d3d12/render_target_cache.cpp
+@@ -213,6 +213,8 @@ bool D3D12RenderTargetCache::Initialize() {
+   if (path_ == Path::kPixelShaderInterlock && !provider.AreRasterizerOrderedViewsSupported()) {
+     path_ = Path::kHostRenderTargets;
+   }
++  REXGPU_INFO("Render target path: {}",
++              path_ == Path::kHostRenderTargets ? "host render targets" : "rasterizer-ordered views");
+ 
+   // Create the buffer for reinterpreting EDRAM contents.
+   uint32_t edram_buffer_size =
+diff --git a/src/system/runtime.cpp b/src/system/runtime.cpp
+index 67c0b9a..51c539f 100644
+--- a/src/system/runtime.cpp
++++ b/src/system/runtime.cpp
+@@ -300,7 +300,7 @@ bool Runtime::SetupVfs() {
+ 
+   auto abs_game_root = std::filesystem::absolute(game_data_root_);
+   if (!std::filesystem::exists(abs_game_root)) {
+-    REXSYS_ERROR("Runtime::SetupVfs: game_data_root does not exist: {}", abs_game_root.string());
++    REXSYS_ERROR("Runtime::SetupVfs: game_data_root does not exist");
+     return false;
+   }
+ 
+diff --git a/src/ui/d3d12/d3d12_provider.cpp b/src/ui/d3d12/d3d12_provider.cpp
+index 9152a93..a6bca2f 100644
+--- a/src/ui/d3d12/d3d12_provider.cpp
++++ b/src/ui/d3d12/d3d12_provider.cpp
+@@ -330,8 +330,15 @@ bool D3D12Provider::Initialize() {
+     char* adapter_name_mb = reinterpret_cast<char*>(alloca(adapter_name_mb_size));
+     if (WideCharToMultiByte(CP_UTF8, 0, adapter_desc.Description, -1, adapter_name_mb,
+                             adapter_name_mb_size, nullptr, nullptr) != 0) {
+-      REXGPU_INFO("DXGI adapter: {} (vendor 0x{:04X}, device 0x{:04X})", adapter_name_mb,
+-                  adapter_desc.VendorId, adapter_desc.DeviceId);
++      LARGE_INTEGER driver = {};
++      bool has_driver = SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &driver));
++      REXGPU_INFO("DXGI adapter: {} (vendor 0x{:04X}, device 0x{:04X}), {} MB video memory, driver {}",
++                  adapter_name_mb, adapter_desc.VendorId, adapter_desc.DeviceId,
++                  adapter_desc.DedicatedVideoMemory >> 20,
++                  has_driver ? fmt::format("{}.{}.{}.{}", HIWORD(driver.HighPart),
++                                           LOWORD(driver.HighPart), HIWORD(driver.LowPart),
++                                           LOWORD(driver.LowPart))
++                             : std::string("unknown"));
+     }
+   }
+ 

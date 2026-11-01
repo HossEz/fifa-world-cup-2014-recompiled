@@ -23,8 +23,7 @@ void OpenLauncherIfNoGame(const std::filesystem::path& game_data_root) {
   // for this process, so a second launcher only looked like Play opening the
   // menu again. The exit code tells it what happened.
   if (REXCVAR_GET(from_launcher)) {
-    REXLOG_ERROR("No game at game_data_root '{}' (from the config, or it couldn't be read)",
-                 rex::path_to_utf8(game_data_root));
+    REXLOG_ERROR("No game at game_data_root (from the config, or it couldn't be read)");
     ExitProcess(kNoGameExitCode);
   }
   std::filesystem::path launcher = rex::filesystem::GetExecutableFolder() / "Launcher.exe";

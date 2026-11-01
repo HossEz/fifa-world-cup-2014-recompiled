@@ -18,6 +18,7 @@
 #include "fps_counter.h"
 #include "launcher_redirect.h"
 #include "quit_shortcut.h"
+#include "system_report.h"
 #include "thread_stats.h"
 #include "game_window.h"
 
@@ -45,6 +46,7 @@ class Fifawc14App : public rex::ReXApp {
     if (auto csv = REXCVAR_GET(perf_log_csv); !csv.empty()) {
       rex::perf::SetCsvLogPath(csv);
     }
+    LogSystemReport(rex::to_path(REXCVAR_GET(game_data_root)));
     StartThreadCpuLog();
     SetUpGameWindow(window());
     SetGuestFrameStats([smoothed_ms = 0.0, frames = uint64_t{0}]() mutable {

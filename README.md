@@ -81,7 +81,7 @@ graphics will run it poorly, and 1440p or 4K needs a stronger card.
 | Saves, settings, logs, shader cache | `Documents\2014 FIFA World Cup Brazil` (the portable version keeps it all in its own folder) |
 
 Problems go in the [Issues](https://github.com/HossEz/fifa-world-cup-2014-recompiled/issues).
-Include `fifawc14.log` (Settings → Data → Logs opens its folder) and the version from the launcher's About page.
+Include `fifawc14.log` (Settings → Data → Logs opens its folder). It lists your hardware and settings, with no user name or folder paths.
 
 ### Known issues
 

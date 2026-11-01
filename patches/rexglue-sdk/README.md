@@ -702,3 +702,14 @@ the console. If the keyboard presses first, the pads stay where they are, since
 it always feeds user 0. The game has four users, so with five or more pads, a pad
 past the fourth that presses first takes user 0 and the pad it replaces gets no
 user, as a pad past the fourth had before.
+
+## 0042-log-report
+
+What a bug report needs is in `fifawc14.log` without asking the player, and nothing
+in it names them. The adapter line adds video memory and the driver version, the
+render target path is logged, and every 10 s a "gpu load:" line gives how much of the
+time the GPU was busy, its time per frame (timestamps around each submission) and
+the video memory in use against the budget (`log_gpu_load`, on by default). The log
+file's sink rewrites `\Users\Name\` to `\Users\<user>\`, whichever code logged the
+path. The audio device's name (they can hold a person's) and the paths in the
+pipeline library and missing game messages are gone.

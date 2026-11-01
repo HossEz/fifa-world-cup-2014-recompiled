@@ -47,6 +47,7 @@ set(FIFAWC14_SOURCES
     src/frame_rate.cpp
     src/launcher_redirect.cpp
     src/thread_stats.cpp
+    src/system_report.cpp
     src/game_window.cpp
     ${FIXES}/kernel_stubs.cpp
     ${FIXES}/gpu_memcpy.cpp
@@ -66,6 +67,10 @@ rexglue_setup_target(fifawc14 GPU_PLUGINS xenos)
 # Properties, Details in Explorer: name, version, publisher.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../installer/version_resource.cmake)
 add_version_resource(fifawc14 "2014 FIFA World Cup Brazil: Recompiled - Game" "fifawc14.exe")
+# The version in the log's session report (src/system_report.cpp).
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../VERSION GAME_VERSION)
+string(STRIP "${GAME_VERSION}" GAME_VERSION)
+set_property(SOURCE src/system_report.cpp APPEND PROPERTY COMPILE_DEFINITIONS "GAME_VERSION=\"${GAME_VERSION}\"")
 # The game window's 16:9 resizing hooks the window with SetWindowSubclass.
 if(WIN32)
     target_link_libraries(fifawc14 PRIVATE comctl32)

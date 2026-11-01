@@ -54,6 +54,19 @@ void Run(int interval_seconds) {
   DWORD process_id = GetCurrentProcessId();
   std::unordered_map<DWORD, uint64_t> previous_cpu;
   auto previous_wall = std::chrono::steady_clock::now();
+  uint64_t previous_idle = 0, previous_total = 0, previous_game = 0;
+  auto read_pc_times = [](uint64_t& idle, uint64_t& total, uint64_t& game) {
+    FILETIME idle_time, kernel_time, user_time, creation, exit, process_kernel, process_user;
+    if (!GetSystemTimes(&idle_time, &kernel_time, &user_time) ||
+        !GetProcessTimes(GetCurrentProcess(), &creation, &exit, &process_kernel, &process_user)) {
+      return false;
+    }
+    idle = FileTimeTo100ns(idle_time);
+    total = FileTimeTo100ns(kernel_time) + FileTimeTo100ns(user_time);
+    game = FileTimeTo100ns(process_kernel) + FileTimeTo100ns(process_user);
+    return true;
+  };
+  read_pc_times(previous_idle, previous_total, previous_game);
   while (true) {
     std::this_thread::sleep_for(std::chrono::seconds(interval_seconds));
     auto now = std::chrono::steady_clock::now();
@@ -105,6 +118,23 @@ void Run(int interval_seconds) {
       text += fmt::format("  {} [t{}] {:.0f}%", thread.name, thread.id, thread.percent);
     }
     REXLOG_INFO("thread cpu ({} s):{}", interval_seconds, text.empty() ? " all under 10%" : text);
+
+    // The whole PC next to the game: a full processor with no single thread
+    // pinned means too few cores, or something else using them.
+    uint64_t idle, total, game;
+    if (read_pc_times(idle, total, game)) {
+      uint64_t total_delta = total - previous_total;
+      if (previous_total && total_delta) {
+        MEMORYSTATUSEX memory = {sizeof(memory)};
+        GlobalMemoryStatusEx(&memory);
+        REXLOG_INFO("pc load ({} s): processor {:.0f}%, the game {:.0f}% of that total; memory {}% in use",
+                    interval_seconds, (total_delta - (idle - previous_idle)) * 100.0 / total_delta,
+                    (game - previous_game) * 100.0 / total_delta, memory.dwMemoryLoad);
+      }
+      previous_idle = idle;
+      previous_total = total;
+      previous_game = game;
+    }
   }
 }
 
