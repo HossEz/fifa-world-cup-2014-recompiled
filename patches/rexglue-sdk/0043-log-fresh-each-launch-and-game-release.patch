@@ -1,0 +1,37 @@
+diff --git a/src/core/logging.cpp b/src/core/logging.cpp
+index 0b986b6..e3f670b 100644
+--- a/src/core/logging.cpp
++++ b/src/core/logging.cpp
+@@ -325,7 +325,9 @@ void InitLogging(const LogConfig& config) {
+     resolved_path = NextSequentialLogPath(log_dir, config.app_name);
+   }
+   if (!resolved_path.empty()) {
+-    auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(resolved_path.string(), false);
++    // Each launch starts the file afresh, so a log attached to a report holds only
++    // the run that showed the problem.
++    auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(resolved_path.string(), true);
+     sink->set_level(spdlog::level::trace);
+     sink->set_pattern(config.file_pattern);
+     g_file_sink = std::make_shared<PrivateFileSink>(sink);
+diff --git a/src/system/kernel_state.cpp b/src/system/kernel_state.cpp
+index 6984f6b..a15de9b 100644
+--- a/src/system/kernel_state.cpp
++++ b/src/system/kernel_state.cpp
+@@ -594,6 +594,17 @@ void KernelState::SetExecutableModule(object_ref<UserModule> module) {
+     return;
+   }
+ 
++  // Which release of the game this is, for bug reports.
++  xex2_opt_execution_info* exec_info = nullptr;
++  executable_module_->GetOptHeader(XEX_HEADER_EXECUTION_INFO, &exec_info);
++  if (exec_info) {
++    xex2_version version = exec_info->version();
++    REXSYS_INFO("game: title {:08X}, version {}.{}.{}.{}, media {:08X}, disc {} of {}",
++                uint32_t(exec_info->title_id), uint32_t(version.major), uint32_t(version.minor),
++                uint32_t(version.build), uint32_t(version.qfe), uint32_t(exec_info->media_id),
++                exec_info->disc_number, exec_info->disc_count);
++  }
++
+   // Update title process fields from the executable module.
+   // Do NOT call InitializeProcess() again - it was already called in the
+   // constructor, and threads (XMA decoder, dispatch) may already be linked

@@ -713,3 +713,10 @@ the video memory in use against the budget (`log_gpu_load`, on by default). The 
 file's sink rewrites `\Users\Name\` to `\Users\<user>\`, whichever code logged the
 path. The audio device's name (they can hold a person's) and the paths in the
 pipeline library and missing game messages are gone.
+
+## 0043-log-fresh-each-launch-and-game-release
+
+The log file is started afresh on each launch instead of growing across runs (one
+player's file held two weeks of runs), so a log attached to a report holds only the
+run that showed the problem, as the bug report form already says. A "game:" line
+gives the release from `default.xex`: title ID, version, media ID and disc.
