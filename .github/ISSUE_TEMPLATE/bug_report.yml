@@ -53,18 +53,6 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: source
-    attributes:
-      label: How do you load your game copy?
-      description: Choose the one that applies. Say in the description if you tried both and only one fails.
-      options:
-        - Disc image (.iso)
-        - Game folder (with default.xex)
-        - Not applicable
-    validations:
-      required: true
-
   - type: textarea
     id: system
     attributes:
