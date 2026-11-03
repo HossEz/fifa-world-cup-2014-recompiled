@@ -73,8 +73,10 @@ uint32_t PhysicalCores() {
 }
 
 // Laptops hold the GPU and CPU back on battery or in a power-saving mode, which looks
-// like the game being slow. The power mode is the slider in Windows' power settings
-// (PowerGetEffectiveOverlayScheme, Windows 10 1809 and later, looked up at run time).
+// like the game being slow. The power plan is the classic one (Balanced, High
+// performance...); the power mode is the slider in Windows' power settings, which only
+// applies to Balanced (PowerGetEffectiveOverlayScheme, Windows 10 1809 and later).
+// powrprof.dll is looked up at run time.
 std::string PowerState() {
   std::string text;
   SYSTEM_POWER_STATUS status = {};
@@ -92,13 +94,42 @@ std::string PowerState() {
       }
     }
   }
+  using ActiveSchemeFn = DWORD(WINAPI*)(HKEY, GUID**);
   using OverlaySchemeFn = DWORD(WINAPI*)(GUID*);
   HMODULE powrprof = LoadLibraryExW(L"powrprof.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
   if (powrprof) {
+    // The power plan. The power mode slider only applies to the Balanced plan.
+    static const GUID kPlanBalanced = {
+        0x381b4222, 0xf694, 0x41f0, {0x96, 0x85, 0xff, 0x5b, 0xb2, 0x60, 0xdf, 0x2e}};
+    static const GUID kPlanHighPerformance = {
+        0x8c5e7fda, 0xe8bf, 0x4a96, {0x9a, 0x85, 0xa6, 0xe2, 0x3a, 0x8c, 0x63, 0x5c}};
+    static const GUID kPlanPowerSaver = {
+        0xa1841308, 0x3541, 0x4fab, {0xbc, 0x81, 0xf7, 0x15, 0x56, 0xf2, 0x0b, 0x4a}};
+    static const GUID kPlanUltimate = {
+        0xe9a42b02, 0xd5df, 0x448d, {0xaa, 0x00, 0x03, 0xf1, 0x47, 0x49, 0xeb, 0x61}};
+    bool balanced = true;
+    auto get_active =
+        reinterpret_cast<ActiveSchemeFn>(GetProcAddress(powrprof, "PowerGetActiveScheme"));
+    GUID* plan = nullptr;
+    if (get_active && get_active(nullptr, &plan) == ERROR_SUCCESS && plan) {
+      const char* name = "custom";
+      if (IsEqualGUID(*plan, kPlanBalanced)) {
+        name = "balanced";
+      } else if (IsEqualGUID(*plan, kPlanHighPerformance)) {
+        name = "high performance";
+      } else if (IsEqualGUID(*plan, kPlanPowerSaver)) {
+        name = "power saver";
+      } else if (IsEqualGUID(*plan, kPlanUltimate)) {
+        name = "ultimate performance";
+      }
+      balanced = IsEqualGUID(*plan, kPlanBalanced);
+      text += fmt::format("{}power plan {}", text.empty() ? "" : ", ", name);
+      LocalFree(plan);
+    }
     auto get_overlay = reinterpret_cast<OverlaySchemeFn>(
         GetProcAddress(powrprof, "PowerGetEffectiveOverlayScheme"));
     GUID overlay = {};
-    if (get_overlay && get_overlay(&overlay) == ERROR_SUCCESS) {
+    if (balanced && get_overlay && get_overlay(&overlay) == ERROR_SUCCESS) {
       static const GUID kBestPerformance = {
           0xded574b5, 0x45a0, 0x4f42, {0x87, 0x37, 0x46, 0x34, 0x5c, 0x09, 0xc2, 0x38}};
       static const GUID kBestEfficiency = {
