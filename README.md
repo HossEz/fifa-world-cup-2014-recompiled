@@ -64,7 +64,7 @@ Settings → Data → Check for updates turns this off.
 ### Requirements
 
 The game is heavy on the graphics card, more than on the processor. Integrated
-graphics will run it poorly, and 1440p or 4K needs a stronger card.
+graphics will run the game poorly, especially Intel iGPUs (check [Known issues](#known-issues)).
 
 | Requirement | Details |
 |---|---|
@@ -85,7 +85,7 @@ Include `fifawc14.log` (Settings → Data → Logs opens its folder). It lists y
 
 ### Known issues
 
-- Cutscenes, replays and celebrations can still drop FPS at high resolutions.
+- Cutscenes, replays and celebrations can still drop FPS.
 - Intel UHD and Iris Xe graphics still run the game poorly. The game doesn't draw correctly on these GPUs due to an issue on Intel's side, so they use a slower mode that draws correctly but costs significantly more performance.
 
 ## Building from source
