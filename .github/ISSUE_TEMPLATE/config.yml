@@ -1,1 +1,5 @@
 blank_issues_enabled: true
+contact_links:
+  - name: Slow on Intel UHD or Iris Xe graphics?
+    url: https://github.com/HossEz/fifa-world-cup-2014-recompiled/issues/9
+    about: This is a known issue. Read and follow it there instead of opening a new one.
