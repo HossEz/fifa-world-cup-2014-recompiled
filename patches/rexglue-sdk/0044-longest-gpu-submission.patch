@@ -1,0 +1,95 @@
+diff --git a/include/rex/graphics/d3d12/command_processor.h b/include/rex/graphics/d3d12/command_processor.h
+index 10394e3..ad236c1 100644
+--- a/include/rex/graphics/d3d12/command_processor.h
++++ b/include/rex/graphics/d3d12/command_processor.h
+@@ -501,9 +501,11 @@ class D3D12CommandProcessor : public CommandProcessor {
+   bool submission_open_ = false;
+   // Values of submission_fence_.
+   // GPU time per frame and video memory, logged every 10 s ("gpu load:"): whether
+-  // the graphics card limits the frame rate, in the logs players send.
++  // the graphics card limits the frame rate, in the logs players send. The longest
++  // submission shows how close a slow GPU gets to the 2 s Windows reset (TDR).
+   static constexpr uint32_t kGpuLoadSlots = 32;
+   bool EnsureGpuLoadResources();
++  void ReadGpuLoadTimestamps();
+   void UpdateGpuLoadLog();
+   Microsoft::WRL::ComPtr<ID3D12QueryHeap> gpu_load_query_heap_;
+   Microsoft::WRL::ComPtr<ID3D12Resource> gpu_load_readback_;
+@@ -513,6 +515,7 @@ class D3D12CommandProcessor : public CommandProcessor {
+   uint64_t gpu_load_frequency_ = 0;
+   uint64_t gpu_load_read_submission_ = UINT64_MAX;
+   uint64_t gpu_load_busy_ticks_ = 0;
++  uint64_t gpu_load_longest_ticks_ = 0;
+   uint64_t gpu_load_last_log_ = 0;
+   uint32_t gpu_load_frames_ = 0;
+ 
+diff --git a/src/graphics/d3d12/command_processor.cpp b/src/graphics/d3d12/command_processor.cpp
+index 40207ee..8af117e 100644
+--- a/src/graphics/d3d12/command_processor.cpp
++++ b/src/graphics/d3d12/command_processor.cpp
+@@ -2378,11 +2378,10 @@ bool D3D12CommandProcessor::EnsureGpuLoadResources() {
+   return true;
+ }
+ 
+-void D3D12CommandProcessor::UpdateGpuLoadLog() {
++void D3D12CommandProcessor::ReadGpuLoadTimestamps() {
+   if (!gpu_load_mapping_ || gpu_load_read_submission_ == UINT64_MAX) {
+     return;
+   }
+-  ++gpu_load_frames_;
+   // Slots overwritten since the last read are skipped.
+   if (submission_completed_ + 1 > gpu_load_read_submission_ + kGpuLoadSlots) {
+     gpu_load_read_submission_ = submission_completed_ + 1 - kGpuLoadSlots;
+@@ -2393,14 +2392,24 @@ void D3D12CommandProcessor::UpdateGpuLoadLog() {
+     uint64_t end = gpu_load_mapping_[slot + 1];
+     if (end > begin) {
+       gpu_load_busy_ticks_ += end - begin;
++      gpu_load_longest_ticks_ = std::max(gpu_load_longest_ticks_, end - begin);
+     }
+   }
++}
++
++void D3D12CommandProcessor::UpdateGpuLoadLog() {
++  if (!gpu_load_mapping_ || gpu_load_read_submission_ == UINT64_MAX) {
++    return;
++  }
++  ++gpu_load_frames_;
++  ReadGpuLoadTimestamps();
+   uint64_t now = chrono::Clock::QueryHostTickCount();
+   uint64_t frequency = chrono::Clock::QueryHostTickFrequency();
+   if (!gpu_load_last_log_) {
+     gpu_load_last_log_ = now;
+     gpu_load_frames_ = 0;
+     gpu_load_busy_ticks_ = 0;
++    gpu_load_longest_ticks_ = 0;
+     return;
+   }
+   if (now - gpu_load_last_log_ < frequency * 10) {
+@@ -2415,12 +2424,15 @@ void D3D12CommandProcessor::UpdateGpuLoadLog() {
+     memory = fmt::format("; video memory {} of {} MB", memory_info.CurrentUsage >> 20,
+                          memory_info.Budget >> 20);
+   }
+-  REXGPU_INFO("gpu load: busy {:.0f}% of the time, {:.1f} ms per frame, {} frames in {:.1f} s{}",
++  REXGPU_INFO("gpu load: busy {:.0f}% of the time, {:.1f} ms per frame, {} frames in {:.1f} s, "
++              "longest submission {:.1f} ms{}",
+               busy_seconds * 100.0 / seconds, busy_seconds * 1000.0 / std::max(gpu_load_frames_, 1u),
+-              gpu_load_frames_, seconds, memory);
++              gpu_load_frames_, seconds,
++              double(gpu_load_longest_ticks_) * 1000.0 / double(gpu_load_frequency_), memory);
+   gpu_load_last_log_ = now;
+   gpu_load_frames_ = 0;
+   gpu_load_busy_ticks_ = 0;
++  gpu_load_longest_ticks_ = 0;
+ }
+ 
+ void D3D12CommandProcessor::OnPrimaryBufferEnd() {
+@@ -4320,6 +4332,9 @@ bool D3D12CommandProcessor::EndSubmission(bool is_swap) {
+     bool gpu_load = REXCVAR_GET(log_gpu_load) && EnsureGpuLoadResources();
+     UINT gpu_load_slot = UINT(submission_current_ % kGpuLoadSlots) * 2;
+     if (gpu_load) {
++      // Loading screens end many submissions between frames: read the completed
++      // ones before their slots are reused.
++      ReadGpuLoadTimestamps();
+       if (gpu_load_read_submission_ == UINT64_MAX) {
+         gpu_load_read_submission_ = submission_current_;
+       }

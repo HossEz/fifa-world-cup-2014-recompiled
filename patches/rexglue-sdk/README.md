@@ -720,3 +720,12 @@ The log file is started afresh on each launch instead of growing across runs (on
 player's file held two weeks of runs), so a log attached to a report holds only the
 run that showed the problem, as the bug report form already says. A "game:" line
 gives the release from `default.xex`: title ID, version, media ID and disc.
+
+## 0044-longest-gpu-submission
+
+The "gpu load:" line also gives the longest single GPU submission in those 10 s.
+Windows resets a GPU that runs one piece of work for over 2 s (TDR, logged as
+`DEVICE_HUNG`), so the value shows how close a slow GPU comes to that. The
+timestamps of completed submissions are now also read when a submission ends,
+so loading screens, which end many submissions between frames, no longer
+overwrite them before they are counted.
