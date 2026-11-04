@@ -729,3 +729,13 @@ Windows resets a GPU that runs one piece of work for over 2 s (TDR, logged as
 timestamps of completed submissions are now also read when a submission ends,
 so loading screens, which end many submissions between frames, no longer
 overwrite them before they are counted.
+
+## 0045-gpu-hang-report
+
+When Windows resets the GPU (`DEVICE_HUNG`), the log lists the GPU work that had
+not finished: per submission, the number of draws, the last shaders drawn and the
+shaders drawn there for the first time in the session (by ucode hash, as in the
+shader storage). A hang that starts on a new screen most likely comes from one of
+those. A removed device reports every submission as completed, so the last real
+completed value decides which ones are kept; once nothing completes, the oldest
+64 are kept.
