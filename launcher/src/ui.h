@@ -185,6 +185,7 @@ class Ui {
   bool binding_ = false;
   float controls_scroll_ = 0.0f;
   float controls_drag_ = -1.0f;  // dragging the scroll bar: where on its thumb (-1: not)
+  bool controls_mouse_focus_ = false;  // the focused row came from the mouse
   // An action's keys, from fifawc14.toml (the default if it has none).
   std::vector<std::string> KeysOf(const std::string& setting) const;
   // Binds `name` to the focused key; "" clears a second key.

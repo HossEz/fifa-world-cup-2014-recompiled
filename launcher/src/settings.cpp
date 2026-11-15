@@ -96,8 +96,8 @@ const std::vector<ControlRow>& KeyboardLayout() {
   static const std::vector<ControlRow> layout = {
       {"Short pass / Contain", "A", Glyph::kFace, "keybind_a"},
       {"Shoot / Tackle", "B", Glyph::kFace, "keybind_b"},
-      {"Lob pass / Cross", "X", Glyph::kFace, "keybind_x"},
-      {"Through ball", "Y", Glyph::kFace, "keybind_y"},
+      {"Lob pass / Slide tackle", "X", Glyph::kFace, "keybind_x"},
+      {"Through ball / Rush goalkeeper", "Y", Glyph::kFace, "keybind_y"},
       {"Player run / Change player", "LB", Glyph::kBumper, "keybind_left_shoulder"},
       {"Finesse shot / Teammate contain", "RB", Glyph::kBumper, "keybind_right_shoulder"},
       {"Pace control / Jockey", "LT", Glyph::kTrigger, "keybind_left_trigger"},

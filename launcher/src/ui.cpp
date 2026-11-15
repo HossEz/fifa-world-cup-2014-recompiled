@@ -1201,6 +1201,7 @@ void Ui::ControlsCommand(Command command) {
       int row = std::clamp(controls_row_ + (command == Command::kUp ? -1 : 1), 0, reset_row);
       if (row != controls_row_) {
         controls_row_ = row;
+        controls_mouse_focus_ = false;
         Sound(Audio::Effect::kList);
       }
       break;
@@ -1257,12 +1258,21 @@ void Ui::ControlsScreen(float width, float height) {
   float max_scroll = float(std::max(0, rows - visible));
   if (MouseIn(bx, top, bx + bw, bottom)) {
     controls_scroll_ -= ImGui::GetIO().MouseWheel * 3.0f;
+    // Near the top or bottom edge the list glides on, faster closer to it.
+    float edge = row_h * 1.2f, mouse_y = ImGui::GetIO().MousePos.y;
+    float pull = mouse_y < top + edge ? -(1.0f - (mouse_y - top) / edge)
+                 : mouse_y > bottom - edge ? 1.0f - (bottom - mouse_y) / edge
+                                           : 0.0f;
+    if (!binding_ && controls_drag_ < 0) controls_scroll_ += pull * 9.0f * dt_;
   }
-  // The focused row stays in view when it moves (keyboard, controller).
+  // A focused row moved by the keyboard or a controller comes into view (a
+  // row the mouse points at is in view already).
   static int last_row = -1;
   if (controls_row_ != last_row) {
-    if (controls_row_ < controls_scroll_) controls_scroll_ = float(controls_row_);
-    if (controls_row_ >= controls_scroll_ + visible) controls_scroll_ = float(controls_row_ - visible + 1);
+    if (!controls_mouse_focus_) {
+      if (controls_row_ < controls_scroll_) controls_scroll_ = float(controls_row_);
+      if (controls_row_ >= controls_scroll_ + visible) controls_scroll_ = float(controls_row_ - visible + 1);
+    }
     last_row = controls_row_;
   }
   controls_scroll_ = std::clamp(controls_scroll_, 0.0f, max_scroll);
@@ -1286,11 +1296,16 @@ void Ui::ControlsScreen(float width, float height) {
     if (r == int(layout.size())) {  // Reset to default
       float focus = Anim("controls_reset", focused_row ? 1.0f : 0.0f, 0.24f);
       float end = DrawItem(label_x, middle - size * 0.7f, T("Reset to default"), bold_, size, focus);
-      if (!binding_ && MouseIn(label_x - 10 * s, row_top, label_x + 260 * s, end)) {
+      if (!binding_ && MouseIn(label_x - 10 * s, row_top, label_x + 260 * s, end) &&
+          MouseIn(bx, top, bx + bw, bottom)) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if (mouse_moved_) controls_row_ = r;
+        if (mouse_moved_) {
+          controls_row_ = r;
+          controls_mouse_focus_ = true;
+        }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
           controls_row_ = r;
+          controls_mouse_focus_ = true;
           ControlsCommand(Command::kAccept);
         }
       }
@@ -1347,6 +1362,7 @@ void Ui::ControlsScreen(float width, float height) {
         if (mouse_moved_ || ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
             ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
           controls_row_ = r;
+          controls_mouse_focus_ = true;
           controls_column_ = column;
         }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ControlsCommand(Command::kAccept);

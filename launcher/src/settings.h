@@ -77,7 +77,7 @@ struct Section {
 // game's keybind_* setting that holds its keys.
 enum class Glyph { kFace, kBumper, kTrigger, kStick, kPad, kSmall };
 struct ControlRow {
-  const char* label;    // what it does (attacking / defending, the game's Classic preset)
+  const char* label;    // what it does: attacking / defending (one when both are the same)
   const char* button;   // "A", "LB", "L", "D-pad", ...
   Glyph glyph;
   const char* setting;  // keybind_*
