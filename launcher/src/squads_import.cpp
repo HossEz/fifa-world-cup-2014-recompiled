@@ -106,9 +106,7 @@ std::optional<std::vector<uint8_t>> FromPackage(const std::vector<uint8_t>& d, b
   return std::nullopt;
 }
 
-// "Squads 20261115174500", the game's own naming, with the time of the import:
-// the game loads squads by itself at start (tested 2026-11-15), and the newest
-// save is the likeliest one it picks when the player has saved their own too.
+// "Squads 20261115174500", the game's own naming, with the time of the import.
 std::string NameNow() {
   SYSTEMTIME t;
   GetLocalTime(&t);
@@ -133,6 +131,28 @@ std::vector<uint8_t> Header(const std::string& name) {
   be(0x138, kProfile, 8);
   be(0x140, kTitleId, 4);
   return h;
+}
+
+// The saves an earlier import wrote: their header still has its display name
+// (the game writes its own when the player saves over one, and then it's theirs).
+std::vector<std::string> EarlierImports(const fs::path& title, const std::string& keep) {
+  const std::vector<uint8_t> ours = Header("");
+  std::vector<std::string> names;
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(title / "Headers" / "00000001", ec)) {
+    std::u8string utf8 = entry.path().stem().u8string();
+    std::string name(utf8.begin(), utf8.end());
+    if (entry.path().extension() != ".header" || name == keep || name.rfind("Squads ", 0) != 0) {
+      continue;
+    }
+    std::ifstream file(entry.path(), std::ios::binary);
+    std::vector<uint8_t> header(0x108);
+    if (file.read(reinterpret_cast<char*>(header.data()), std::streamsize(header.size())) &&
+        std::equal(header.begin(), header.end(), ours.begin())) {
+      names.push_back(name);
+    }
+  }
+  return names;
 }
 
 bool WriteFile(const fs::path& path, const std::vector<uint8_t>& data) {
@@ -198,7 +218,13 @@ SquadsImport PickAndImportSquads(const fs::path& user_folder) {
   fs::path title = user_folder / "B13EBABEBABEBABE" / "454109D4";
   bool ok = WriteFile(title / "00000001" / name / name, *save) &&
             WriteFile(title / "Headers" / "00000001" / (name + ".header"), Header(name));
-  return ok ? SquadsImport::kOk : SquadsImport::kWriteFailed;
+  if (!ok) return SquadsImport::kWriteFailed;
+  // One imported squads save at a time, so there's no doubt which one the game loads.
+  for (const std::string& old : EarlierImports(title, name)) {
+    fs::remove_all(title / "00000001" / old, ec);
+    fs::remove(title / "Headers" / "00000001" / (old + ".header"), ec);
+  }
+  return SquadsImport::kOk;
 }
 
 }  // namespace launcher

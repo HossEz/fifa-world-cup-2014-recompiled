@@ -1,6 +1,7 @@
 // Imports a squads file (such as EA's last squad update, July 2014) as one of
 // the game's own squads saves. The game loads squads by itself at start, so
-// the player doesn't save one first, rename files or load anything.
+// the player doesn't save one first, rename files or load anything. A new
+// import replaces the previous imported save (not the player's own).
 //
 // Takes the Xbox 360 save package (CON) or the bare save inside one, as the
 // game writes it in this port's saves folder.
