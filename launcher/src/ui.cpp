@@ -339,6 +339,7 @@ void Ui::HomeCommand(Command command) {
 }
 
 void Ui::SettingsCommand(Command command) {
+  settings_list_.mouse_focus = false;
   const Section& section = sections_[section_focus_];
   if (!in_options_) {
     int count = int(sections_.size());
@@ -843,15 +844,25 @@ void Ui::SettingsScreen(float width, float height) {
              board_y - 70 * s + icon_w * 0.33f, icon_w, splash_appear_);
 
   float option_size = 22 * s, em = option_size;
-  float row_x0 = board_x + 48 * s + 0.9f * em, row_x1 = board_x + board_w - 48 * s - 0.6f * em;
-  y = board_y + 64 * s + 70 * s;
+  float help_size = 18 * s, help_y = board_y + board_h - 88 * s - 3.6f * help_size;
+  // The options between the board's top and the help; they scroll when they don't fit.
+  float row_h = 0.4f * em + option_size * 1.25f + 0.4f * em, step = row_h + 4 * s;
+  float list_top = board_y + 64 * s + 70 * s, list_bottom = help_y - 14 * s;
+  int count = int(section.options.size());
+  bool scrolls = float(count) * step > list_bottom - list_top + 0.5f;
+  float row_x0 = board_x + 48 * s + 0.9f * em;
+  float row_x1 = board_x + board_w - 48 * s - 0.6f * em - (scrolls ? 24 * s : 0.0f);
+  float first_y = BeginScrollList(settings_list_, "settings_options", section_focus_, board_x,
+                                  board_x + board_w, list_top, list_bottom, step, count,
+                                  in_options_ ? option_focus_ : -1, true);
   bool accept_click = false;
-  for (int i = 0; i < int(section.options.size()); ++i) {
+  for (int i = 0; i < count; ++i) {
     const Option& option = section.options[i];
+    float row_top = first_y + float(i) * step;
+    if (row_top + row_h < list_top || row_top > list_bottom) continue;
     bool focused = in_options_ && i == option_focus_;
     float focus = Anim("option" + std::to_string(section_focus_) + "_" + std::to_string(i),
                        focused ? 1.0f : 0.0f, 0.24f);
-    float row_top = y, row_h = 0.4f * em + option_size * 1.25f + 0.4f * em;
     float sweep = EaseOut(focus);
     if (sweep > 0) {
       float x0 = row_x0 - 0.9f * em - 0.9f * em, x1 = row_x1 + 0.6f * em + 0.4f * em;
@@ -900,27 +911,28 @@ void Ui::SettingsScreen(float width, float height) {
     }
 
     // Mouse: pointing focuses the row, clicking changes it.
-    if (MouseIn(board_x, row_top, board_x + board_w, row_top + row_h)) {
+    if (MouseIn(board_x, row_top, board_x + board_w, row_top + row_h) &&
+        MouseIn(board_x, list_top, board_x + board_w, list_bottom)) {
       if (mouse_moved_ && (!in_options_ || option_focus_ != i)) {
+        settings_list_.mouse_focus = true;
         in_options_ = true;
         option_focus_ = i;
         armed_option_ = -1;
         Sound(Audio::Effect::kList);
       }
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        settings_list_.mouse_focus = true;
         in_options_ = true;
         option_focus_ = i;
         accept_click = true;  // after the frame: it may rebuild the sections drawn here
       }
     }
-    y = row_top + row_h + 4 * s;
   }
+  EndScrollList(settings_list_, board_x + board_w - 48 * s - 10 * s, true);
 
   // The focused option's help (or the section's first) at the board's foot.
   const Option& described = section.options[in_options_ ? option_focus_ : 0];
-  float help_size = 18 * s;
-  DrawWrapped(book_, help_size, row_x0 - 0.9f * em + 14 * s,
-              board_y + board_h - 88 * s - 3.6f * help_size, board_w - 130 * s, kCreamDim,
+  DrawWrapped(book_, help_size, row_x0 - 0.9f * em + 14 * s, help_y, board_w - 130 * s, kCreamDim,
               described.help);
 
   if (in_options_) {
@@ -1100,6 +1112,75 @@ void Ui::TwoBoards(float width, float height, const char* heading, float list_he
   DrawBoard(*x, *y, *w, *h, true);
 }
 
+// ------------------------------------------------------------------ scroll lists
+
+float Ui::BeginScrollList(ScrollList& list, const char* key, int owner, float x0, float x1, float top,
+                          float bottom, float row_h, int rows, int focus, bool active) {
+  if (list.owner != owner) {  // another section: from the top, at once
+    list.owner = owner;
+    list.scroll = 0.0f;
+    list.last_focus = focus;
+    anims_[key] = 0.0f;
+  }
+  list.top = top;
+  list.bottom = bottom;
+  list.row_h = row_h;
+  float view = (bottom - top) / row_h;  // rows that fit
+  list.max_scroll = std::max(0.0f, float(rows) - view);
+  if (active && list.max_scroll > 0 && MouseIn(x0, top, x1, bottom)) {
+    list.scroll -= ImGui::GetIO().MouseWheel * 3.0f;
+    // Near the top or bottom edge the list glides on, faster closer to it.
+    float edge = row_h * 1.2f, mouse_y = ImGui::GetIO().MousePos.y;
+    float pull = mouse_y < top + edge      ? -(1.0f - (mouse_y - top) / edge)
+                 : mouse_y > bottom - edge ? 1.0f - (bottom - mouse_y) / edge
+                                           : 0.0f;
+    if (list.drag < 0) list.scroll += pull * 9.0f * dt_;
+  }
+  // A focused row moved by the keyboard or a controller comes into view (a
+  // row the mouse points at is in view already).
+  if (focus != list.last_focus) {
+    if (!list.mouse_focus && focus >= 0) {
+      if (focus < list.scroll) list.scroll = float(focus);
+      if (focus + 1 > list.scroll + view) list.scroll = float(focus + 1) - view;
+    }
+    list.last_focus = focus;
+  }
+  list.scroll = std::clamp(list.scroll, 0.0f, list.max_scroll);
+  list.shown = Anim(key, list.scroll, 0.12f);
+  // A little beyond the list, so the brush stroke of a row at its edge isn't cut.
+  draw_->PushClipRect(ImVec2(x0, top - 6 * scale_), ImVec2(x1, bottom + 6 * scale_), true);
+  return top - list.shown * row_h;
+}
+
+void Ui::EndScrollList(ScrollList& list, float bar_x, bool active) {
+  draw_->PopClipRect();
+  if (list.max_scroll <= 0) return;
+  // The bar: drag its thumb or click the track.
+  float s = scale_, bar_w = 6 * s, top = list.top, bottom = list.bottom;
+  float track_h = bottom - top, rows_shown = track_h / list.row_h;
+  float thumb_h = std::max(30 * s, track_h * rows_shown / (rows_shown + list.max_scroll));
+  float thumb_y = top + (track_h - thumb_h) * (list.shown / list.max_scroll);
+  bool over_bar = MouseIn(bar_x - 8 * s, top, bar_x + bar_w + 8 * s, bottom);
+  float mouse_y = ImGui::GetIO().MousePos.y;
+  if (active && over_bar && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    bool on_thumb = mouse_y >= thumb_y && mouse_y <= thumb_y + thumb_h;
+    list.drag = on_thumb ? mouse_y - thumb_y : thumb_h * 0.5f;
+  }
+  if (list.drag >= 0) {
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      float t = (mouse_y - list.drag - top) / std::max(1.0f, track_h - thumb_h);
+      list.scroll = std::clamp(t, 0.0f, 1.0f) * list.max_scroll;
+    } else {
+      list.drag = -1.0f;
+    }
+  }
+  bool lit = over_bar || list.drag >= 0;
+  draw_->AddRectFilled(ImVec2(bar_x, top), ImVec2(bar_x + bar_w, bottom), WithAlpha(kCream, 0.12f),
+                       bar_w * 0.5f);
+  draw_->AddRectFilled(ImVec2(bar_x, thumb_y), ImVec2(bar_x + bar_w, thumb_y + thumb_h),
+                       WithAlpha(kCream, lit ? 0.85f : 0.5f), bar_w * 0.5f);
+}
+
 // ------------------------------------------------------------------ Controls
 
 std::vector<std::string> Ui::KeysOf(const std::string& setting) const {
@@ -1201,7 +1282,7 @@ void Ui::ControlsCommand(Command command) {
       int row = std::clamp(controls_row_ + (command == Command::kUp ? -1 : 1), 0, reset_row);
       if (row != controls_row_) {
         controls_row_ = row;
-        controls_mouse_focus_ = false;
+        controls_list_.mouse_focus = false;
         Sound(Audio::Effect::kList);
       }
       break;
@@ -1254,43 +1335,21 @@ void Ui::ControlsScreen(float width, float height) {
   const int rows = int(layout.size()) + 1;
   float size = 18 * s, row_h = 40 * s, key_size = 15 * s;
   float top = by + 64 * s, bottom = by + bh - 70 * s;
-  int visible = std::max(1, int((bottom - top) / row_h));
-  float max_scroll = float(std::max(0, rows - visible));
-  if (MouseIn(bx, top, bx + bw, bottom)) {
-    controls_scroll_ -= ImGui::GetIO().MouseWheel * 3.0f;
-    // Near the top or bottom edge the list glides on, faster closer to it.
-    float edge = row_h * 1.2f, mouse_y = ImGui::GetIO().MousePos.y;
-    float pull = mouse_y < top + edge ? -(1.0f - (mouse_y - top) / edge)
-                 : mouse_y > bottom - edge ? 1.0f - (bottom - mouse_y) / edge
-                                           : 0.0f;
-    if (!binding_ && controls_drag_ < 0) controls_scroll_ += pull * 9.0f * dt_;
-  }
-  // A focused row moved by the keyboard or a controller comes into view (a
-  // row the mouse points at is in view already).
-  static int last_row = -1;
-  if (controls_row_ != last_row) {
-    if (!controls_mouse_focus_) {
-      if (controls_row_ < controls_scroll_) controls_scroll_ = float(controls_row_);
-      if (controls_row_ >= controls_scroll_ + visible) controls_scroll_ = float(controls_row_ - visible + 1);
-    }
-    last_row = controls_row_;
-  }
-  controls_scroll_ = std::clamp(controls_scroll_, 0.0f, max_scroll);
-  float scroll = Anim("controls_scroll", controls_scroll_, 0.12f);
 
   // Two key columns of one width (the widest cap), then the scroll bar, against
   // the board's right side.
   float cap_w = bold_->CalcTextSizeA(key_size, FLT_MAX, 0, "Num Enter").x + 0.9f * key_size;
-  float bar_x = bx + bw - 48 * s - 24 * s, bar_w = 6 * s;
+  float bar_x = bx + bw - 48 * s - 24 * s;
   float second_x = bar_x - 22 * s - cap_w, first_x = second_x - 14 * s - cap_w;
   float glyph_x = bx + 48 * s + 30 * s, label_x = bx + 48 * s + 70 * s;
   auto stroke = [&](float x0, float y0, float x1, float y1) {
     Image(draw_, stroke_, ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32_WHITE);
   };
 
-  draw_->PushClipRect(ImVec2(bx, top), ImVec2(bx + bw, bottom), true);
+  float first_y = BeginScrollList(controls_list_, "controls", 0, bx, bx + bw, top, bottom, row_h, rows,
+                                  controls_row_, !binding_);
   for (int r = 0; r < rows; ++r) {
-    float row_top = top + (float(r) - scroll) * row_h, middle = row_top + row_h * 0.5f;
+    float row_top = first_y + float(r) * row_h, middle = row_top + row_h * 0.5f;
     if (row_top + row_h < top || row_top > bottom) continue;
     bool focused_row = controls_row_ == r;
     if (r == int(layout.size())) {  // Reset to default
@@ -1301,11 +1360,11 @@ void Ui::ControlsScreen(float width, float height) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         if (mouse_moved_) {
           controls_row_ = r;
-          controls_mouse_focus_ = true;
+          controls_list_.mouse_focus = true;
         }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
           controls_row_ = r;
-          controls_mouse_focus_ = true;
+          controls_list_.mouse_focus = true;
           ControlsCommand(Command::kAccept);
         }
       }
@@ -1362,7 +1421,7 @@ void Ui::ControlsScreen(float width, float height) {
         if (mouse_moved_ || ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
             ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
           controls_row_ = r;
-          controls_mouse_focus_ = true;
+          controls_list_.mouse_focus = true;
           controls_column_ = column;
         }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ControlsCommand(Command::kAccept);
@@ -1370,32 +1429,7 @@ void Ui::ControlsScreen(float width, float height) {
       }
     }
   }
-  draw_->PopClipRect();
-
-  // The scroll bar, when the list doesn't fit: drag the thumb or click the track.
-  if (max_scroll > 0) {
-    float track_h = bottom - top, thumb_h = std::max(30 * s, track_h * float(visible) / float(rows));
-    float thumb_y = top + (track_h - thumb_h) * (scroll / max_scroll);
-    bool over_bar = MouseIn(bar_x - 8 * s, top, bar_x + bar_w + 8 * s, bottom);
-    float mouse_y = ImGui::GetIO().MousePos.y;
-    if (!binding_ && over_bar && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-      bool on_thumb = mouse_y >= thumb_y && mouse_y <= thumb_y + thumb_h;
-      controls_drag_ = on_thumb ? mouse_y - thumb_y : thumb_h * 0.5f;
-    }
-    if (controls_drag_ >= 0) {
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-        float t = (mouse_y - controls_drag_ - top) / std::max(1.0f, track_h - thumb_h);
-        controls_scroll_ = std::clamp(t, 0.0f, 1.0f) * max_scroll;
-      } else {
-        controls_drag_ = -1;
-      }
-    }
-    bool lit = over_bar || controls_drag_ >= 0;
-    draw_->AddRectFilled(ImVec2(bar_x, top), ImVec2(bar_x + bar_w, bottom), WithAlpha(kCream, 0.12f),
-                         bar_w * 0.5f);
-    draw_->AddRectFilled(ImVec2(bar_x, thumb_y), ImVec2(bar_x + bar_w, thumb_y + thumb_h),
-                         WithAlpha(kCream, lit ? 0.85f : 0.5f), bar_w * 0.5f);
-  }
+  EndScrollList(controls_list_, bar_x, !binding_);
 
   if (binding_) {
     std::vector<Hint> hints = {{"Esc", "B", "Cancel", Command::kBack}};

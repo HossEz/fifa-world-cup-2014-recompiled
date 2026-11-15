@@ -334,6 +334,15 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     size.defaults = {{"windowed_width", "0"}, {"windowed_height", "0"}};
     display.options.push_back(size);
 
+    Option picture;
+    picture.label = T("Picture");
+    picture.help = T("Fit keeps the right shape, with black bars on screens wider than 16:9. "
+                     "Stretch fills the screen, but players and the HUD look wider.");
+    picture.choices = {{T("Fit"), {{"present_letterbox", "true"}}, {}},
+                       {T("Stretch"), {{"present_letterbox", "false"}}, {}}};
+    picture.defaults = {{"present_letterbox", "true"}};
+    display.options.push_back(picture);
+
     int monitors = GetSystemMetrics(SM_CMONITORS);
     if (monitors > 1) {
       Option monitor;
@@ -411,15 +420,6 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
                          {"FSR", {{"present_effect", "\"fsr\""}}, {}}};
     upscaling.defaults = {{"present_effect", "\"bilinear\""}};
     graphics.options.push_back(upscaling);
-
-    Option picture;
-    picture.label = T("Picture");
-    picture.help = T("Fit keeps the right shape, with black bars on screens wider than 16:9. "
-                     "Stretch fills the screen, but players and the HUD look wider.");
-    picture.choices = {{T("Fit"), {{"present_letterbox", "true"}}, {}},
-                       {T("Stretch"), {{"present_letterbox", "false"}}, {}}};
-    picture.defaults = {{"present_letterbox", "true"}};
-    graphics.options.push_back(picture);
 
     Option filtering;
     filtering.label = T("Texture filtering");

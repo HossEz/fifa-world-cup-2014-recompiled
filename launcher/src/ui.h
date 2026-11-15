@@ -183,9 +183,24 @@ class Ui {
   int controls_row_ = 0;
   int controls_column_ = 0;
   bool binding_ = false;
-  float controls_scroll_ = 0.0f;
-  float controls_drag_ = -1.0f;  // dragging the scroll bar: where on its thumb (-1: not)
-  bool controls_mouse_focus_ = false;  // the focused row came from the mouse
+
+  // A list that scrolls when its rows don't fit: the mouse wheel, gliding
+  // when the mouse is near its top or bottom edge, a focused row moved by the
+  // keyboard or a controller kept in view, and a scroll bar to drag or click.
+  struct ScrollList {
+    float scroll = 0.0f;        // in rows
+    float drag = -1.0f;         // dragging the bar: where on its thumb (-1: not)
+    bool mouse_focus = false;   // the focus came from the mouse: no jump into view
+    int last_focus = -1, owner = -1;
+    float top = 0, bottom = 0, row_h = 1, max_scroll = 0, shown = 0;
+  };
+  // Between Begin and End, row i is at the returned y + i * row_h (drawing is
+  // clipped to the list). `owner`: what the list shows (a new one starts at
+  // the top). `active`: false while something else takes the input.
+  float BeginScrollList(ScrollList& list, const char* key, int owner, float x0, float x1, float top,
+                        float bottom, float row_h, int rows, int focus, bool active);
+  void EndScrollList(ScrollList& list, float bar_x, bool active);
+  ScrollList controls_list_, settings_list_;
   // An action's keys, from fifawc14.toml (the default if it has none).
   std::vector<std::string> KeysOf(const std::string& setting) const;
   // Binds `name` to the focused key; "" clears a second key.
