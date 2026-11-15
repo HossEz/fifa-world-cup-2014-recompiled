@@ -292,11 +292,12 @@ const Entry kEntries[] = {
      "un procesador con SSE4.2.",
      "Windows 10 ou 11 de 64 bits, uma placa de vídeo com Direct3D 12 e drivers atualizados, e "
      "um processador com SSE4.2."},
-    {"A controller is recommended; the keyboard works too (its keys are on the Controls page).",
-     "Se recomienda un control; el teclado también funciona (sus teclas están en la página "
-     "Controles).",
-     "É recomendado usar um controle; o teclado também funciona (as teclas estão na página "
-     "Controles)."},
+    {"A controller is recommended; the keyboard works too, and its keys can be changed on the "
+     "Controls page.",
+     "Se recomienda un control; el teclado también funciona y sus teclas se pueden cambiar en la "
+     "página Controles.",
+     "É recomendado usar um controle; o teclado também funciona e as teclas podem ser mudadas na "
+     "página Controles."},
     {"Your own copy of the game. Everything of the game's, including the art and music in this "
      "menu, is read from it.",
      "Tu propia copia del juego. Todo lo del juego, incluidos el arte y la música de este menú, "
@@ -359,11 +360,11 @@ const Entry kEntries[] = {
      "Uma versão não oficial para PC do 2014 FIFA World Cup Brazil, feita recompilando o jogo de "
      "Xbox 360. Ela roda com a sua própria cópia do jogo; nada do jogo está incluído."},
     {"A controller is recommended (Xbox, PlayStation and others work). The keyboard works too, "
-     "and its keys are on the Controls page.",
+     "and its keys can be changed on the Controls page.",
      "Se recomienda un control (funcionan los de Xbox, PlayStation y otros). El teclado también "
-     "funciona, y sus teclas están en la página Controles.",
+     "funciona, y sus teclas se pueden cambiar en la página Controles.",
      "É recomendado usar um controle (Xbox, PlayStation e outros funcionam). O teclado também "
-     "funciona, e as teclas estão na página Controles."},
+     "funciona, e as teclas podem ser mudadas na página Controles."},
     {"Settings here change how the game looks and runs, from the next Play. Show FPS (Settings, "
      "Display) puts the frame rate in the game's corner.",
      "Los ajustes de aquí cambian cómo se ve y funciona el juego, a partir de la próxima vez que "

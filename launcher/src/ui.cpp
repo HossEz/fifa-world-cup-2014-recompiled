@@ -1514,7 +1514,7 @@ void Ui::NoticeScreen(float width, float height) {
       T("An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
         "game. It runs on your own copy of the game; nothing of the game's is included."),
       T("A controller is recommended (Xbox, PlayStation and others work). The keyboard works "
-        "too, and its keys are on the Controls page."),
+        "too, and its keys can be changed on the Controls page."),
       T("Settings here change how the game looks and runs, from the next Play. Show FPS "
         "(Settings, Display) puts the frame rate in the game's corner.")};
   float text_size = 19 * s;
