@@ -59,6 +59,9 @@ class Ui {
   void Frame(float width, float height, float dt);
 
   void OnCommand(Command command, InputDevice device);
+  // A key press (Windows virtual key). True if it was taken: the Controls page
+  // was waiting for a key to bind. `repeat`: held down (taken, not bound).
+  bool OnKey(unsigned virtual_key, bool extended, bool repeat);
   // A line at the bottom of the window for a few seconds (e.g. why Play failed).
   // Bottom left for a few seconds; `ok` gives it a green stripe instead of red.
   void ShowMessage(std::string text, bool ok = false);
@@ -174,8 +177,19 @@ class Ui {
   double shown_song_at_ = 0;  // when it appeared (ImGui time), for scrolling long names
   float skip_pressed_ = 0.0f;  // seconds the skip button still shows pressed
   ControllerStyle controller_style_ = ControllerStyle::kXbox;
-  // The Controls page shows what the buttons do when defending (left / right).
-  bool controls_defending_ = false;
+  // The Controls page: the focused row (one per action, then Reset to
+  // default), the focused key column (0 the key, 1 the second key), whether
+  // the next key press goes there, and the list's scroll (in rows).
+  int controls_row_ = 0;
+  int controls_column_ = 0;
+  bool binding_ = false;
+  float controls_scroll_ = 0.0f;
+  float controls_drag_ = -1.0f;  // dragging the scroll bar: where on its thumb (-1: not)
+  // An action's keys, from fifawc14.toml (the default if it has none).
+  std::vector<std::string> KeysOf(const std::string& setting) const;
+  // Binds `name` to the focused key; "" clears a second key.
+  void BindKey(const std::string& name);
+  void ControlsCommand(Command command);
   // Option infos (folder sizes) are computed in the background, every few seconds.
   struct Info {
     std::string text;

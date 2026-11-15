@@ -291,12 +291,7 @@ void Ui::OnCommand(Command command, InputDevice device) {
       }
       break;
     case Screen::kControls:
-      if (command == Command::kLeft || command == Command::kRight) {
-        controls_defending_ = !controls_defending_;
-        Sound(Audio::Effect::kList);
-      } else if (command == Command::kBack) {
-        Go(Screen::kHome);
-      }
+      ControlsCommand(command);
       break;
     default:
       if (command == Command::kBack) Go(Screen::kHome);
@@ -1105,67 +1100,298 @@ void Ui::TwoBoards(float width, float height, const char* heading, float list_he
   DrawBoard(*x, *y, *w, *h, true);
 }
 
+// ------------------------------------------------------------------ Controls
+
+std::vector<std::string> Ui::KeysOf(const std::string& setting) const {
+  // As written in fifawc14.toml ("L,Return" in quotes), or the default.
+  std::string value = config_ ? config_->Get(setting, "") : "";
+  if (value.size() >= 2 && value.front() == '"') value = value.substr(1, value.size() - 2);
+  if (value.empty()) value = DefaultKeys().at(setting);
+  std::vector<std::string> keys;
+  size_t start = 0;
+  for (size_t comma; (comma = value.find(',', start)) != std::string::npos; start = comma + 1) {
+    keys.push_back(value.substr(start, comma - start));
+  }
+  keys.push_back(value.substr(start));
+  return keys;
+}
+
+void Ui::BindKey(const std::string& name) {
+  const auto& layout = KeyboardLayout();
+  const std::string& setting = layout[controls_row_].setting;
+  const size_t column = size_t(controls_column_);
+  // Every action's keys as they'll be, starting from the file's.
+  std::map<std::string, std::vector<std::string>> keys;
+  auto of = [&](const std::string& s) -> std::vector<std::string>& {
+    auto it = keys.find(s);
+    if (it == keys.end()) it = keys.emplace(s, KeysOf(s)).first;
+    return it->second;
+  };
+  std::vector<std::string>& mine = of(setting);
+  const std::string old = column < mine.size() ? mine[column] : "";
+  if (name.empty()) {  // clear the second key
+    if (column == 0 || mine.size() < 2) return;
+    mine.resize(1);
+  } else {
+    if (name == old) return;
+    if (old.empty() && std::find(mine.begin(), mine.end(), name) != mine.end()) return;
+    // A key another action has swaps with this one's old key, so no key does
+    // two things; without an old key it just moves, unless that leaves the
+    // other action with none.
+    for (const ControlRow& row : layout) {
+      std::vector<std::string>& list = of(row.setting);
+      for (size_t j = 0; j < list.size(); ++j) {
+        if ((row.setting == setting && j == column) || list[j] != name) continue;
+        if (!old.empty()) {
+          list[j] = old;
+        } else {
+          list.erase(list.begin() + j);
+          if (list.empty()) {
+            ShowMessage(T("Every action needs a key."));
+            return;
+          }
+        }
+        break;
+      }
+    }
+    if (column < mine.size()) {
+      mine[column] = name;
+    } else {
+      mine.push_back(name);
+    }
+  }
+  for (const auto& [s, list] : keys) {
+    if (list == KeysOf(s)) continue;
+    std::string joined;
+    for (const std::string& key : list) joined += (joined.empty() ? "" : ",") + key;
+    config_->Set(s, "\"" + joined + "\"");
+  }
+  if (!config_->Save()) ShowMessage(T("The keys couldn't be saved."));
+}
+
+bool Ui::OnKey(unsigned virtual_key, bool extended, bool repeat) {
+  if (!binding_ || screen_ != Screen::kControls) return false;
+  if (repeat) return true;
+  if (virtual_key == VK_ESCAPE) {
+    binding_ = false;
+    Sound(Audio::Effect::kBack);
+    return true;
+  }
+  // Delete clears a second key; it isn't one itself.
+  std::string name = virtual_key == VK_DELETE ? "" : KeyName(virtual_key, extended);
+  if (name.empty() && (virtual_key != VK_DELETE || controls_column_ == 0)) return true;
+  BindKey(name);
+  binding_ = false;
+  Sound(Audio::Effect::kSelect);
+  return true;
+}
+
+void Ui::ControlsCommand(Command command) {
+  if (binding_) {
+    if (command == Command::kBack) {  // a controller's B (Esc comes through OnKey)
+      binding_ = false;
+      Sound(Audio::Effect::kBack);
+    }
+    return;
+  }
+  const int reset_row = int(KeyboardLayout().size());
+  switch (command) {
+    case Command::kUp:
+    case Command::kDown: {
+      int row = std::clamp(controls_row_ + (command == Command::kUp ? -1 : 1), 0, reset_row);
+      if (row != controls_row_) {
+        controls_row_ = row;
+        Sound(Audio::Effect::kList);
+      }
+      break;
+    }
+    case Command::kLeft:
+    case Command::kRight: {
+      int column = command == Command::kLeft ? 0 : 1;
+      if (controls_row_ < reset_row && column != controls_column_) {
+        controls_column_ = column;
+        Sound(Audio::Effect::kMove);
+      }
+      break;
+    }
+    case Command::kAccept:
+      if (controls_row_ < reset_row) {
+        binding_ = true;
+        Sound(Audio::Effect::kSelect);
+      } else {
+        for (const auto& [setting, keys] : DefaultKeys()) config_->Set(setting, "\"" + keys + "\"");
+        Sound(Audio::Effect::kSelect);
+        if (config_->Save()) {
+          ShowMessage(T("Keys reset to default."), true);
+        } else {
+          ShowMessage(T("The keys couldn't be saved."));
+        }
+      }
+      break;
+    case Command::kBack:
+      Go(Screen::kHome);
+      break;
+    default:
+      break;
+  }
+}
+
 void Ui::ControlsScreen(float width, float height) {
   float s = scale_;
   float bx, by, bw, bh, list_y;
   float intro_size = 19 * s;
   TwoBoards(width, height, T("Controls"), intro_size * 1.35f * 5, &bx, &by, &bw, &bh, &list_y);
   DrawWrapped(book_, intro_size, 56 * s + 48 * s, list_y, 290 * s, kCreamDim,
-              T("A controller works as it does on the console. On a keyboard each button has "
-                "its own keys. Both work at any time."));
+              T("A controller works as it does on the console. The keyboard's keys can be "
+                "changed here. Both work at any time."));
   float icon_w = 230 * s;
   DrawSplash(home_icons_[2], std::min(bx + bw + 50 * s - icon_w * 0.5f, width - icon_w * 0.55f), by - 70 * s + icon_w * 0.33f,
              icon_w, splash_appear_);
 
-  // One row per button: the button, its keys, what it does in a match.
+  // One row per action, then Reset to default; the list scrolls.
   const auto& layout = KeyboardLayout();
-  float size = 17 * s, row_h = (bh - 64 * s - 74 * s - 66 * s) / float(layout.size());
-  float glyph_x = bx + 48 * s + 34 * s, keys_x = bx + 48 * s + 84 * s, match_x = bx + bw * 0.48f;
-  float y = by + 64 * s + 74 * s;
-  // What the buttons do: the game's Classic preset, attacking or defending
-  // (left / right), as the game's own Controller Settings screen.
-  {
-    const char* page = controls_defending_ ? T("DEFENDING") : T("ATTACKING");
-    float head_y = by + 64 * s + 6 * s;
-    draw_->AddText(bold_, size * 0.8f, ImVec2(match_x, head_y), kCreamDim, T("CLASSIC PRESET"));
-    ImVec2 page_size = bold_->CalcTextSizeA(size, FLT_MAX, 0, page);
-    float arrow = size * 0.3f, page_y = head_y + size * 1.05f, mid = page_y + size * 0.62f;
-    float text_x = match_x + arrow * 2.0f + 6 * s;
-    draw_->AddTriangleFilled(ImVec2(match_x, mid), ImVec2(match_x + arrow * 1.4f, mid - arrow),
-                             ImVec2(match_x + arrow * 1.4f, mid + arrow), kCream);
-    draw_->AddText(bold_, size, ImVec2(text_x, page_y), kCream, page);
-    float right_x = text_x + page_size.x + 6 * s;
-    draw_->AddTriangleFilled(ImVec2(right_x + arrow * 1.4f, mid), ImVec2(right_x, mid - arrow),
-                             ImVec2(right_x, mid + arrow), kCream);
-    if (MouseIn(match_x - 4 * s, page_y - 4 * s, right_x + arrow * 2.0f, page_y + size * 1.3f)) {
-      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) OnCommand(Command::kRight, device_);
+  const int rows = int(layout.size()) + 1;
+  float size = 18 * s, row_h = 40 * s, key_size = 15 * s;
+  float top = by + 64 * s, bottom = by + bh - 70 * s;
+  int visible = std::max(1, int((bottom - top) / row_h));
+  float max_scroll = float(std::max(0, rows - visible));
+  if (MouseIn(bx, top, bx + bw, bottom)) {
+    controls_scroll_ -= ImGui::GetIO().MouseWheel * 3.0f;
+  }
+  // The focused row stays in view when it moves (keyboard, controller).
+  static int last_row = -1;
+  if (controls_row_ != last_row) {
+    if (controls_row_ < controls_scroll_) controls_scroll_ = float(controls_row_);
+    if (controls_row_ >= controls_scroll_ + visible) controls_scroll_ = float(controls_row_ - visible + 1);
+    last_row = controls_row_;
+  }
+  controls_scroll_ = std::clamp(controls_scroll_, 0.0f, max_scroll);
+  float scroll = Anim("controls_scroll", controls_scroll_, 0.12f);
+
+  // Two key columns of one width (the widest cap), then the scroll bar, against
+  // the board's right side.
+  float cap_w = bold_->CalcTextSizeA(key_size, FLT_MAX, 0, "Num Enter").x + 0.9f * key_size;
+  float bar_x = bx + bw - 48 * s - 24 * s, bar_w = 6 * s;
+  float second_x = bar_x - 22 * s - cap_w, first_x = second_x - 14 * s - cap_w;
+  float glyph_x = bx + 48 * s + 30 * s, label_x = bx + 48 * s + 70 * s;
+  auto stroke = [&](float x0, float y0, float x1, float y1) {
+    Image(draw_, stroke_, ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32_WHITE);
+  };
+
+  draw_->PushClipRect(ImVec2(bx, top), ImVec2(bx + bw, bottom), true);
+  for (int r = 0; r < rows; ++r) {
+    float row_top = top + (float(r) - scroll) * row_h, middle = row_top + row_h * 0.5f;
+    if (row_top + row_h < top || row_top > bottom) continue;
+    bool focused_row = controls_row_ == r;
+    if (r == int(layout.size())) {  // Reset to default
+      float focus = Anim("controls_reset", focused_row ? 1.0f : 0.0f, 0.24f);
+      float end = DrawItem(label_x, middle - size * 0.7f, T("Reset to default"), bold_, size, focus);
+      if (!binding_ && MouseIn(label_x - 10 * s, row_top, label_x + 260 * s, end)) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (mouse_moved_) controls_row_ = r;
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          controls_row_ = r;
+          ControlsCommand(Command::kAccept);
+        }
+      }
+      continue;
+    }
+    const ControlRow& row = layout[r];
+    DrawGlyph(glyph_x, middle, row_h * 0.62f, row);
+    // The label left of the keys: on one line if it fits, else attacking and
+    // defending on two ("Finesse shot / Teammate contain"), shrunk if need be.
+    {
+      std::string label = T(row.label);
+      float room = first_x - 16 * s - label_x;
+      ImU32 color = focused_row ? kCream : kCreamDim;
+      size_t slash = label.find(" / ");
+      float one = book_->CalcTextSizeA(size, FLT_MAX, 0, label.c_str()).x;
+      if (one <= room || slash == std::string::npos) {
+        float fit = std::min(size, size * room / std::max(one, 1.0f));
+        draw_->AddText(book_, fit, ImVec2(label_x, middle - fit * 0.6f), color, label.c_str());
+      } else {
+        std::string lines[2] = {label.substr(0, slash + 2), label.substr(slash + 3)};
+        float two_size = size * 0.82f, widest = 0;
+        for (const std::string& line : lines) {
+          widest = std::max(widest, book_->CalcTextSizeA(two_size, FLT_MAX, 0, line.c_str()).x);
+        }
+        two_size = std::min(two_size, two_size * room / std::max(widest, 1.0f));
+        draw_->AddText(book_, two_size, ImVec2(label_x, middle - two_size * 1.15f), color, lines[0].c_str());
+        draw_->AddText(book_, two_size, ImVec2(label_x, middle + two_size * 0.02f), color, lines[1].c_str());
+      }
+    }
+    std::vector<std::string> keys = KeysOf(row.setting);
+    for (int column = 0; column < 2; ++column) {
+      float x = column == 0 ? first_x : second_x, key_h = key_size * 1.4f;
+      bool focused = focused_row && controls_column_ == column;
+      std::string cap = focused && binding_ ? "..."
+                        : column < int(keys.size()) ? KeyCap(keys[column])
+                                                    : "";
+      if (focused) stroke(x - 8 * s, middle - key_h * 0.5f - 5 * s, x + cap_w + 8 * s, middle + key_h * 0.5f + 5 * s);
+      if (cap.empty()) {  // no second key: an empty slot
+        draw_->AddRect(ImVec2(x, middle - key_h * 0.5f), ImVec2(x + cap_w, middle + key_h * 0.5f),
+                       WithAlpha(kCream, focused ? 0.0f : 0.25f), 6 * s, 0, std::max(1.0f, s));
+      } else {
+        // DrawKey sizes the cap to its text; draw it at the column's width instead.
+        ImVec2 text = bold_->CalcTextSizeA(key_size, FLT_MAX, 0, cap.c_str());
+        float top_y = middle - key_h * 0.5f;
+        draw_->AddRectFilled(ImVec2(x, top_y), ImVec2(x + cap_w, top_y + key_h), kCream, 6 * s);
+        draw_->AddRectFilled(ImVec2(x, top_y + key_h - 3 * s), ImVec2(x + cap_w, top_y + key_h),
+                             IM_COL32(12, 30, 20, 64), 6 * s, ImDrawFlags_RoundCornersBottom);
+        draw_->AddText(bold_, key_size, ImVec2(x + (cap_w - text.x) * 0.5f, top_y + key_size * 0.2f),
+                       kInk, cap.c_str());
+      }
+      if (!binding_ && MouseIn(x, middle - key_h * 0.5f, x + cap_w, middle + key_h * 0.5f) &&
+          MouseIn(bx, top, bx + bw, bottom)) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+        if (mouse_moved_ || ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+            ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+          controls_row_ = r;
+          controls_column_ = column;
+        }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ControlsCommand(Command::kAccept);
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) BindKey("");  // right-click clears a second key
+      }
     }
   }
-  for (const ControlRow& row : layout) {
-    float middle = y + row_h * 0.5f;
-    DrawGlyph(glyph_x, middle, row_h * 0.72f, row);
-    // The keys as caps, left to right ("Space  Z" -> two caps).
-    std::string shown = T(row.shown);
-    float key_x = keys_x, key_size = size * 0.85f;
-    for (size_t start = 0; start < shown.size();) {
-      size_t end = shown.find("  ", start);
-      std::string key = shown.substr(start, end == std::string::npos ? std::string::npos
-                                                                    : end - start);
-      ImVec2 text = bold_->CalcTextSizeA(key_size, FLT_MAX, 0, key.c_str());
-      float key_w = std::max(text.x + 0.9f * key_size, 1.8f * key_size);
-      DrawKey(key_x + key_w, middle, key_size, key.c_str(), false);
-      key_x += key_w + 6 * s;
-      if (end == std::string::npos) break;
-      start = end + 2;
+  draw_->PopClipRect();
+
+  // The scroll bar, when the list doesn't fit: drag the thumb or click the track.
+  if (max_scroll > 0) {
+    float track_h = bottom - top, thumb_h = std::max(30 * s, track_h * float(visible) / float(rows));
+    float thumb_y = top + (track_h - thumb_h) * (scroll / max_scroll);
+    bool over_bar = MouseIn(bar_x - 8 * s, top, bar_x + bar_w + 8 * s, bottom);
+    float mouse_y = ImGui::GetIO().MousePos.y;
+    if (!binding_ && over_bar && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      bool on_thumb = mouse_y >= thumb_y && mouse_y <= thumb_y + thumb_h;
+      controls_drag_ = on_thumb ? mouse_y - thumb_y : thumb_h * 0.5f;
     }
-    draw_->AddText(book_, size, ImVec2(match_x, middle - size * 0.6f), kCreamDim,
-                   T(controls_defending_ ? row.defending : row.attacking));
-    y += row_h;
+    if (controls_drag_ >= 0) {
+      if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        float t = (mouse_y - controls_drag_ - top) / std::max(1.0f, track_h - thumb_h);
+        controls_scroll_ = std::clamp(t, 0.0f, 1.0f) * max_scroll;
+      } else {
+        controls_drag_ = -1;
+      }
+    }
+    bool lit = over_bar || controls_drag_ >= 0;
+    draw_->AddRectFilled(ImVec2(bar_x, top), ImVec2(bar_x + bar_w, bottom), WithAlpha(kCream, 0.12f),
+                         bar_w * 0.5f);
+    draw_->AddRectFilled(ImVec2(bar_x, thumb_y), ImVec2(bar_x + bar_w, thumb_y + thumb_h),
+                         WithAlpha(kCream, lit ? 0.85f : 0.5f), bar_w * 0.5f);
   }
-  DrawHints(width, height, {{"<>", "<>", controls_defending_ ? "Attacking" : "Defending",
-                             Command::kRight},
-                            {"Esc", "B", "Back", Command::kBack}});
+
+  if (binding_) {
+    std::vector<Hint> hints = {{"Esc", "B", "Cancel", Command::kBack}};
+    if (controls_column_ == 1 && device_ == InputDevice::kKeyboard) {
+      hints.insert(hints.begin(), {"Del", "", "Clear"});
+    }
+    DrawHints(width, height, hints);
+  } else {
+    DrawHints(width, height, {{"Enter", "A", controls_row_ < int(layout.size()) ? "Change key" : "Reset to default",
+                               Command::kAccept},
+                              {"Esc", "B", "Back", Command::kBack}});
+  }
 }
 
 void Ui::AboutScreen(float width, float height) {

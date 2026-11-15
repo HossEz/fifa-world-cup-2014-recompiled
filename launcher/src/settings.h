@@ -72,26 +72,28 @@ struct Section {
   std::vector<Option> options;
 };
 
-// The keyboard layout: one row per controller button, the keys the launcher
-// binds to it (the game's keybind_* settings, SDK key names) and what it does
-// in a match with the game's Classic preset, in the game's own words (its
-// Controller Settings screen, 2026-10-20). The Controls page shows the same
-// table.
+// The keyboard, as the Controls page lists it: one row per action (a stick or
+// the d-pad has one per direction), the controller button it is, and the
+// game's keybind_* setting that holds its keys.
 enum class Glyph { kFace, kBumper, kTrigger, kStick, kPad, kSmall };
 struct ControlRow {
+  const char* label;    // what it does (attacking / defending, the game's Classic preset)
   const char* button;   // "A", "LB", "L", "D-pad", ...
   Glyph glyph;
-  const char* setting;  // keybind_* setting(s), comma-separated for a stick's four
-  const char* keys;     // SDK key names, as written (comma = alternatives)
-  const char* shown;    // the keys as shown to the player
-  const char* attacking;  // what it does when attacking ("" if the game lists nothing)
-  const char* defending;  // ... and when defending
+  const char* setting;  // keybind_*
 };
 const std::vector<ControlRow>& KeyboardLayout();
-// The game settings for that layout: keyboard play on (it's merged with any
-// controller, so it never gets in a controller's way), every keybind_*, and
+// The default keys: setting -> keys (SDK key names, comma = a second key).
+const std::map<std::string, std::string>& DefaultKeys();
+// The game settings for keyboard play: on (it's merged with any controller, so
+// it never gets in a controller's way), the default keybind_*, and
 // mnk_exact_modifiers off so Shift can sprint while steering.
 std::map<std::string, std::string> KeyboardSettings();
+// The SDK's name for a Windows virtual key ("" for keys that can't be bound:
+// Esc, the F keys, Windows keys...). `extended`: the key message's extended bit.
+std::string KeyName(unsigned virtual_key, bool extended);
+// A key name as shown on a key cap ("Return" -> "Enter").
+std::string KeyCap(const std::string& name);
 
 // The launcher's sections. `data_folder`: the settings and logs (see
 // DataFolder in main.cpp); `user_folder`: the game's saves and caches

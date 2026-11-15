@@ -366,12 +366,15 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
       launcher::Log("window %s", wparam ? "activated" : "deactivated");
       break;
     case WM_SYSKEYDOWN:
+      // A key for the Controls page, while it waits for one (Alt comes this way).
+      if (g_ui && g_ui->OnKey(unsigned(wparam), lparam & (1 << 24), lparam & (1 << 30))) return 0;
       if (wparam == VK_RETURN && (lparam & (1 << 29))) {
         ToggleFullscreen();
         return 0;
       }
       break;
     case WM_KEYDOWN:
+      if (g_ui && g_ui->OnKey(unsigned(wparam), lparam & (1 << 24), lparam & (1 << 30))) return 0;
       if (wparam == VK_F11) {
         ToggleFullscreen();
         return 0;

@@ -93,65 +93,114 @@ void Option::Step(GameConfig& config, int delta) const {
 // ------------------------------------------------------------------ keyboard
 
 const std::vector<ControlRow>& KeyboardLayout() {
-  // Sticks: one setting per direction (up, down, left, right), keys in the same order.
-  // The game's Controller Settings screen lists neither the right stick nor
-  // L3 / R3, Start and Back; Skill moves and Pause are FIFA's usual ones.
   static const std::vector<ControlRow> layout = {
-      {"A", Glyph::kFace, "keybind_a", "Space,Z", "Space  Z", "Short Pass/Header", "Contain"},
-      {"B", Glyph::kFace, "keybind_b", "X,Backspace", "X  Backspace", "Shoot/Volley/Header",
-       "Tackle/Push or Pull (when chasing)"},
-      {"X", Glyph::kFace, "keybind_x", "C", "C", "Lob Pass/Cross/Header", ""},
-      {"Y", Glyph::kFace, "keybind_y", "V", "V", "Through Ball", ""},
-      {"LB", Glyph::kBumper, "keybind_left_shoulder", "Q", "Q", "Player Run/Modifier",
-       "Change Player"},
-      {"RB", Glyph::kBumper, "keybind_right_shoulder", "E", "E", "Finesse Shot Modifier",
-       "Teammate Contain"},
-      {"LT", Glyph::kTrigger, "keybind_left_trigger", "1,Control", "1  Ctrl", "Pace Control",
-       "Jockey"},
-      {"RT", Glyph::kTrigger, "keybind_right_trigger", "Shift,3", "Shift  3", "Sprint", "Sprint"},
-      {"L", Glyph::kStick,
-       "keybind_lstick_up,keybind_lstick_down,keybind_lstick_left,keybind_lstick_right",
-       "W,S,A,D", "W  A  S  D", "Move Player", "Move Player"},
-      {"R", Glyph::kStick,
-       "keybind_rstick_up,keybind_rstick_down,keybind_rstick_left,keybind_rstick_right",
-       "I,K,J,L", "I  J  K  L", "Skill moves", ""},
-      {"L3", Glyph::kStick, "keybind_lstick_press", "F", "F", "", ""},
-      {"R3", Glyph::kStick, "keybind_rstick_press", "G", "G", "", ""},
-      {"D-pad", Glyph::kPad, "keybind_dpad_up,keybind_dpad_down,keybind_dpad_left,keybind_dpad_right",
-       "Up,Down,Left,Right", "Arrow keys", "Tactics & Mentality",
-       "Tactics & Mentality"},
-      {"Start", Glyph::kSmall, "keybind_start", "Return", "Enter", "Pause", "Pause"},
-      {"Back", Glyph::kSmall, "keybind_back", "Tab", "Tab", "", ""},
+      {"Short pass / Contain", "A", Glyph::kFace, "keybind_a"},
+      {"Shoot / Tackle", "B", Glyph::kFace, "keybind_b"},
+      {"Lob pass / Cross", "X", Glyph::kFace, "keybind_x"},
+      {"Through ball", "Y", Glyph::kFace, "keybind_y"},
+      {"Player run / Change player", "LB", Glyph::kBumper, "keybind_left_shoulder"},
+      {"Finesse shot / Teammate contain", "RB", Glyph::kBumper, "keybind_right_shoulder"},
+      {"Pace control / Jockey", "LT", Glyph::kTrigger, "keybind_left_trigger"},
+      {"Sprint", "RT", Glyph::kTrigger, "keybind_right_trigger"},
+      {"Move up", "L", Glyph::kStick, "keybind_lstick_up"},
+      {"Move down", "L", Glyph::kStick, "keybind_lstick_down"},
+      {"Move left", "L", Glyph::kStick, "keybind_lstick_left"},
+      {"Move right", "L", Glyph::kStick, "keybind_lstick_right"},
+      {"Skill move up", "R", Glyph::kStick, "keybind_rstick_up"},
+      {"Skill move down", "R", Glyph::kStick, "keybind_rstick_down"},
+      {"Skill move left", "R", Glyph::kStick, "keybind_rstick_left"},
+      {"Skill move right", "R", Glyph::kStick, "keybind_rstick_right"},
+      {"Left stick press", "L3", Glyph::kStick, "keybind_lstick_press"},
+      {"Right stick press", "R3", Glyph::kStick, "keybind_rstick_press"},
+      {"Tactics", "D-pad", Glyph::kPad, "keybind_dpad_up"},
+      {"Custom tactics", "D-pad", Glyph::kPad, "keybind_dpad_down"},
+      {"More defensive", "D-pad", Glyph::kPad, "keybind_dpad_left"},
+      {"More attacking", "D-pad", Glyph::kPad, "keybind_dpad_right"},
+      {"Pause", "Start", Glyph::kSmall, "keybind_start"},
+      {"Help", "Back", Glyph::kSmall, "keybind_back"},
   };
   return layout;
 }
 
-// The keybind settings for the layout above: each row's setting gets its keys;
-// a stick's four settings get one key each.
+// FIFA 14 on PC, keyboard only, Classic (its manual and the in-game table, as
+// GamePressure shows it): the left hand moves, the right passes and shoots.
+// Enter and Backspace are A and B's second keys, so the menus work as usual.
+// L3 / R3, which it has no keys for, are Q and E.
+const std::map<std::string, std::string>& DefaultKeys() {
+  static const std::map<std::string, std::string> keys = {
+      {"keybind_a", "L,Return"}, {"keybind_b", "Space,Backspace"}, {"keybind_x", "J"},
+      {"keybind_y", "K"}, {"keybind_left_shoulder", "Control"}, {"keybind_right_shoulder", "I"},
+      {"keybind_left_trigger", "CapsLock"}, {"keybind_right_trigger", "Shift"},
+      {"keybind_lstick_up", "W"}, {"keybind_lstick_down", "S"}, {"keybind_lstick_left", "A"},
+      {"keybind_lstick_right", "D"}, {"keybind_rstick_up", "Numpad8"},
+      {"keybind_rstick_down", "Numpad2"}, {"keybind_rstick_left", "Numpad4"},
+      {"keybind_rstick_right", "Numpad6"}, {"keybind_lstick_press", "Q"},
+      {"keybind_rstick_press", "E"}, {"keybind_dpad_up", "Up"}, {"keybind_dpad_down", "Down"},
+      {"keybind_dpad_left", "Left"}, {"keybind_dpad_right", "Right"},
+      {"keybind_start", "Escape"}, {"keybind_back", "F"}};
+  return keys;
+}
+
 std::map<std::string, std::string> KeyboardSettings() {
   std::map<std::string, std::string> settings = {{"mnk_mode", "true"},
                                                  {"mnk_exact_modifiers", "false"}};
-  auto split = [](const std::string& text) {
-    std::vector<std::string> parts;
-    size_t start = 0;
-    for (size_t comma; (comma = text.find(',', start)) != std::string::npos; start = comma + 1) {
-      parts.push_back(text.substr(start, comma - start));
-    }
-    parts.push_back(text.substr(start));
-    return parts;
-  };
-  for (const ControlRow& row : KeyboardLayout()) {
-    std::vector<std::string> names = split(row.setting);
-    if (names.size() == 1) {
-      settings[names[0]] = "\"" + std::string(row.keys) + "\"";
-    } else {
-      std::vector<std::string> keys = split(row.keys);
-      for (size_t i = 0; i < names.size() && i < keys.size(); ++i) {
-        settings[names[i]] = "\"" + keys[i] + "\"";
-      }
-    }
-  }
+  for (const auto& [key, keys] : DefaultKeys()) settings[key] = "\"" + keys + "\"";
   return settings;
+}
+
+std::string KeyName(unsigned vk, bool extended) {
+  if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) return std::string(1, char(vk));
+  if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) return "Numpad" + std::to_string(vk - VK_NUMPAD0);
+  switch (vk) {
+    case VK_SPACE: return "Space";
+    case VK_RETURN: return extended ? "NumpadEnter" : "Return";
+    case VK_TAB: return "Tab";
+    case VK_BACK: return "Backspace";
+    case VK_SHIFT: case VK_LSHIFT: case VK_RSHIFT: return "Shift";
+    case VK_CONTROL: case VK_LCONTROL: case VK_RCONTROL: return "Control";
+    case VK_MENU: case VK_LMENU: case VK_RMENU: return "Alt";
+    case VK_CAPITAL: return "CapsLock";
+    case VK_UP: return "Up";
+    case VK_DOWN: return "Down";
+    case VK_LEFT: return "Left";
+    case VK_RIGHT: return "Right";
+    case VK_INSERT: return "Insert";
+    case VK_DELETE: return "Delete";
+    case VK_HOME: return "Home";
+    case VK_END: return "End";
+    case VK_PRIOR: return "PageUp";
+    case VK_NEXT: return "PageDown";
+    case VK_ADD: return "NumpadPlus";
+    case VK_SUBTRACT: return "NumpadMinus";
+    case VK_MULTIPLY: return "NumpadStar";
+    case VK_DIVIDE: return "NumpadSlash";
+    case VK_OEM_COMMA: return "Comma";
+    case VK_OEM_PERIOD: return "Period";
+    case VK_OEM_MINUS: return "Minus";
+    case VK_OEM_PLUS: return "Plus";
+    case VK_OEM_1: return "Semicolon";
+    case VK_OEM_2: return "Slash";
+    case VK_OEM_3: return "Backtick";
+    case VK_OEM_4: return "LBracket";
+    case VK_OEM_5: return "Backslash";
+    case VK_OEM_6: return "RBracket";
+    case VK_OEM_7: return "Quote";
+    default: return "";  // Esc (it cancels), F keys (the SDK's own), Windows keys...
+  }
+}
+
+std::string KeyCap(const std::string& name) {
+  static const std::map<std::string, std::string> caps = {
+      {"Return", "Enter"}, {"Control", "Ctrl"}, {"CapsLock", "Caps"}, {"Escape", "Esc"},
+      {"Backspace", "Bksp"}, {"PageUp", "PgUp"}, {"PageDown", "PgDn"}, {"Delete", "Del"},
+      {"Insert", "Ins"}, {"NumpadEnter", "Num Enter"}, {"NumpadPlus", "Num +"},
+      {"NumpadMinus", "Num -"}, {"NumpadStar", "Num *"}, {"NumpadSlash", "Num /"},
+      {"Comma", ","}, {"Period", "."}, {"Minus", "-"}, {"Plus", "="}, {"Semicolon", ";"},
+      {"Slash", "/"}, {"Backtick", "`"}, {"LBracket", "["}, {"Backslash", "\\"},
+      {"RBracket", "]"}, {"Quote", "'"}};
+  if (auto it = caps.find(name); it != caps.end()) return it->second;
+  if (name.rfind("Numpad", 0) == 0) return "Num " + name.substr(6);
+  return name;
 }
 
 
