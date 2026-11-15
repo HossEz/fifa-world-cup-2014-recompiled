@@ -155,7 +155,7 @@ class Ui {
 
   Texture backdrop_;  // behind the fluxwaves (BuildBackdrop in ui.cpp)
   std::array<Texture, 35> covers_;  // EA Trax art by Song::cover (1-34)
-  Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_, quit_panel_;
+  Texture background_, panel_, stroke_, logo_, update_panel_, update_icon_, quit_panel_, note_;
   std::array<Texture, 4> home_icons_;
   std::array<Texture, 5> section_icons_;
   ImFont* bold_ = nullptr;

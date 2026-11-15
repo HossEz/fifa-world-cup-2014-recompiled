@@ -30,6 +30,8 @@ constexpr const char* kPanel = "data/ui/imgassets/custompanels/custompanels_27.d
 // The update popup's light painted panel, with leaves at its edges.
 constexpr const char* kUpdatePanel = "data/ui/imgassets/custompanels/custompanels_5.dds";
 constexpr const char* kQuitPanel = "data/ui/imgassets/custompanels/custompanels_66.dds";
+// Crumpled paper, under Settings' help text.
+constexpr const char* kNote = "data/ui/imgassets/custompanels/custompanels_38.dds";
 constexpr const char* kStroke = "data/ui/imgassets/custompanels/custompanels_61.dds";
 constexpr const char* kLogo = "data/ui/imgassets/custompanels/custompanels_39.dds";
 constexpr const char* kTiles = "data/ui/imgassets/tiles/mainhub/";
@@ -135,6 +137,7 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
   panel_ = LoadGameTexture(device, files, kPanel);
   update_panel_ = LoadGameTexture(device, files, kUpdatePanel);
   quit_panel_ = LoadGameTexture(device, files, kQuitPanel);
+  note_ = LoadGameTexture(device, files, kNote);
   update_icon_ = LoadGameTexture(device, files, std::string(kTiles) + "ct_downloadupdates.dds");
   stroke_ = LoadGameTexture(device, files, kStroke);
   logo_ = LoadGameTexture(device, files, kLogo);
@@ -670,6 +673,60 @@ void Ui::DrawNowPlaying(float x, float bottom, float width) {
   draw_->PopClipRect();
 }
 
+// A note on crumpled paper (custompanels_38) between two corners: the sheet's
+// top part at the note's width, unstretched, with its torn bottom edge faded in
+// below, so every side keeps the sheet's own torn border.
+static void PaperNote(ImDrawList* draw, const Texture& paper, float x0, float y0, float x1, float y1) {
+  // In the 1024x512 picture: the sheet with its border (x 2-778, y 8-508), the
+  // rows taken for the bottom edge and the rows the two parts fade over.
+  constexpr float kL = 2, kR = 778, kT = 8, kB = 508, kBottomRows = 60, kFadeRows = 20;
+  float k = (x1 - x0) / (kR - kL);  // screen pixels per picture pixel
+  // Picture pixels to texture coordinates. Not through u0..u1: those cover
+  // only the part with visible pixels (LoadDds trims to it), not the picture.
+  auto uv = [](float px, float py) { return ImVec2(px / 1024.0f, py / 512.0f); };
+  // A textured rectangle whose alpha goes from `top_alpha` to `bottom_alpha`.
+  auto quad = [&](float top, float bottom, float py0, float py1, int top_alpha, int bottom_alpha) {
+    ImU32 c0 = IM_COL32(255, 255, 255, top_alpha), c1 = IM_COL32(255, 255, 255, bottom_alpha);
+    ImVec2 uv0 = uv(kL, py0), uv1 = uv(kR, py1);
+    draw->PushTexture(ImTextureRef(paper.id()));
+    draw->PrimReserve(6, 4);
+    ImDrawIdx i = ImDrawIdx(draw->_VtxCurrentIdx);
+    for (int n : {0, 1, 2, 0, 2, 3}) draw->PrimWriteIdx(ImDrawIdx(i + n));
+    draw->PrimWriteVtx(ImVec2(x0, top), uv0, c0);
+    draw->PrimWriteVtx(ImVec2(x1, top), ImVec2(uv1.x, uv0.y), c0);
+    draw->PrimWriteVtx(ImVec2(x1, bottom), uv1, c1);
+    draw->PrimWriteVtx(ImVec2(x0, bottom), ImVec2(uv0.x, uv1.y), c1);
+    draw->PopTexture();
+  };
+  float bottom_h = std::min(kBottomRows * k, (y1 - y0) * 0.5f), fade_h = kFadeRows * k;
+  float bottom_top = y1 - bottom_h;
+  // The top part reaches into the bottom one's fade (no deeper than the
+  // sheet's clean rows; a very tall note stretches instead).
+  float top_end = std::min(y1, bottom_top + fade_h);
+  float top_rows = std::min((top_end - y0) / k, kB - kBottomRows - kT);
+  quad(y0, top_end, kT, kT + top_rows, 255, 255);
+  float fade_end = std::min(y1, bottom_top + fade_h);
+  float rows_per_px = kBottomRows / bottom_h;
+  quad(bottom_top, fade_end, kB - kBottomRows, kB - kBottomRows + (fade_end - bottom_top) * rows_per_px,
+       0, 255);
+  quad(fade_end, y1, kB - kBottomRows + (fade_end - bottom_top) * rows_per_px, kB, 255, 255);
+}
+
+// The number of lines DrawWrapped breaks `text` into.
+static int WrappedLines(ImFont* font, float size, float wrap, const std::string& text) {
+  const char* line = text.c_str();
+  const char* end = line + text.size();
+  int lines = 0;
+  while (line < end) {
+    const char* next = font->CalcWordWrapPosition(size, line, end, wrap);
+    if (next == line) ++next;
+    ++lines;
+    line = next;
+    while (line < end && *line == ' ') ++line;
+  }
+  return lines;
+}
+
 float Ui::DrawWrapped(ImFont* font, float size, float x, float y, float wrap, ImU32 color,
                       const std::string& text) {
   const char* line = text.c_str();
@@ -844,10 +901,20 @@ void Ui::SettingsScreen(float width, float height) {
              board_y - 70 * s + icon_w * 0.33f, icon_w, splash_appear_);
 
   float option_size = 22 * s, em = option_size;
-  float help_size = 18 * s, help_y = board_y + board_h - 88 * s - 3.6f * help_size;
-  // The options between the board's top and the help; they scroll when they don't fit.
+  // The help on a paper note at the board's foot, as tall as the section's
+  // longest help, so the list above doesn't move from option to option.
+  float help_size = 18 * s, pad_x = 18 * s, pad_y = 14 * s;
+  float note_x0 = board_x + 48 * s, note_x1 = board_x + board_w - 48 * s;
+  float help_wrap = note_x1 - note_x0 - 2 * pad_x;
+  int help_lines = 1;
+  for (const Option& option : section.options) {
+    help_lines = std::max(help_lines, WrappedLines(book_, help_size, help_wrap, option.help));
+  }
+  float note_bottom = board_y + board_h - 74 * s;
+  float note_top = note_bottom - float(help_lines) * help_size * 1.4f - 2 * pad_y;
+  // The options between the board's top and the note; they scroll when they don't fit.
   float row_h = 0.4f * em + option_size * 1.25f + 0.4f * em, step = row_h + 4 * s;
-  float list_top = board_y + 64 * s + 70 * s, list_bottom = help_y - 14 * s;
+  float list_top = board_y + 64 * s + 70 * s, list_bottom = note_top - 12 * s;
   int count = int(section.options.size());
   bool scrolls = float(count) * step > list_bottom - list_top + 0.5f;
   float row_x0 = board_x + 48 * s + 0.9f * em;
@@ -930,10 +997,11 @@ void Ui::SettingsScreen(float width, float height) {
   }
   EndScrollList(settings_list_, board_x + board_w - 48 * s - 10 * s, true);
 
-  // The focused option's help (or the section's first) at the board's foot.
+  // The focused option's help (or the section's first) on the note.
   const Option& described = section.options[in_options_ ? option_focus_ : 0];
-  DrawWrapped(book_, help_size, row_x0 - 0.9f * em + 14 * s, help_y, board_w - 130 * s, kCreamDim,
-              described.help);
+  if (note_) PaperNote(draw_, note_, note_x0, note_top, note_x1, note_bottom);
+  DrawWrapped(book_, help_size, note_x0 + pad_x, note_top + pad_y, help_wrap,
+              note_ ? kInk : kCreamDim, described.help);
 
   if (in_options_) {
     if (section.options[option_focus_].is_action()) {
