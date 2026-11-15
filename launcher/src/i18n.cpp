@@ -170,6 +170,24 @@ const Entry kEntries[] = {
      "ofrece. No se envía nada sobre ti ni sobre tu juego.",
      "Ao iniciar, consulta a página do projeto no GitHub para ver se há uma versão nova e a "
      "oferece. Nada sobre você ou seu jogo é enviado."},
+    {"Squads", "Plantillas", "Elencos"},
+    {"Import", "Importar", "Importar"},
+    {"Imports a squads file, such as EA's last squad update. The game loads it by itself when it "
+     "starts.",
+     "Importa un archivo de plantillas, como la última actualización de EA. El juego lo carga "
+     "solo al iniciar.",
+     "Importa um arquivo de elencos, como a última atualização da EA. O jogo o carrega sozinho "
+     "ao iniciar."},
+    {"Squads imported. The game uses them from its next start.",
+     "Plantillas importadas. El juego las usa desde su próximo inicio.",
+     "Elencos importados. O jogo os usa a partir do próximo início."},
+    {"That file isn't a squads file.", "Ese archivo no es de plantillas.",
+     "Esse arquivo não é de elencos."},
+    {"Those squads are for another FIFA game.", "Esas plantillas son de otro juego de FIFA.",
+     "Esses elencos são de outro jogo FIFA."},
+    {"The squads couldn't be saved.", "No se pudieron guardar las plantillas.",
+     "Não foi possível salvar os elencos."},
+    {"The squads file", "El archivo de plantillas", "O arquivo de elencos"},
     {"Desktop shortcut", "Acceso directo", "Atalho"},
     {"Create", "Crear", "Criar"},
     // The game's quit shortcut: "Hold [Back] + [Start] to quit", then "Quitting".

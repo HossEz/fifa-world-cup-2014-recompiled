@@ -7,9 +7,11 @@
 #include <wrl/client.h>
 
 #include <fstream>
+#include <memory>
 #include <regex>
 
 #include "i18n.h"
+#include "squads_import.h"
 
 namespace launcher {
 
@@ -426,6 +428,29 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     saves.help = T("Your profile, settings and tournament saves.");
     saves.run = [user_folder] { OpenFolder(user_folder); };
     data.options.push_back(saves);
+
+    auto imported = std::make_shared<SquadsImport>(SquadsImport::kCancelled);
+    Option squads;
+    squads.label = T("Squads");
+    squads.action = T("Import");
+    squads.help = T("Imports a squads file, such as EA's last squad update. The game loads it "
+                    "by itself when it starts.");
+    squads.run = [user_folder, imported] { *imported = PickAndImportSquads(user_folder); };
+    squads.outcome = [imported]() -> std::pair<std::string, bool> {
+      switch (*imported) {
+        case SquadsImport::kOk:
+          return {T("Squads imported. The game uses them from its next start."), true};
+        case SquadsImport::kNotSquads:
+          return {T("That file isn't a squads file."), false};
+        case SquadsImport::kOtherGame:
+          return {T("Those squads are for another FIFA game."), false};
+        case SquadsImport::kWriteFailed:
+          return {T("The squads couldn't be saved."), false};
+        default:
+          return {};
+      }
+    };
+    data.options.push_back(squads);
 
     fs::path shaders = user_folder / "cache";
     Option cache;

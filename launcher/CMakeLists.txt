@@ -53,6 +53,7 @@ add_executable(Launcher WIN32
   src/log.cpp
   src/settings.cpp
   src/setup.cpp
+  src/squads_import.cpp
   src/textures.cpp
   src/updater.cpp
   src/ui.cpp
