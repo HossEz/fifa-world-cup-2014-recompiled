@@ -212,12 +212,12 @@ const Entry kEntries[] = {
      "portátil ou se você apagou o que o instalador criou."},
 
     // Controls.
-    {"Each key presses a controller button. The actions shown are the game's default "
-     "controls. If you change them in the game, the keys follow.",
-     "Cada tecla pulsa un botón del control. Las acciones son las del juego por defecto. Si las "
-     "cambias en el juego, las teclas las siguen.",
-     "Cada tecla aperta um botão do controle. As ações são os controles padrão do jogo. Se você "
-     "mudá-los no jogo, as teclas acompanham."},
+    {"These are the keys for playing on the keyboard. Select an action to give it a new "
+     "key. A controller works at any time too.",
+     "Estas son las teclas para jugar con el teclado. Elige una acción para asignarle otra "
+     "tecla. El control también funciona en cualquier momento.",
+     "Estas são as teclas para jogar no teclado. Escolha uma ação para dar a ela outra tecla. "
+     "O controle também funciona a qualquer momento."},
     {"Short pass / Contain", "Pase corto / Contener", "Passe curto / Conter"},
     {"Shoot / Tackle", "Disparo / Entrada", "Chute / Desarme"},
     {"Lob pass / Slide tackle", "Pase bombeado / Entrada deslizante", "Passe por cima / Carrinho"},
