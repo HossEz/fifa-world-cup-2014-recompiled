@@ -213,10 +213,10 @@ const Entry kEntries[] = {
 
     // Controls.
     {"Each key presses a controller button. The actions shown are the game's default "
-     "controls; change them in the game and the keys follow.",
-     "Cada tecla pulsa un botón del control. Las acciones son las del juego por defecto; si las "
+     "controls. If you change them in the game, the keys follow.",
+     "Cada tecla pulsa un botón del control. Las acciones son las del juego por defecto. Si las "
      "cambias en el juego, las teclas las siguen.",
-     "Cada tecla aperta um botão do controle. As ações são os controles padrão do jogo; se você "
+     "Cada tecla aperta um botão do controle. As ações são os controles padrão do jogo. Se você "
      "mudá-los no jogo, as teclas acompanham."},
     {"Short pass / Contain", "Pase corto / Contener", "Passe curto / Conter"},
     {"Shoot / Tackle", "Disparo / Entrada", "Chute / Desarme"},
@@ -299,11 +299,11 @@ const Entry kEntries[] = {
      "un procesador con SSE4.2.",
      "Windows 10 ou 11 de 64 bits, uma placa de vídeo com Direct3D 12 e drivers atualizados, e "
      "um processador com SSE4.2."},
-    {"A controller is recommended; the keyboard works too, and its keys can be changed on the "
+    {"A controller is recommended. The keyboard works too, and its keys can be changed on the "
      "Controls page.",
-     "Se recomienda un control; el teclado también funciona y sus teclas se pueden cambiar en la "
+     "Se recomienda un control. El teclado también funciona y sus teclas se pueden cambiar en la "
      "página Controles.",
-     "É recomendado usar um controle; o teclado também funciona e as teclas podem ser mudadas na "
+     "É recomendado usar um controle. O teclado também funciona e as teclas podem ser mudadas na "
      "página Controles."},
     {"Your own copy of the game. Everything of the game's, including the art and music in this "
      "menu, is read from it.",
@@ -345,12 +345,12 @@ const Entry kEntries[] = {
      "Nenhum arquivo do jogo está incluído. A arte, o som e os dados vêm da sua própria cópia, e "
      "o código só está incluído em forma recompilada. Se um detentor de direitos levantar uma "
      "questão legal válida, ela será atendida."},
-    {"This project's code is under the BSD 3-Clause licence (LICENSE.txt); the components it "
+    {"This project's code is under the BSD 3-Clause licence (LICENSE.txt). The components it "
      "uses keep theirs (THIRD-PARTY-NOTICES.txt, both in the program's folder).",
-     "El código de este proyecto está bajo la licencia BSD de 3 cláusulas (LICENSE.txt); los "
+     "El código de este proyecto está bajo la licencia BSD de 3 cláusulas (LICENSE.txt). Los "
      "componentes que usa mantienen las suyas (THIRD-PARTY-NOTICES.txt, ambos en la carpeta del "
      "programa).",
-     "O código deste projeto está sob a licença BSD de 3 cláusulas (LICENSE.txt); os componentes "
+     "O código deste projeto está sob a licença BSD de 3 cláusulas (LICENSE.txt). Os componentes "
      "que ele usa mantêm as suas (THIRD-PARTY-NOTICES.txt, ambos na pasta do programa)."},
     {"Build", "Versión", "Versão"},
     {"Mention this when reporting a problem, so it's clear which version you're running.",
@@ -361,11 +361,11 @@ const Entry kEntries[] = {
     // The first start's welcome.
     {"Before you play", "Antes de jugar", "Antes de jogar"},
     {"An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
-     "game. It runs on your own copy of the game; nothing of the game's is included.",
+     "game. It runs on your own copy of the game, and nothing of the game's is included.",
      "Una versión no oficial para PC de 2014 FIFA World Cup Brazil, hecha recompilando el juego "
-     "de Xbox 360. Funciona con tu propia copia del juego; no incluye nada del juego.",
+     "de Xbox 360. Funciona con tu propia copia del juego y no incluye nada del juego.",
      "Uma versão não oficial para PC do 2014 FIFA World Cup Brazil, feita recompilando o jogo de "
-     "Xbox 360. Ela roda com a sua própria cópia do jogo; nada do jogo está incluído."},
+     "Xbox 360. Ela roda com a sua própria cópia do jogo, e nada do jogo está incluído."},
     {"A controller is recommended (Xbox, PlayStation and others work). The keyboard works too, "
      "and its keys can be changed on the Controls page.",
      "Se recomienda un control (funcionan los de Xbox, PlayStation y otros). El teclado también "
@@ -437,11 +437,11 @@ const Entry kEntries[] = {
      "lo esté bloqueando.",
      "Não foi possível iniciar o jogo (fifawc14.exe) (erro do Windows {0}). Talvez o seu "
      "antivírus esteja bloqueando."},
-    {"The game stopped: your processor doesn't support SSE4.2, which the game needs (Intel from "
+    {"The game stopped because your processor doesn't support SSE4.2, which the game needs (Intel from "
      "2008 on, AMD from 2011).",
-     "El juego se detuvo: tu procesador no es compatible con SSE4.2, que el juego necesita (Intel "
+     "El juego se detuvo porque tu procesador no es compatible con SSE4.2, que el juego necesita (Intel "
      "desde 2008, AMD desde 2011).",
-     "O jogo parou: seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a "
+     "O jogo parou porque seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a "
      "partir de 2008, AMD a partir de 2011)."},
     {"The game couldn't read where the game files are from fifawc14.toml in {0}. Pick the game "
      "again in Settings, Data, Game.",

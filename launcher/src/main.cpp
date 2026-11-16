@@ -277,7 +277,7 @@ std::string GameExitMessage(DWORD code) {
   // (-march=x86-64-v2, pc/CMakeLists.txt). Told from the exit code alone: no
   // processor check, which antivirus heuristics count against a program.
   if (code == 0xC000001D) {
-    return T("The game stopped: your processor doesn't support SSE4.2, which the game needs "
+    return T("The game stopped because your processor doesn't support SSE4.2, which the game needs "
              "(Intel from 2008 on, AMD from 2011).");
   }
   // The game found no game_data_root in fifawc14.toml, though the launcher saved

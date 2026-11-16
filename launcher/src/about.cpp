@@ -40,7 +40,7 @@ const std::vector<Topic>& AboutTopics() {
       {T("What it needs"),
        {T("Windows 10 or 11, 64-bit, a graphics card with Direct3D 12 and up-to-date drivers, "
           "and a processor with SSE4.2."),
-        T("A controller is recommended; the keyboard works too, and its keys can be changed on "
+        T("A controller is recommended. The keyboard works too, and its keys can be changed on "
           "the Controls page."),
         T("Your own copy of the game. Everything of the game's, including the art and music in "
           "this menu, is read from it.")}},
@@ -56,7 +56,7 @@ const std::vector<Topic>& AboutTopics() {
         T("None of the game's files are included. Its art, sound and data come from your own "
           "copy, and its code is included only in recompiled form. If a rights holder raises a valid "
           "legal concern, it will be addressed."),
-        T("This project's code is under the BSD 3-Clause licence (LICENSE.txt); the components "
+        T("This project's code is under the BSD 3-Clause licence (LICENSE.txt). The components "
           "it uses keep theirs (THIRD-PARTY-NOTICES.txt, both in the program's folder).")}},
       {T("Build"),
        {T("Mention this when reporting a problem, so it's clear which version you're running.")},
