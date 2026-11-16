@@ -1407,8 +1407,8 @@ void Ui::ControlsScreen(float width, float height) {
   float intro_size = 19 * s;
   TwoBoards(width, height, T("Controls"), intro_size * 1.35f * 5, &bx, &by, &bw, &bh, &list_y);
   DrawWrapped(book_, intro_size, 56 * s + 48 * s, list_y, 290 * s, kCreamDim,
-              T("A controller works as it does on the console. The keyboard's keys can be "
-                "changed here. Both work at any time."));
+              T("Each key presses a controller button. The actions shown are the game's default "
+                "controls; change them in the game and the keys follow."));
   float icon_w = 230 * s;
   DrawSplash(home_icons_[2], std::min(bx + bw + 50 * s - icon_w * 0.5f, width - icon_w * 0.55f), by - 70 * s + icon_w * 0.33f,
              icon_w, splash_appear_);
