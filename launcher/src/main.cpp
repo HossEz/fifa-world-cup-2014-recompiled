@@ -955,7 +955,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
           launcher::WriteGameIcon(*files, icon)) {
         made.Set("icon_source", source);
         made.Save();
-        launcher::RefreshShellIcons();
+        launcher::RefreshShellIcons(icon);
       }
     }
     ui = std::make_unique<launcher::Ui>();

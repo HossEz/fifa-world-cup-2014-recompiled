@@ -27,8 +27,8 @@ bool WriteGameIcon(const GameFiles& files, const std::filesystem::path& ico);
 // The icon on a window's title bar and taskbar button (if the file exists).
 void SetWindowIcon(void* window, const std::filesystem::path& ico);
 
-// Has Windows show the new icon on the shortcuts, which the installer points
-// at icon.ico before it exists.
-void RefreshShellIcons();
+// Has Windows show the new icon `ico` on the game's shortcuts (desktop and
+// Start menu), which the installer points at icon.ico before it exists.
+void RefreshShellIcons(const std::filesystem::path& ico);
 
 }  // namespace launcher

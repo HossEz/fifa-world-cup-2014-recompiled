@@ -183,6 +183,21 @@ void SetWindowIcon(void* window, const fs::path& ico) {
   }
 }
 
-void RefreshShellIcons() { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr); }
+void RefreshShellIcons(const fs::path& ico) {
+  // Only our shortcuts and the icon file: a refresh of every icon
+  // (SHCNE_ASSOCCHANGED) made Explorer lay out the whole desktop again, and
+  // players' icons moved.
+  std::error_code ec;
+  SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, ico.c_str(), nullptr);
+  for (REFKNOWNFOLDERID folder : {FOLDERID_PublicDesktop, FOLDERID_Desktop, FOLDERID_CommonPrograms,
+                                  FOLDERID_Programs}) {
+    PWSTR path = nullptr;
+    if (SUCCEEDED(SHGetKnownFolderPath(folder, 0, nullptr, &path))) {
+      fs::path shortcut = fs::path(path) / L"2014 FIFA World Cup Brazil - Recompiled.lnk";
+      if (fs::exists(shortcut, ec)) SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATHW, shortcut.c_str(), nullptr);
+    }
+    CoTaskMemFree(path);
+  }
+}
 
 }  // namespace launcher
