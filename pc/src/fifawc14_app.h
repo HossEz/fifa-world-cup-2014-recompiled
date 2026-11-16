@@ -16,6 +16,7 @@
 
 #include "data_folder.h"
 #include "fps_counter.h"
+#include "game_files.h"
 #include "launcher_redirect.h"
 #include "quit_shortcut.h"
 #include "system_report.h"
@@ -39,6 +40,8 @@ class Fifawc14App : public rex::ReXApp {
   // void OnPreSetup(rex::RuntimeConfig& config) override {}
   // void OnLoadXexImage(std::string& xex_image) override {}
   // void OnPostLoadXexImage() override {}
+  // The game files the PC build replaces, before the game opens any.
+  void OnPreLaunchModule() override { SetUpGameFiles(runtime()); }
   // Feed the F3 debug overlay's "Guest: N FPS" line. The SDK times every guest
   // frame swap (VdSwap) into perf counters but leaves the overlay hook unset.
   void OnPostSetup() override {

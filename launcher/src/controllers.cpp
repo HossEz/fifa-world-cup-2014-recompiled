@@ -4,10 +4,35 @@
 #include <vector>
 
 #include <SDL3/SDL.h>
+#include <windows.h>
 
 #include "log.h"
 
 namespace launcher {
+namespace {
+
+// A Sony game controller among the HID devices, also one hidden behind an
+// emulated Xbox pad.
+bool SonyControllerConnected() {
+  UINT count = 0;
+  if (GetRawInputDeviceList(nullptr, &count, sizeof(RAWINPUTDEVICELIST)) != 0 || !count) return false;
+  std::vector<RAWINPUTDEVICELIST> devices(count);
+  if (GetRawInputDeviceList(devices.data(), &count, sizeof(RAWINPUTDEVICELIST)) == UINT(-1)) return false;
+  for (const RAWINPUTDEVICELIST& device : devices) {
+    if (device.dwType != RIM_TYPEHID) continue;
+    RID_DEVICE_INFO info{};
+    info.cbSize = sizeof(info);
+    UINT size = sizeof(info);
+    if (GetRawInputDeviceInfoW(device.hDevice, RIDI_DEVICEINFO, &info, &size) == UINT(-1)) continue;
+    if (info.hid.dwVendorId == 0x054C && info.hid.usUsagePage == 1 &&
+        (info.hid.usUsage == 4 || info.hid.usUsage == 5)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
 
 Controllers::~Controllers() {
   quit_ = true;
@@ -42,6 +67,10 @@ void Controllers::Run() {
                          type == SDL_GAMEPAD_TYPE_PS5;
         }
       }
+      // A PlayStation pad DS4Windows and the like show as an Xbox 360 one still
+      // has PlayStation buttons; the game's Automatic button icons test the same
+      // (pc/src/game_files.cpp).
+      if (count > 0 && SonyControllerConnected()) playstation_ = true;
       if (count == 0 && known > 0) Log("controller: none connected");
       known = count;
     }

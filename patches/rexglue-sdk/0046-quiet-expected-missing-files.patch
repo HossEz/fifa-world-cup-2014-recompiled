@@ -1,0 +1,51 @@
+diff --git a/include/rex/system/kernel_state.h b/include/rex/system/kernel_state.h
+--- a/include/rex/system/kernel_state.h
++++ b/include/rex/system/kernel_state.h
+@@ -60,6 +60,12 @@
+ 
+ #define REXKRNL_IMPORT_FAIL(name, fmt, ...) REXKRNL_WARN("[" name "] FAILED: " fmt, ##__VA_ARGS__)
+ 
++namespace rex::system {
++// A game's filter for NtCreateFile's FAILED line: a miss it expects (a look on
++// disk before its archives, say) isn't logged when this returns true for the path.
++void SetQuietMissingFiles(std::function<bool(std::string_view path)> quiet);
++}  // namespace rex::system
++
+ #define REXKRNL_IMPORT_WARN(name, fmt, ...) REXKRNL_NOISY_DEBUG("[" name "] " fmt, ##__VA_ARGS__)
+ 
+ //=============================================================================
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_io.cpp b/src/kernel/xboxkrnl/xboxkrnl_io.cpp
+--- a/src/kernel/xboxkrnl/xboxkrnl_io.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_io.cpp
+@@ -100,6 +100,9 @@
+   return true;
+ }
+ 
++// The game's filter of expected misses (rex::system::SetQuietMissingFiles).
++std::function<bool(std::string_view)> quiet_missing_files;
++
+ u32 NtCreateFile_entry(mapped_u32 handle_out, u32 desired_access,
+                        ppc_ptr_t<X_OBJECT_ATTRIBUTES> object_attrs,
+                        ppc_ptr_t<X_IO_STATUS_BLOCK> io_status_block, mapped_u64 allocation_size_ptr,
+@@ -169,7 +172,9 @@
+ 
+   *handle_out = handle;
+   if (XFAILED(result)) {
+-    REXKRNL_IMPORT_FAIL("NtCreateFile", "path='{}' -> {:#x}", target_path, result);
++    if (!quiet_missing_files || !quiet_missing_files(target_path)) {
++      REXKRNL_IMPORT_FAIL("NtCreateFile", "path='{}' -> {:#x}", target_path, result);
++    }
+   } else {
+     REXKRNL_IMPORT_RESULT("NtCreateFile", "{:#x} handle={:#x}", result, handle);
+   }
+@@ -760,6 +765,10 @@
+ 
+ }  // namespace rex::kernel::xboxkrnl
+ 
++void rex::system::SetQuietMissingFiles(std::function<bool(std::string_view)> quiet) {
++  rex::kernel::xboxkrnl::quiet_missing_files = std::move(quiet);
++}
++
+ REX_EXPORT(__imp__NtCreateFile, rex::kernel::xboxkrnl::NtCreateFile_entry)
+ REX_EXPORT(__imp__NtOpenFile, rex::kernel::xboxkrnl::NtOpenFile_entry)
+ REX_EXPORT(__imp__NtReadFile, rex::kernel::xboxkrnl::NtReadFile_entry)

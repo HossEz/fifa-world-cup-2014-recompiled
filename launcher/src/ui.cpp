@@ -201,6 +201,13 @@ void Ui::BuildSections() {
   }
 }
 
+void Ui::SetControllerStyle(ControllerStyle detected) {
+  std::string choice = config_ ? config_->Get("button_icons", "\"auto\"") : "\"auto\"";
+  controller_style_ = choice == "\"playstation\"" ? ControllerStyle::kPlayStation
+                      : choice == "\"xbox\""      ? ControllerStyle::kXbox
+                                                  : detected;
+}
+
 // After a launcher setting changed: the sound, and the language.
 void Ui::ApplyLocalSettings() {
   ApplySoundSettings();

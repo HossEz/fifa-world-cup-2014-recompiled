@@ -53,7 +53,8 @@ class Ui {
   void ApplySoundSettings();
   // The next song (N, Y / Triangle, or the board's button), with the button's press.
   void SkipSong();
-  void SetControllerStyle(ControllerStyle style) { controller_style_ = style; }
+  // The controller in use; the Button icons setting decides the hints unless it's Automatic.
+  void SetControllerStyle(ControllerStyle detected);
 
   // Draws one frame for a window of `width` x `height` pixels. `dt` in seconds.
   void Frame(float width, float height, float dt);

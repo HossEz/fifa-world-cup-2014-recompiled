@@ -1,0 +1,2 @@
+// The PS3 version's button pictures for the PlayStation buttons (game_files.cpp).
+300 RCDATA "../data/playstation_buttons.bin"

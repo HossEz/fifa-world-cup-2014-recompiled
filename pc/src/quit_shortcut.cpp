@@ -22,10 +22,8 @@
 #include <rex/ui/windowed_app_context.h>
 
 #include "../fixes/present_interval.h"
+#include "game_files.h"
 
-REXCVAR_DEFINE_STRING(quit_buttons, "xbox", "Game",
-                      "Button icons of the quit shortcut: xbox or playstation (the launcher sets "
-                      "it from the controller in use)");
 // The overlay's words, in the launcher's language: the launcher writes them
 // translated (launcher/src/main.cpp), so the game has no translations of its
 // own. A table of them here got the setup flagged by Microsoft (0.1.6).
@@ -35,8 +33,6 @@ REXCVAR_DEFINE_STRING(quit_to_quit, "to quit", "Game",
                       "Quit shortcut: [buttons] \"to quit\" (the launcher sets it)");
 REXCVAR_DEFINE_STRING(quit_quitting, "Quitting", "Game",
                       "Quit shortcut: shown while quitting (the launcher sets it)");
-REXCVAR_DEFINE_STRING(quit_create, "Create", "Game",
-                      "Quit shortcut: the PlayStation Create button's name (the launcher sets it)");
 
 namespace {
 
@@ -54,7 +50,6 @@ struct Words {
   std::string hold;      // "Hold " [buttons]
   std::string to_quit;   // " to quit"
   std::string quitting;
-  std::string create;    // the PlayStation Create button's name (Back, Start and Options stay)
 };
 
 ImU32 WithAlpha(ImU32 color, float alpha) {
@@ -71,9 +66,9 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
         runtime_(std::move(runtime)),
         window_(window),
         panel_(std::move(panel)),
-        playstation_(REXCVAR_GET(quit_buttons) == "playstation"),
+        playstation_(PlayStationButtons()),
         words_{REXCVAR_GET(quit_hold) + " ", " " + REXCVAR_GET(quit_to_quit),
-               REXCVAR_GET(quit_quitting), REXCVAR_GET(quit_create)} {}
+               REXCVAR_GET(quit_quitting)} {}
   // Drawn with each game frame, as the FPS counter (fps_counter.cpp).
   bool WantsContinuousPaint() const override { return false; }
 
@@ -91,7 +86,7 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
       double shown = std::chrono::duration<double>(now - *hint_start_).count();
       if (shown < kHintSeconds) {
         float alpha = float(std::clamp(kHintSeconds - shown, 0.0, 1.0));
-        // "Hold [icon] Create + [icon] Options to quit (Alt+F4)".
+        // "Hold [icon] + [icon] to quit (Alt+F4)".
         float width = Measure(font, size, words_.hold.c_str()) + MeasureButtons(font, size) +
                       Measure(font, size, words_.to_quit.c_str()) + Measure(font, size, " (Alt+F4)");
         ImVec2 pos(size * 0.5f + PanelPadding(width, size).x,
@@ -181,22 +176,15 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
     }
   }
 
-  const char* BackLabel() const { return playstation_ ? words_.create.c_str() : "Back"; }
-  const char* StartLabel() const { return playstation_ ? "Options" : "Start"; }
-
   float MeasureButtons(ImFont* font, float size) const {
-    return 2.0f * size * 1.6f + Measure(font, size, BackLabel()) + Measure(font, size, " + ") +
-           Measure(font, size, StartLabel()) + size * 0.8f;
+    return 2.0f * size * 1.6f + Measure(font, size, " + ");
   }
 
-  // The two buttons, each as its icon and name: "[icon] Create + [icon] Options".
-  // Returns the end x.
+  // The two buttons' icons: "[icon] + [icon]". Returns the end x.
   float DrawButtons(ImDrawList* draw, ImFont* font, ImVec2 pos, float size, float alpha) const {
     float x = DrawIcon(draw, ImVec2(pos.x, pos.y), size, true, alpha);
-    x = DrawText(draw, font, size, ImVec2(x + size * 0.4f, pos.y), BackLabel(), alpha);
     x = DrawText(draw, font, size, ImVec2(x, pos.y), " + ", alpha);
-    x = DrawIcon(draw, ImVec2(x, pos.y), size, false, alpha);
-    return DrawText(draw, font, size, ImVec2(x + size * 0.4f, pos.y), StartLabel(), alpha);
+    return DrawIcon(draw, ImVec2(x, pos.y), size, false, alpha);
   }
 
   // A small dark pill like the controller's button, with its symbol: Create's
@@ -206,7 +194,7 @@ class QuitShortcut : public rex::ui::ImGuiDialog {
     float w = size * 1.6f, h = size * 1.05f;
     // Centred on the letters (x-height to cap height), not the line with its
     // descender space.
-    ImVec2 min(pos.x, pos.y + size * 0.52f - h * 0.5f);
+    ImVec2 min(pos.x, pos.y + size * 0.47f - h * 0.5f);
     ImVec2 max(min.x + w, min.y + h);
     draw->AddRectFilled(ImVec2(min.x, min.y + 2), ImVec2(max.x, max.y + 2),
                         WithAlpha(IM_COL32(0, 0, 0, 90), alpha), h * 0.5f);

@@ -49,6 +49,8 @@ set(FIFAWC14_SOURCES
     src/thread_stats.cpp
     src/system_report.cpp
     src/game_window.cpp
+    src/game_files.cpp
+    src/game_text.cpp
     ${FIXES}/kernel_stubs.cpp
     ${FIXES}/gpu_memcpy.cpp
     ${FIXES}/boot_race_fixes.cpp
@@ -73,6 +75,12 @@ add_version_resource(fifawc14 "2014 FIFA World Cup Brazil: Recompiled - Game" "f
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../VERSION GAME_VERSION)
 string(STRIP "${GAME_VERSION}" GAME_VERSION)
 set_property(SOURCE src/system_report.cpp APPEND PROPERTY COMPILE_DEFINITIONS "GAME_VERSION=\"${GAME_VERSION}\"")
+# The PS3 button pictures (src/game_files.cpp), embedded in the exe.
+if(WIN32)
+    target_sources(fifawc14 PRIVATE src/game_files.rc)
+    set_property(SOURCE src/game_files.rc APPEND PROPERTY OBJECT_DEPENDS
+                 ${CMAKE_CURRENT_SOURCE_DIR}/data/playstation_buttons.bin)
+endif()
 # The game window's 16:9 resizing hooks the window with SetWindowSubclass.
 if(WIN32)
     target_link_libraries(fifawc14 PRIVATE comctl32)

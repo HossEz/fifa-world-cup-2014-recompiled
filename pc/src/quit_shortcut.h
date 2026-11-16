@@ -22,10 +22,9 @@ class Window;
 // can't happen by accident. For the first seconds of a session a hint shows
 // it ("Hold [Back] + [Start] to quit (Alt+F4)").
 // The panel behind it is quit-panel.png in the data folder (the launcher
-// writes it from the player's game), and the button icons and names are
-// PlayStation or Xbox ones by quit_buttons (the launcher sets it from the
-// controller in use). The runtime is created after the overlay, so it's
-// looked up when drawing.
+// writes it from the player's game), and the button icons and names are the
+// game's (PlayStationButtons, game_files.h). The runtime is created after the
+// overlay, so it's looked up when drawing.
 std::unique_ptr<rex::ui::ImGuiDialog> CreateQuitShortcut(
     rex::ui::ImGuiDrawer* drawer, ImFont* font, std::function<rex::Runtime*()> runtime,
     rex::ui::Window* window, rex::ui::ImmediateDrawer* immediate_drawer,

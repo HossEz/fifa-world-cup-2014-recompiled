@@ -343,6 +343,17 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     picture.defaults = {{"present_letterbox", "true"}};
     display.options.push_back(picture);
 
+    // The game's button icons (pc/src/game_files.h) and this menu's hints.
+    Option buttons;
+    buttons.label = T("Button icons");
+    buttons.help = T("The controller buttons shown in the game and here. Automatic matches your "
+                     "controller each time the game starts.");
+    buttons.choices = {{T("Automatic"), {{"button_icons", "\"auto\""}}, {}},
+                       {"Xbox", {{"button_icons", "\"xbox\""}}, {}},
+                       {"PlayStation", {{"button_icons", "\"playstation\""}}, {}}};
+    buttons.defaults = {{"button_icons", "\"auto\""}};
+    display.options.push_back(buttons);
+
     int monitors = GetSystemMetrics(SM_CMONITORS);
     if (monitors > 1) {
       Option monitor;

@@ -971,10 +971,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     // The game has its own sound: the menu's music stops while it runs.
     ui->on_play = [&] {
       audio->SetMusic(false, 0.0f);
-      // The quit shortcut's button icons (pc/src/quit_shortcut.cpp) match the
-      // controller in use.
       launcher::GameConfig config(data_folder / "fifawc14.toml");
-      config.Set("quit_buttons", g_controllers.PlayStation() ? "\"playstation\"" : "\"xbox\"");
       // The launcher's language for the game too: its language screen at
       // start has it selected (the console's language setting).
       // Only one the disc has: asked for another, the game picks its own (the
@@ -991,7 +988,6 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       config.Set("quit_hold", quoted(T("Hold")));
       config.Set("quit_to_quit", quoted(T("to quit")));
       config.Set("quit_quitting", quoted(T("Quitting")));
-      config.Set("quit_create", quoted(T("Create")));
       // The rate the game runs at: Frame rate, and with VSync on no more than the
       // screen shows. The game then takes its vblanks from a screen at that rate
       // (SDK vsync_to_display), which caps it there without tearing.

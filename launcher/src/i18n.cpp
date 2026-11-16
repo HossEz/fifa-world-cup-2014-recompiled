@@ -82,6 +82,13 @@ const Entry kEntries[] = {
      "Estirar llena la pantalla, pero los jugadores y el HUD se ven más anchos.",
      "Ajustar mantém a forma correta, com barras pretas em telas mais largas que 16:9. Esticar "
      "preenche a tela, mas os jogadores e o HUD ficam mais largos."},
+    {"Button icons", "Iconos de botones", "Ícones dos botões"},
+    {"The controller buttons shown in the game and here. Automatic matches your controller each "
+     "time the game starts.",
+     "Los botones del mando que se muestran en el juego y aquí. Automático usa los de tu mando "
+     "cada vez que empieza el juego.",
+     "Os botões do controle mostrados no jogo e aqui. Automático usa os do seu controle sempre "
+     "que o jogo começa."},
     {"Fit", "Ajustar", "Ajustar"},
     {"Stretch", "Estirar", "Esticar"},
     {"Frame rate", "Tasa de fotogramas", "Taxa de quadros"},

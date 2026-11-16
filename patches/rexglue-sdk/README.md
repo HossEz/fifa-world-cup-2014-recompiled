@@ -739,3 +739,11 @@ shader storage). A hang that starts on a new screen most likely comes from one o
 those. A removed device reports every submission as completed, so the last real
 completed value decides which ones are kept; once nothing completes, the oldest
 64 are kept.
+
+## 0046-quiet-expected-missing-files
+
+`rex::system::SetQuietMissingFiles` lets the game leave out the NtCreateFile
+FAILED line for misses it expects. With PlayStation buttons the game reads loose
+files before its archives (pc/src/game_files.cpp), so it looks on disk for every
+file it loads: about 90% of a session's log was those misses. The game's filter
+is true only for files its archives have; other misses are still logged.
