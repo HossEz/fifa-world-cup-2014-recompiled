@@ -964,6 +964,12 @@ void Ui::SettingsScreen(float width, float height) {
       if (armed) {
         draw_->AddRectFilled(ImVec2(px, py), ImVec2(px + pill_w, py + pill_h), kAlarm, pill_h);
       } else {
+        // Focused, it fills white as the brush stroke sweeps in under it.
+        if (focus > 0) {
+          draw_->AddRectFilled(ImVec2(px, py), ImVec2(px + pill_w, py + pill_h),
+                               WithAlpha(IM_COL32_WHITE, EaseOut(focus) * (applies ? 1.0f : 0.45f)),
+                               pill_h);
+        }
         draw_->AddRect(ImVec2(px, py), ImVec2(px + pill_w, py + pill_h), ink, pill_h, 0,
                        2 * s);
       }
