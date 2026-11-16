@@ -33,7 +33,10 @@ class FolderSource : public GameSource {
          it != fs::recursive_directory_iterator(); it.increment(ec)) {
       if (ec) break;
       if (!it->is_regular_file(ec)) continue;
-      std::string relative = Lower(fs::relative(it->path(), root_, ec).generic_string());
+      // UTF-8, not generic_string(): that throws on names outside the ANSI code
+      // page (mods have them), and the launcher closed as it found the game.
+      std::u8string utf8 = fs::relative(it->path(), root_, ec).generic_u8string();
+      std::string relative = Lower(std::string(utf8.begin(), utf8.end()));
       files_.push_back(relative);
       paths_[relative] = it->path();
     }

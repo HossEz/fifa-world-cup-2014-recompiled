@@ -185,8 +185,9 @@ void Ui::BuildSections() {
     std::string location = config_->Get("game_data_root", "");
     if (location.size() >= 2 && location.front() == '"') location = location.substr(1, location.size() - 2);
     std::filesystem::path path = std::filesystem::u8path(location).make_preferred();
-    location = path.string();
-    std::string name = path.filename().string();
+    std::u8string utf8 = path.u8string(), file = path.filename().u8string();
+    location.assign(utf8.begin(), utf8.end());
+    std::string name(file.begin(), file.end());
     if (name.empty()) name = location;  // a drive's root ("E:/")
     if (name.size() > 22) name = name.substr(0, 21) + "\xE2\x80\xA6";
     Option game;
