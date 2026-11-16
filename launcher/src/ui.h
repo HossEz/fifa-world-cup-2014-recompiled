@@ -116,6 +116,8 @@ class Ui {
   // A PlayStation face button for the Xbox one's letter (A Cross, B Circle,
   // X Square, Y Triangle): its symbol in its colour on a dark button.
   void DrawPlayStationFace(float x, float y, float radius, char xbox_letter);
+  // An Xbox face button: its letter centred on a button in its colour.
+  void DrawXboxFace(float x, float y, float radius, char letter);
   void NoticeScreen(float width, float height);
   void AboutScreen(float width, float height);
   // A keycap (or, `dark`, a controller's d-pad/Start style key) ending at

@@ -776,17 +776,9 @@ void Ui::DrawHints(float width, float height, const std::vector<Hint>& hints) {
       DrawPlayStationFace(x + r, middle, r, glyph[0]);
     } else if (controller && !arrows && std::strlen(glyph) == 1) {
       // A face button in its console colour.
-      ImU32 colors[] = {IM_COL32(93, 184, 47, 255), IM_COL32(226, 65, 47, 255),
-                        IM_COL32(47, 127, 226, 255), IM_COL32(242, 194, 27, 255)};
-      int index = glyph[0] == 'A' ? 0 : glyph[0] == 'B' ? 1 : glyph[0] == 'X' ? 2 : 3;
       float r = size * 0.62f;
       x -= 10 * s + 2 * r;
-      draw_->AddCircleFilled(ImVec2(x + r, middle + 2 * s), r, IM_COL32(0, 0, 0, 90));
-      draw_->AddCircleFilled(ImVec2(x + r, middle), r, colors[index]);
-      ImVec2 letter = bold_->CalcTextSizeA(size * 0.8f, FLT_MAX, 0, glyph);
-      draw_->AddText(bold_, size * 0.8f,
-                     ImVec2(x + r - letter.x * 0.5f, middle - size * 0.8f * 0.55f),
-                     index == 3 ? kInk : IM_COL32_WHITE, glyph);
+      DrawXboxFace(x + r, middle, r, glyph[0]);
     } else {
       x -= 10 * s;
       x -= DrawKey(x, middle, size * 0.75f, glyph, controller);
@@ -1043,6 +1035,25 @@ float Ui::DrawKey(float right, float middle, float key_size, const char* text, b
   return key_w;
 }
 
+void Ui::DrawXboxFace(float x, float y, float r, char letter) {
+  float s = scale_;
+  ImU32 colors[] = {IM_COL32(93, 184, 47, 255), IM_COL32(226, 65, 47, 255),
+                    IM_COL32(47, 127, 226, 255), IM_COL32(242, 194, 27, 255)};
+  int index = letter == 'A' ? 0 : letter == 'B' ? 1 : letter == 'X' ? 2 : 3;
+  ImVec2 c(x, y);
+  draw_->AddCircleFilled(ImVec2(c.x, c.y + 2 * s), r, IM_COL32(0, 0, 0, 90));
+  draw_->AddCircleFilled(c, r, colors[index]);
+  draw_->AddCircle(c, r - 0.5f * s, IM_COL32(0, 0, 0, 60), 0, std::max(1.0f, s));
+  // The letter centred on its own outline (the font's line box sits it low).
+  float size = r * 1.3f;
+  ImWchar ch = ImWchar(letter);
+  if (const ImFontGlyph* glyph = bold_->GetFontBaked(size)->FindGlyph(ch)) {
+    ImVec2 at(c.x - (glyph->X0 + glyph->X1) * 0.5f, c.y - (glyph->Y0 + glyph->Y1) * 0.5f);
+    const char text[2] = {letter, 0};
+    draw_->AddText(bold_, size, at, index == 3 ? kInk : IM_COL32_WHITE, text);
+  }
+}
+
 void Ui::DrawPlayStationFace(float x, float y, float r, char xbox_letter) {
   float s = scale_;
   ImVec2 c(x, y);
@@ -1094,17 +1105,7 @@ void Ui::DrawGlyph(float x, float y, float size, const ControlRow& row) {
         DrawPlayStationFace(x, y, size * 0.5f, row.button[0]);
         return;
       }
-      // Face buttons in their console colours.
-      ImU32 colors[] = {IM_COL32(93, 184, 47, 255), IM_COL32(226, 65, 47, 255),
-                        IM_COL32(47, 127, 226, 255), IM_COL32(242, 194, 27, 255)};
-      char letter = row.button[0];
-      int index = letter == 'A' ? 0 : letter == 'B' ? 1 : letter == 'X' ? 2 : 3;
-      float r = size * 0.5f;
-      draw_->AddCircleFilled(ImVec2(x, y + 2 * s), r, shadow);
-      draw_->AddCircleFilled(ImVec2(x, y), r, colors[index]);
-      label_size = size * 0.6f;
-      if (index == 3) label_color = kInk;
-      label_text(row.button);
+      DrawXboxFace(x, y, size * 0.5f, row.button[0]);
       return;
     }
     case Glyph::kBumper:
