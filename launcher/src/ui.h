@@ -196,6 +196,7 @@ class Ui {
     bool mouse_focus = false;   // the focus came from the mouse: no jump into view
     int last_focus = -1, owner = -1;
     float top = 0, bottom = 0, row_h = 1, max_scroll = 0, shown = 0;
+    float bar_x = -1.0f;        // where End drew the bar (-1 before the first frame)
   };
   // Between Begin and End, row i is at the returned y + i * row_h (drawing is
   // clipped to the list). `owner`: what the list shows (a new one starts at
@@ -204,6 +205,7 @@ class Ui {
                         float bottom, float row_h, int rows, int focus, bool active);
   void EndScrollList(ScrollList& list, float bar_x, bool active);
   ScrollList controls_list_, settings_list_;
+  bool on_scroll_bar_ = false;  // the mouse is on a list's bar, so its rows don't take it
   // An action's keys, from fifawc14.toml (the default if it has none).
   std::vector<std::string> KeysOf(const std::string& setting) const;
   // Binds `name` to the focused key; "" clears a second key.

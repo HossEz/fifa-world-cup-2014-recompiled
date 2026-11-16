@@ -423,6 +423,7 @@ void Ui::SettingsCommand(Command command) {
 
 bool Ui::MouseIn(float x0, float y0, float x1, float y1) const {
   if (blocked_) return false;  // behind the update popup
+  if (on_scroll_bar_) return false;
   if (language_.Captures()) return false;
   ImVec2 mouse = ImGui::GetIO().MousePos;
   return mouse.x >= x0 && mouse.x < x1 && mouse.y >= y0 && mouse.y < y1;
@@ -1230,6 +1231,10 @@ float Ui::BeginScrollList(ScrollList& list, const char* key, int owner, float x0
   }
   list.scroll = std::clamp(list.scroll, 0.0f, list.max_scroll);
   list.shown = Anim(key, list.scroll, 0.12f);
+  // Pressing the bar must not also press the row under it.
+  if (list.max_scroll > 0 && list.bar_x >= 0) {
+    on_scroll_bar_ = list.drag >= 0 || MouseIn(list.bar_x - 8 * scale_, top, list.bar_x + 14 * scale_, bottom);
+  }
   // A little beyond the list, so the brush stroke of a row at its edge isn't cut.
   draw_->PushClipRect(ImVec2(x0, top - 6 * scale_), ImVec2(x1, bottom + 6 * scale_), true);
   return top - list.shown * row_h;
@@ -1237,6 +1242,8 @@ float Ui::BeginScrollList(ScrollList& list, const char* key, int owner, float x0
 
 void Ui::EndScrollList(ScrollList& list, float bar_x, bool active) {
   draw_->PopClipRect();
+  on_scroll_bar_ = false;
+  list.bar_x = bar_x;
   if (list.max_scroll <= 0) return;
   // The bar: drag its thumb or click the track.
   float s = scale_, bar_w = 6 * s, top = list.top, bottom = list.bottom;
