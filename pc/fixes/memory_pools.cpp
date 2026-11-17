@@ -12,7 +12,8 @@
 // build doesn't, so XPhys4KPP gets what is free at boot, less the heaps outside
 // the container and a reserve. Measured with the pool at 170 MB: 492 MB free
 // before the pools, 290 after (the container isn't physical memory), 288 at a
-// match's load, so the 64 MB reserve is far more than the game needs.
+// match's load. A 169 MB modded stadium ran the pool out at a match's training
+// drill while 61 of a 64 MB reserve were still free, so the reserve is 16 MB.
 
 #include <cstring>
 #include <string_view>
@@ -33,7 +34,7 @@ constexpr std::string_view kPhysPoolLine = "XPhys4KPP\t\tXPhysical4kAllocator\t[
 constexpr uint32_t kOriginalKb = 227104;
 // The Xbox 360 heaps outside the container (SRenderingPP, RenderingPP, GTRenderingPP, ShaderPP, RenderingRain).
 constexpr uint32_t kOtherPoolsKb = 32576;
-constexpr uint32_t kReserveKb = 64 * 1024;
+constexpr uint32_t kReserveKb = 16 * 1024;
 
 uint32_t FreePhysicalKb() {
   auto* heap = REX_KERNEL_MEMORY()->GetPhysicalHeap();
