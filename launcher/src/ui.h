@@ -80,7 +80,7 @@ class Ui {
   void SetUpdateJob(const UpdateJob* job) { update_job_ = job; }
   // Set by the host: the player chose Update (and again after a failure).
   std::function<void()> on_update;
-  // Opens a release page in the browser (the update popup's "more" line).
+  // Opens a page in the browser (the About page's GitHub link).
   std::function<void(const std::string&)> on_open_page;
 
  private:
@@ -203,8 +203,8 @@ class Ui {
   // the top). `active`: false while something else takes the input.
   float BeginScrollList(ScrollList& list, const char* key, int owner, float x0, float x1, float top,
                         float bottom, float row_h, int rows, int focus, bool active);
-  void EndScrollList(ScrollList& list, float bar_x, bool active);
-  ScrollList controls_list_, settings_list_;
+  void EndScrollList(ScrollList& list, float bar_x, bool active, uint32_t color = 0);  // 0: cream
+  ScrollList controls_list_, settings_list_, notes_list_;
   bool on_scroll_bar_ = false;  // the mouse is on a list's bar, so its rows don't take it
   // An action's keys, from fifawc14.toml (the default if it has none).
   std::vector<std::string> KeysOf(const std::string& setting) const;

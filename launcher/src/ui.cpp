@@ -1248,7 +1248,8 @@ float Ui::BeginScrollList(ScrollList& list, const char* key, int owner, float x0
   return top - list.shown * row_h;
 }
 
-void Ui::EndScrollList(ScrollList& list, float bar_x, bool active) {
+void Ui::EndScrollList(ScrollList& list, float bar_x, bool active, uint32_t color) {
+  if (!color) color = kCream;
   draw_->PopClipRect();
   on_scroll_bar_ = false;
   list.bar_x = bar_x;
@@ -1273,10 +1274,10 @@ void Ui::EndScrollList(ScrollList& list, float bar_x, bool active) {
     }
   }
   bool lit = over_bar || list.drag >= 0;
-  draw_->AddRectFilled(ImVec2(bar_x, top), ImVec2(bar_x + bar_w, bottom), WithAlpha(kCream, 0.12f),
+  draw_->AddRectFilled(ImVec2(bar_x, top), ImVec2(bar_x + bar_w, bottom), WithAlpha(color, 0.12f),
                        bar_w * 0.5f);
   draw_->AddRectFilled(ImVec2(bar_x, thumb_y), ImVec2(bar_x + bar_w, thumb_y + thumb_h),
-                       WithAlpha(kCream, lit ? 0.85f : 0.5f), bar_w * 0.5f);
+                       WithAlpha(color, lit ? 0.85f : 0.5f), bar_w * 0.5f);
 }
 
 // ------------------------------------------------------------------ Controls
@@ -1689,30 +1690,20 @@ void Ui::UpdatePopup(float width, float height) {
   float x = px + 62 * s, wrap = panel_w - 140 * s;
   State state = update_job_ ? update_job_->state() : State::kFailed;
   bool choosing = !update_job_ || state == State::kFailed;
-  // The content's height, to centre it in the panel's painted area. As many of
-  // the changes as fit (with the buttons' height, so the list doesn't change
-  // when the download starts), then a line counting the rest.
+  // The content's height, to centre it in the panel's painted area. The changes
+  // take the room left (with the buttons' height, so the list doesn't move when
+  // the download starts) and scroll when they don't fit.
   float fixed_h = 38 * s * 1.2f + 24 * s * 1.5f + 22 * s;
   if (update_job_ && state == State::kFailed) fixed_h += 18 * s * 2.6f;
   // Update now, and Later a size smaller.
   float buttons_h = (32 * s * 1.35f + 6 * s) + (26 * s * 1.35f + 6 * s);
-  float more_h = 18 * s * 1.4f + 6 * s;
-  float room = panel_h * 0.9f - 56 * s - 16 * s - fixed_h - buttons_h;
-  std::vector<float> change_h;
+  float room = std::max(18 * s * 1.4f, panel_h * 0.9f - 56 * s - 16 * s - fixed_h - buttons_h);
+  float notes_h = 0;
   for (const std::string& change : update_->changes) {
-    change_h.push_back(
-        book_->CalcTextSizeA(18 * s, FLT_MAX, wrap - 18 * s, change.c_str()).y * 1.4f + 6 * s);
+    notes_h += book_->CalcTextSizeA(18 * s, FLT_MAX, wrap - 18 * s, change.c_str()).y * 1.4f + 6 * s;
   }
-  size_t shown = change_h.size();
-  for (;;) {
-    float list_h = shown < change_h.size() ? more_h : 0.0f;
-    for (size_t i = 0; i < shown; ++i) list_h += change_h[i];
-    if (shown == 0 || list_h <= room) break;
-    --shown;
-  }
-  float content_h = fixed_h + (choosing ? buttons_h : 24 * s * 1.5f + 12 * s);
-  for (size_t i = 0; i < shown; ++i) content_h += change_h[i];
-  if (shown < change_h.size()) content_h += more_h;
+  float list_h = std::min(notes_h, room);
+  float content_h = fixed_h + list_h + (choosing ? buttons_h : 24 * s * 1.5f + 12 * s);
   float y = py + std::max(56 * s, (panel_h * 0.9f - content_h) * 0.5f);
   draw_->AddText(bold_, 38 * s, ImVec2(x, y), ink, T("Update available"));
   y += 38 * s * 1.2f;
@@ -1720,34 +1711,17 @@ void Ui::UpdatePopup(float width, float height) {
                             {update_->version, *LauncherVersion() ? LauncherVersion() : "?"});
   draw_->AddText(condensed_, 24 * s, ImVec2(x, y), soft, versions.c_str());
   y += 24 * s * 1.5f;
-  for (size_t i = 0; i < shown; ++i) {
-    draw_->AddText(book_, 18 * s, ImVec2(x, y), soft, "\xE2\x80\xA2");
-    y += DrawWrapped(book_, 18 * s, x + 18 * s, y, wrap - 18 * s, soft, update_->changes[i]) +
-         6 * s;
+  // Scrolled in steps of a line.
+  float line_h = 18 * s * 1.4f;
+  int lines = int(std::ceil(notes_h / line_h));
+  float notes_y = BeginScrollList(notes_list_, "update_notes", 0, x - 4 * s, x + wrap + 4 * s, y,
+                                  y + list_h, line_h, lines, -1, true);
+  for (const std::string& change : update_->changes) {
+    draw_->AddText(book_, 18 * s, ImVec2(x, notes_y), soft, "\xE2\x80\xA2");
+    notes_y += DrawWrapped(book_, 18 * s, x + 18 * s, notes_y, wrap - 18 * s, soft, change) + 6 * s;
   }
-  if (shown < update_->changes.size()) {
-    // A link to the release page: brighter and underlined under the mouse.
-    std::string more = Tf("+ {0} more on the release page",
-                          {std::to_string(update_->changes.size() - shown)});
-    ImVec2 size = book_->CalcTextSizeA(18 * s, FLT_MAX, 0.0f, more.c_str());
-    float link_x = x + 18 * s;
-    bool link = !update_->page_url.empty() && on_open_page;
-    bool over = link && MouseIn(link_x, y, link_x + size.x, y + size.y);
-    ImU32 link_color = WithAlpha(kInk, (over ? 0.9f : 0.5f) * t);
-    draw_->AddText(book_, 18 * s, ImVec2(link_x, y), link_color, more.c_str());
-    if (link) {
-      draw_->AddLine(ImVec2(link_x, y + size.y), ImVec2(link_x + size.x, y + size.y),
-                     WithAlpha(kInk, (over ? 0.9f : 0.3f) * t), std::max(1.0f, s));
-    }
-    if (over) {
-      ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        Sound(Audio::Effect::kSelect);
-        on_open_page(update_->page_url);
-      }
-    }
-    y += more_h;
-  }
+  EndScrollList(notes_list_, x + wrap + 12 * s, true, kInk);
+  y += list_h;
   y += 22 * s;
   if (update_job_ && state == State::kFailed) {
     DrawWrapped(book_, 18 * s, x, y, wrap, WithAlpha(kAlarm, t), update_job_->error());
