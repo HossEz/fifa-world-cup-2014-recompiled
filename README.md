@@ -46,8 +46,9 @@ To quit the game, hold **Back + Start** (**Create + Options** on PlayStation) fo
 
 The launcher's Settings set how the game runs (window, resolution, frame
 rate, Show FPS, ...) and where it's read from. A controller is recommended
-(Xbox, PlayStation and others). The keyboard works too, and its keys are on the
-Controls page.
+(Xbox, PlayStation and others). The game shows Xbox or PlayStation buttons to
+match your controller, or the ones you choose in Settings → Display → Button
+icons. The keyboard works too, and its keys can be changed on the Controls page.
 
 <img width="1920" height="1080" alt="An in-game screenshot" src="https://github.com/user-attachments/assets/416c4381-1563-47bc-a1b3-d5dd63544605" />
 
