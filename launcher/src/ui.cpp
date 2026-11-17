@@ -389,7 +389,11 @@ void Ui::SettingsCommand(Command command) {
       if (!option.is_action() && applies) {
         option.Step(ConfigFor(option), command == Command::kLeft ? -1 : 1);
         Sound(Audio::Effect::kChange);
-        if (option.local) ApplyLocalSettings();  // may rebuild the sections
+        if (option.local) {
+          ApplyLocalSettings();  // may rebuild the sections
+        } else if (option.choices[0].writes.count("monitor")) {
+          BuildSections();  // Window size lists what fits the new monitor
+        }
       }
       break;
     case Command::kAccept:
@@ -398,7 +402,11 @@ void Ui::SettingsCommand(Command command) {
       } else if (!option.is_action()) {
         option.Step(ConfigFor(option), 1);
         Sound(Audio::Effect::kChange);
-        if (option.local) ApplyLocalSettings();  // may rebuild the sections
+        if (option.local) {
+          ApplyLocalSettings();  // may rebuild the sections
+        } else if (option.choices[0].writes.count("monitor")) {
+          BuildSections();  // Window size lists what fits the new monitor
+        }
       } else if (option.confirm && armed_option_ != option_focus_) {
         armed_option_ = option_focus_;  // press again to confirm
         Sound(Audio::Effect::kSelect);

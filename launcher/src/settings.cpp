@@ -280,6 +280,34 @@ void CreateDesktopShortcut(const fs::path& data_folder) {
   }
 }
 
+// The resolution of the screen the game opens on (the `monitor` setting: 0 the
+// main one, otherwise its place with the main one first, as the game counts), in
+// real pixels. From its display mode, since the launcher isn't DPI aware and
+// Windows scales the sizes it reports to it.
+std::pair<int, int> ScreenSize(int monitor) {
+  std::vector<std::wstring> devices;
+  EnumDisplayMonitors(
+      nullptr, nullptr,
+      [](HMONITOR handle, HDC, LPRECT, LPARAM list) -> BOOL {
+        auto& names = *reinterpret_cast<std::vector<std::wstring>*>(list);
+        MONITORINFOEXW info = {};
+        info.cbSize = sizeof(info);
+        if (GetMonitorInfoW(handle, &info)) {
+          names.insert(info.dwFlags & MONITORINFOF_PRIMARY ? names.begin() : names.end(),
+                       info.szDevice);
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&devices));
+  size_t index = monitor >= 1 && size_t(monitor) <= devices.size() ? size_t(monitor - 1) : 0;
+  DEVMODEW mode = {};
+  mode.dmSize = sizeof(mode);
+  if (devices.empty() || !EnumDisplaySettingsW(devices[index].c_str(), ENUM_CURRENT_SETTINGS, &mode)) {
+    return {1920, 1080};
+  }
+  return {int(mode.dmPelsWidth), int(mode.dmPelsHeight)};
+}
+
 Option OnOff(const char* label, std::string key, std::string fallback, std::string help) {
   Option option;
   option.label = T(label);
@@ -325,7 +353,13 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
                   "as fits your screen. A size larger than your screen is shrunk to fit.");
     size.applies = [](const GameConfig& config) { return config.Get("fullscreen", "true") == "false"; };
     size.choices = {{T("Automatic"), {{"windowed_width", "0"}, {"windowed_height", "0"}}, {}}};
-    for (auto [w, h] : {std::pair{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}}) {
+    // The 16:9 sizes that fit the chosen monitor (1280 x 720 always). Changing
+    // Monitor builds the list again (ui.cpp).
+    int monitor_index = std::atoi(GameConfig(data_folder / "fifawc14.toml").Get("monitor", "0").c_str());
+    auto [screen_w, screen_h] = ScreenSize(monitor_index);
+    for (auto [w, h] : {std::pair{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}, {3200, 1800},
+                        {3840, 2160}, {5120, 2880}}) {
+      if (w > 1280 && (w > screen_w || h > screen_h)) continue;
       size.choices.push_back({std::to_string(w) + " x " + std::to_string(h),
                               {{"windowed_width", std::to_string(w)},
                                {"windowed_height", std::to_string(h)}},
