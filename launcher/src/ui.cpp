@@ -1,8 +1,11 @@
 #include "ui.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 
 #include <imgui.h>
 
@@ -157,7 +160,21 @@ bool Ui::Load(ID3D11Device* device, const GameFiles& files, const std::filesyste
     ImFontConfig config;
     config.FontDataOwnedByAtlas = false;
     std::vector<uint8_t>& bytes = font_data_.back();
-    return io.Fonts->AddFontFromMemoryTTF(bytes.data(), int(bytes.size()), 32.0f, &config);
+    ImFont* font = io.Fonts->AddFontFromMemoryTTF(bytes.data(), int(bytes.size()), 32.0f, &config);
+    // Futura has only Latin letters: arrows and other symbols (a "→" in the
+    // release notes) come from Windows' Segoe UI fonts instead of showing "?".
+    const char* windir = std::getenv("WINDIR");
+    std::filesystem::path fonts = std::filesystem::path(windir ? windir : "C:\\Windows") / "Fonts";
+    for (const char* fallback : {"segoeui.ttf", "seguisym.ttf"}) {
+      std::error_code ec;
+      if (!font || !std::filesystem::exists(fonts / fallback, ec)) continue;
+      ImFontConfig merge;
+      merge.MergeMode = true;
+      merge.DstFont = font;
+      std::u8string path = (fonts / fallback).u8string();
+      io.Fonts->AddFontFromFileTTF(reinterpret_cast<const char*>(path.c_str()), 32.0f, &merge);
+    }
+    return font;
   };
   bold_ = add_font("data/ui/fonts/futurastd-bold.ttf");
   book_ = add_font("data/ui/fonts/futurastd-book.ttf");
@@ -1714,11 +1731,68 @@ void Ui::UpdatePopup(float width, float height) {
   // Scrolled in steps of a line.
   float line_h = 18 * s * 1.4f;
   int lines = int(std::ceil(notes_h / line_h));
+  notes_list_.scroll += scroll_input_ * 14.0f * dt_;  // lines a second, held fully
   float notes_y = BeginScrollList(notes_list_, "update_notes", 0, x - 4 * s, x + wrap + 4 * s, y,
                                   y + list_h, line_h, lines, -1, true);
+  // "#23" in a change links to that issue, as on the release page. The issues
+  // page is next to the release's page (.../releases/tag/v1.0 -> .../issues/).
+  std::string issues;
+  if (size_t at = update_->page_url.find("/releases/"); at != std::string::npos && on_open_page) {
+    issues = update_->page_url.substr(0, at) + "/issues/";
+  }
+  float note_size = 18 * s, list_top = y, list_bottom = y + list_h;
   for (const std::string& change : update_->changes) {
-    draw_->AddText(book_, 18 * s, ImVec2(x, notes_y), soft, "\xE2\x80\xA2");
-    notes_y += DrawWrapped(book_, 18 * s, x + 18 * s, notes_y, wrap - 18 * s, soft, change) + 6 * s;
+    draw_->AddText(book_, note_size, ImVec2(x, notes_y), soft, "\xE2\x80\xA2");
+    // Wrapped as DrawWrapped does, each line drawn in pieces so a link has its place.
+    const char* line = change.c_str();
+    const char* end = line + change.size();
+    float text_x = x + 18 * s;
+    while (line < end) {
+      const char* next = book_->CalcWordWrapPosition(note_size, line, end, wrap - 18 * s);
+      if (next == line) ++next;
+      float lx = text_x;
+      for (const char* p = line; p < next;) {
+        // A link: '#' and digits standing alone, as in "(#23, #25)". After a
+        // space or bracket and before a space or punctuation, so "C#1" or
+        // "#1-ranked" stay text.
+        const char* q = p;
+        bool link = !issues.empty() && *p == '#' && p + 1 < next && std::isdigit((unsigned char)p[1]) &&
+                    (p == change.c_str() || std::strchr(" ([", p[-1]));
+        if (link) {
+          q = p + 1;
+          while (q < next && std::isdigit((unsigned char)*q)) ++q;
+          link = q == next || std::strchr(" ,.;:!?)]", *q);
+        }
+        if (!link) {  // plain text up to the next '#'
+          q = p + 1;
+          while (q < next && *q != '#') ++q;
+          draw_->AddText(book_, note_size, ImVec2(lx, notes_y), soft, p, q);
+          lx += book_->CalcTextSizeA(note_size, FLT_MAX, 0.0f, p, q).x;
+          p = q;
+          continue;
+        }
+        float w = book_->CalcTextSizeA(note_size, FLT_MAX, 0.0f, p, q).x;
+        bool over = MouseIn(lx, notes_y, lx + w, notes_y + note_size * 1.2f) &&
+                    MouseIn(x, list_top, x + wrap, list_bottom);
+        draw_->AddText(book_, note_size, ImVec2(lx, notes_y), WithAlpha(kInk, (over ? 1.0f : 0.85f) * t), p, q);
+        float under = notes_y + note_size * 1.1f;
+        draw_->AddLine(ImVec2(lx, under), ImVec2(lx + w, under), WithAlpha(kInk, (over ? 0.9f : 0.35f) * t),
+                       std::max(1.0f, s));
+        if (over) {
+          ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+          if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            Sound(Audio::Effect::kSelect);
+            on_open_page(issues + std::string(p + 1, q));
+          }
+        }
+        lx += w;
+        p = q;
+      }
+      notes_y += note_size * 1.4f;
+      line = next;
+      while (line < end && *line == ' ') ++line;
+    }
+    notes_y += 6 * s;
   }
   EndScrollList(notes_list_, x + wrap + 12 * s, true, kInk);
   y += list_h;
@@ -1746,8 +1820,10 @@ void Ui::UpdatePopup(float width, float height) {
       }
       y += 6 * s;
     }
-    DrawHints(width, height, {{"Enter", "A", "Select", Command::kAccept},
-                              {"Esc", "B", "Later", Command::kBack}});
+    std::vector<Hint> hints = {{"Enter", "A", "Select", Command::kAccept},
+                               {"Esc", "B", "Later", Command::kBack}};
+    if (notes_h > room) hints.insert(hints.begin(), Hint{"PgDn", "RS", "Scroll"});
+    DrawHints(width, height, hints);
   } else {
     // Progress: a bar while downloading, then what's happening.
     uint64_t done = update_job_->downloaded(), total = update_job_->total();

@@ -1,6 +1,7 @@
 #include "controllers.h"
 
 #include <chrono>
+#include <cmath>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -76,6 +77,7 @@ void Controllers::Run() {
     }
     SDL_free(ids);
     uint32_t buttons = 0;
+    float scroll = 0.0f;
     for (SDL_Gamepad* pad : pads) {
       if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_UP)) buttons |= kUp;
       if (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)) buttons |= kDown;
@@ -90,8 +92,12 @@ void Controllers::Run() {
       if (y > dead) buttons |= kDown;
       if (x < -dead) buttons |= kLeft;
       if (x > dead) buttons |= kRight;
+      // The right stick scrolls, from a smaller dead zone than the menus' moves.
+      float ry = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
+      if (std::abs(ry) > 0.25f && std::abs(ry) > std::abs(scroll)) scroll = ry;
     }
     buttons_ = buttons;
+    scroll_ = scroll;
     std::this_thread::sleep_for(std::chrono::milliseconds(8));
   }
   for (SDL_Gamepad* pad : pads) SDL_CloseGamepad(pad);

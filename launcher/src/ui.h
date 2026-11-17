@@ -55,6 +55,8 @@ class Ui {
   void SkipSong();
   // The controller in use; the Button icons setting decides the hints unless it's Automatic.
   void SetControllerStyle(ControllerStyle detected);
+  // Held scrolling, -1 (up) to 1 (down): the right stick or Page Up / Page Down.
+  void SetScrollInput(float amount) { scroll_input_ = amount; }
 
   // Draws one frame for a window of `width` x `height` pixels. `dt` in seconds.
   void Frame(float width, float height, float dt);
@@ -205,7 +207,8 @@ class Ui {
                         float bottom, float row_h, int rows, int focus, bool active);
   void EndScrollList(ScrollList& list, float bar_x, bool active, uint32_t color = 0);  // 0: cream
   ScrollList controls_list_, settings_list_, notes_list_;
-  bool on_scroll_bar_ = false;  // the mouse is on a list's bar, so its rows don't take it
+  bool on_scroll_bar_ = false;
+  float scroll_input_ = 0.0f;  // the mouse is on a list's bar, so its rows don't take it
   // An action's keys, from fifawc14.toml (the default if it has none).
   std::vector<std::string> KeysOf(const std::string& setting) const;
   // Binds `name` to the focused key; "" clears a second key.

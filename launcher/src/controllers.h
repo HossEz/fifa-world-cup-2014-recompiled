@@ -31,6 +31,8 @@ class Controllers {
   uint32_t Buttons() const { return buttons_.load(std::memory_order_relaxed); }
   // The last connected controller is a PlayStation one (for the hints).
   bool PlayStation() const { return playstation_.load(std::memory_order_relaxed); }
+  // The right stick's up/down, -1 (up) to 1 (down), 0 inside the dead zone.
+  float Scroll() const { return scroll_.load(std::memory_order_relaxed); }
 
  private:
   void Run();
@@ -38,6 +40,7 @@ class Controllers {
   std::atomic<bool> quit_{false};
   std::atomic<uint32_t> buttons_{0};
   std::atomic<bool> playstation_{false};
+  std::atomic<float> scroll_{0.0f};
 };
 
 }  // namespace launcher

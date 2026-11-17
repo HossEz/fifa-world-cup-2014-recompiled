@@ -417,6 +417,12 @@ void PollController(float dt) {
   if (g_ui) {
     g_ui->SetControllerStyle(g_controllers.PlayStation() ? launcher::ControllerStyle::kPlayStation
                                                          : launcher::ControllerStyle::kXbox);
+    float scroll = g_controllers.Scroll();
+    if (GetForegroundWindow() == g_window) {
+      if (GetKeyState(VK_NEXT) & 0x8000) scroll += 1.0f;
+      if (GetKeyState(VK_PRIOR) & 0x8000) scroll -= 1.0f;
+    }
+    g_ui->SetScrollInput(std::clamp(scroll, -1.0f, 1.0f));
   }
   uint32_t pressed = buttons & ~previous;
   const uint32_t directions = kUp | kDown | kLeft | kRight;

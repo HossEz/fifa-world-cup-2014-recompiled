@@ -27,6 +27,7 @@ const Entry kEntries[] = {
     {"Change", "Cambiar", "Mudar"},
     {"Continue", "Continuar", "Continuar"},
     {"Later", "Más tarde", "Mais tarde"},
+    {"Scroll", "Desplazar", "Rolar"},
     {"Cancel", "Cancelar", "Cancelar"},
     {"Sure? Press again", "¿Seguro? Presiona otra vez", "Tem certeza? Aperte de novo"},
     {"Quit the launcher?", "¿Salir del launcher?", "Sair do launcher?"},
