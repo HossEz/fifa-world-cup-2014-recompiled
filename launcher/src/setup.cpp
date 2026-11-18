@@ -264,7 +264,7 @@ void Setup::Frame(float width, float height, float dt) {
       case Result::kNoGame:
         heading = source_ ? T("No game in that folder") : T("That's not a game folder or .iso");
         body = source_ ? T("Choose the folder that has default.xex in it, or the game's .iso.")
-                       : T("Choose the game's .iso, or its folder (the one with default.xex).");
+                       : T("Choose your copy of the game's .iso, or its folder (the one with default.xex).");
         break;
       case Result::kOtherGame:
         heading = T("That's a different game");

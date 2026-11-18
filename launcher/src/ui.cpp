@@ -1631,8 +1631,7 @@ void Ui::NoticeScreen(float width, float height) {
         "game. It runs on your own copy of the game, and nothing of the game's is included."),
       T("A controller is recommended (Xbox, PlayStation and others work). The keyboard works "
         "too, and its keys can be changed on the Controls page."),
-      T("Settings here change how the game looks and runs, from the next Play. Show FPS "
-        "(Settings, Display) puts the frame rate in the game's corner.")};
+      T("Settings here change how the game looks and runs, from the next Play.")};
   float text_size = 19 * s;
   for (const char* paragraph : paragraphs) {
     y += DrawWrapped(book_, text_size, x, y, wrap, kCreamDim, paragraph) + text_size * 0.5f;

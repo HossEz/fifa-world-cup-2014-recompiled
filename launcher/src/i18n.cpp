@@ -373,13 +373,11 @@ const Entry kEntries[] = {
      "funciona, y sus teclas se pueden cambiar en la página Controles.",
      "É recomendado usar um controle (Xbox, PlayStation e outros funcionam). O teclado também "
      "funciona, e as teclas podem ser mudadas na página Controles."},
-    {"Settings here change how the game looks and runs, from the next Play. Show FPS (Settings, "
-     "Display) puts the frame rate in the game's corner.",
+    {"Settings here change how the game looks and runs, from the next Play.",
      "Los ajustes de aquí cambian cómo se ve y funciona el juego, a partir de la próxima vez que "
-     "elijas Jugar. "
-     "Mostrar FPS (Ajustes, Pantalla) muestra los FPS en una esquina del juego.",
+     "elijas Jugar.",
      "As configurações daqui mudam como o jogo fica e roda, a partir da próxima vez que você "
-     "escolher Jogar. Mostrar FPS (Configurações, Tela) mostra os FPS no canto do jogo."},
+     "escolher Jogar."},
     {"Got it", "Entendido", "Entendi"},
 
     // Updates.
@@ -495,9 +493,9 @@ const Entry kEntries[] = {
      "Escolha a pasta que contém o default.xex, ou o .iso do jogo."},
     {"That's not a game folder or .iso", "Eso no es una carpeta de juego ni un .iso",
      "Isso não é uma pasta de jogo nem um .iso"},
-    {"Choose the game's .iso, or its folder (the one with default.xex).",
-     "Elige el .iso del juego o su carpeta (la que tiene default.xex).",
-     "Escolha o .iso do jogo ou a pasta dele (a que tem o default.xex)."},
+    {"Choose your copy of the game's .iso, or its folder (the one with default.xex).",
+     "Elige tu copia del .iso del juego o su carpeta (la que tiene default.xex).",
+     "Escolha sua cópia do .iso do jogo ou a pasta dele (a que tem o default.xex)."},
     {"That's a different game", "Ese es otro juego", "Esse é outro jogo"},
     {"It's an Xbox 360 game, but not 2014 FIFA World Cup Brazil. Choose your copy of 2014 FIFA "
      "World Cup Brazil.",
