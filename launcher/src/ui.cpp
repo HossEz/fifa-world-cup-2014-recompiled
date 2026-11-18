@@ -1627,11 +1627,11 @@ void Ui::NoticeScreen(float width, float height) {
   draw_->AddText(bold_, 40 * s, ImVec2(x, y), kCream, T("Before you play"));
   y += 40 * s * 1.1f + 22 * s;
   const char* paragraphs[] = {
-      T("An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
-        "game. It runs on your own copy of the game, and nothing of the game's is included."),
-      T("A controller is recommended (Xbox, PlayStation and others work). The keyboard works "
-        "too, and its keys can be changed on the Controls page."),
-      T("Settings here change how the game looks and runs, from the next Play.")};
+      T("This is an unofficial PC version of 2014 FIFA World Cup Brazil, brought over from the "
+        "Xbox 360 by recompiling the original game."),
+      T("It plays best with a controller, but the keyboard works too, and you can set up your own "
+        "keys on the Controls page."),
+      T("If you run into a problem or need help, open an issue on GitHub."), T("Have fun!")};
   float text_size = 19 * s;
   for (const char* paragraph : paragraphs) {
     y += DrawWrapped(book_, text_size, x, y, wrap, kCreamDim, paragraph) + text_size * 0.5f;

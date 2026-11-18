@@ -361,23 +361,22 @@ const Entry kEntries[] = {
 
     // The first start's welcome.
     {"Before you play", "Antes de jugar", "Antes de jogar"},
-    {"An unofficial PC version of 2014 FIFA World Cup Brazil, made by recompiling the Xbox 360 "
-     "game. It runs on your own copy of the game, and nothing of the game's is included.",
-     "Una versión no oficial para PC de 2014 FIFA World Cup Brazil, hecha recompilando el juego "
-     "de Xbox 360. Funciona con tu propia copia del juego y no incluye nada del juego.",
-     "Uma versão não oficial para PC do 2014 FIFA World Cup Brazil, feita recompilando o jogo de "
-     "Xbox 360. Ela roda com a sua própria cópia do jogo, e nada do jogo está incluído."},
-    {"A controller is recommended (Xbox, PlayStation and others work). The keyboard works too, "
-     "and its keys can be changed on the Controls page.",
-     "Se recomienda un control (funcionan los de Xbox, PlayStation y otros). El teclado también "
-     "funciona, y sus teclas se pueden cambiar en la página Controles.",
-     "É recomendado usar um controle (Xbox, PlayStation e outros funcionam). O teclado também "
-     "funciona, e as teclas podem ser mudadas na página Controles."},
-    {"Settings here change how the game looks and runs, from the next Play.",
-     "Los ajustes de aquí cambian cómo se ve y funciona el juego, a partir de la próxima vez que "
-     "elijas Jugar.",
-     "As configurações daqui mudam como o jogo fica e roda, a partir da próxima vez que você "
-     "escolher Jogar."},
+    {"This is an unofficial PC version of 2014 FIFA World Cup Brazil, brought over from the Xbox "
+     "360 by recompiling the original game.",
+     "Esta es una versión no oficial para PC de 2014 FIFA World Cup Brazil, traída desde Xbox 360 "
+     "recompilando el juego original.",
+     "Esta é uma versão não oficial para PC do 2014 FIFA World Cup Brazil, trazida do Xbox 360 "
+     "recompilando o jogo original."},
+    {"It plays best with a controller, but the keyboard works too, and you can set up your own "
+     "keys on the Controls page.",
+     "Se juega mejor con un control, pero el teclado también funciona, y puedes configurar tus "
+     "propias teclas en la página Controles.",
+     "É melhor jogar com um controle, mas o teclado também funciona, e você pode configurar suas "
+     "próprias teclas na página Controles."},
+    {"If you run into a problem or need help, open an issue on GitHub.",
+     "Si tienes algún problema o necesitas ayuda, abre un issue en GitHub.",
+     "Se tiver algum problema ou precisar de ajuda, abra uma issue no GitHub."},
+    {"Have fun!", "¡Diviértete!", "Divirta-se!"},
     {"Got it", "Entendido", "Entendi"},
 
     // Updates.
