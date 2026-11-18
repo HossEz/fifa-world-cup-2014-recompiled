@@ -106,10 +106,10 @@ const std::vector<ControlRow>& KeyboardLayout() {
       {"Move down", "L", Glyph::kStick, "keybind_lstick_down"},
       {"Move left", "L", Glyph::kStick, "keybind_lstick_left"},
       {"Move right", "L", Glyph::kStick, "keybind_lstick_right"},
-      {"Skill move up", "R", Glyph::kStick, "keybind_rstick_up"},
-      {"Skill move down", "R", Glyph::kStick, "keybind_rstick_down"},
-      {"Skill move left", "R", Glyph::kStick, "keybind_rstick_left"},
-      {"Skill move right", "R", Glyph::kStick, "keybind_rstick_right"},
+      {"Right stick up", "R", Glyph::kStick, "keybind_rstick_up"},
+      {"Right stick down", "R", Glyph::kStick, "keybind_rstick_down"},
+      {"Right stick left", "R", Glyph::kStick, "keybind_rstick_left"},
+      {"Right stick right", "R", Glyph::kStick, "keybind_rstick_right"},
       {"Left stick press", "L3", Glyph::kStick, "keybind_lstick_press"},
       {"Right stick press", "R3", Glyph::kStick, "keybind_rstick_press"},
       {"Tactics", "D-pad", Glyph::kPad, "keybind_dpad_up"},
@@ -117,7 +117,7 @@ const std::vector<ControlRow>& KeyboardLayout() {
       {"More defensive", "D-pad", Glyph::kPad, "keybind_dpad_left"},
       {"More attacking", "D-pad", Glyph::kPad, "keybind_dpad_right"},
       {"Pause", "Start", Glyph::kSmall, "keybind_start"},
-      {"Help", "Back", Glyph::kSmall, "keybind_back"},
+      {"Switch to goalkeeper", "Back", Glyph::kSmall, "keybind_back"},
   };
   return layout;
 }
