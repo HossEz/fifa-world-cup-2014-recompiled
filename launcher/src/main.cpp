@@ -176,14 +176,17 @@ bool CreateDevice(HWND window) {
   return true;
 }
 
-// The game's data folder from fifawc14.toml (game_data_root = "...").
+// The game's data folder from fifawc14.toml (game_data_root = "..." or '...',
+// the second as other tools like RecompLauncher may write it).
 fs::path GameDataRoot(const fs::path& data_folder) {
   std::ifstream config(data_folder / "fifawc14.toml");
   std::string line;
-  std::regex pattern(R"(^\s*game_data_root\s*=\s*"([^"]*)\")");
+  std::regex pattern(R"re(^\s*game_data_root\s*=\s*(?:"([^"]*)"|'([^']*)'))re");
   std::smatch match;
   while (std::getline(config, line)) {
-    if (std::regex_search(line, match, pattern)) return fs::u8path(match[1].str());
+    if (std::regex_search(line, match, pattern)) {
+      return fs::u8path(match[1].matched ? match[1].str() : match[2].str());
+    }
   }
   return {};
 }
@@ -936,7 +939,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   std::unique_ptr<launcher::UpdateJob> update_job;
   {
     launcher::GameConfig settings(data_folder / "launcher.toml");
-    bool wanted = settings.Get("check_updates", "true") != "false";
+    // RecompLauncher sets RECOMPLAUNCHER and brings the updates itself.
+    bool wanted = settings.Get("check_updates", "true") != "false" &&
+                  GetEnvironmentVariableW(L"RECOMPLAUNCHER", nullptr, 0) == 0;
     if (update_feed_given || (wanted && install_kind != launcher::InstallKind::kDeveloper)) {
       update_check = std::async(std::launch::async, launcher::CheckForUpdate, update_feed,
                                 std::string(launcher::LauncherVersion()));
