@@ -7,7 +7,14 @@
       "id": "game",
       "label": "Your copy of 2014 FIFA World Cup Brazil for Xbox 360. Its disc image (.iso), or its folder with default.xex.",
       "formats": [{ "type": "file", "extensions": ["iso"] }, { "type": "folder" }],
-      "check": { "file": "default.xex", "xdvdfs": "default.xex" }
+      "check": { "file": "default.xex", "xdvdfs": "default.xex" },
+      "dumps": [
+        { "name": "Europe (En, De, It)", "size": 8738846720, "crc32": "df51f920" },
+        { "name": "Europe (Nl, Fr, Es)", "size": 8738846720, "crc32": "8ef7feca" },
+        { "name": "USA", "size": 8738846720, "crc32": "0ebe23b3" },
+        { "name": "Japan", "size": 8738846720, "crc32": "17ee7481" },
+        { "name": "Brazil", "size": 8738846720, "crc32": "89c4a6a3" }
+      ]
     }
   ],
   "start": { "program": ["Launcher.exe"] },
