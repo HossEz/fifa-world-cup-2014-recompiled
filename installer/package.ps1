@@ -70,10 +70,11 @@ $found = Get-ChildItem $folder -Recurse -Include $forbidden
 if ($found) { throw "Not for release: $($found.Name -join ', ')" }
 
 # The portable zip has portable.txt, which keeps its settings next to it; the
-# installer's copy doesn't (its settings go to Documents).
-Copy-Item "installer\portable.txt" $folder
+# installer's copy doesn't (its settings go to Documents). RecompLauncher
+# installs this zip and reads recomplauncher.json from it.
+Copy-Item "installer\portable.txt", "installer\recomplauncher.json" $folder
 Compress-Archive -Path $folder -DestinationPath (Join-Path $release "$name-portable.zip")
-Remove-Item (Join-Path $folder "portable.txt")
+Remove-Item (Join-Path $folder "portable.txt"), (Join-Path $folder "recomplauncher.json")
 Compress-Archive -Path "$symbols\*" -DestinationPath (Join-Path $release "$name-symbols.zip")
 Remove-Item -Recurse -Force $symbols
 
