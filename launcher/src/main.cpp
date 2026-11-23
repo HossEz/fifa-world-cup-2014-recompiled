@@ -250,17 +250,15 @@ std::string StartGame(const fs::path& game_folder) {
   return {};
 }
 
-// Why the game stopped, if it said: the SDK logs "Guest stopped: <reason>"
-// before the debugger break that ends it (error 0x80000003, SDK patch 0022).
+// What follows `marker` in its last line this run of the game logged, or "".
 // Players send a screenshot of the message more often than the log.
-std::string GameStopReason() {
+std::string LastGameLogLine(const std::string& marker) {
   std::error_code ec;
   uintmax_t size = fs::file_size(g_game_log, ec);
   if (ec) return {};
   std::ifstream log(g_game_log, std::ios::binary);
   if (size >= g_game_log_start) log.seekg(std::streamoff(g_game_log_start));
   std::string line, reason;
-  const std::string marker = "Guest stopped: ";
   while (std::getline(log, line)) {
     size_t at = line.find(marker);
     if (at != std::string::npos) reason = line.substr(at + marker.size());
@@ -288,9 +286,19 @@ std::string GameExitMessage(DWORD code) {
                         "in {0}. Pick the game again in Settings, Data, Game.",
                         {reinterpret_cast<const char*>(folder.c_str())});
   }
+  // No Direct3D 12 graphics card: the SDK logs this line, then std::abort() ends
+  // the game with 0xC0000409 and its message goes to a console nobody sees.
+  if (code == 0xC0000409 &&
+      !LastGameLogLine("Failed to get an adapter supporting Direct3D 12").empty()) {
+    launcher::Log("game stopped: no graphics card with Direct3D 12");
+    return T("The game stopped because your graphics card or its driver doesn't support "
+             "Direct3D 12, which the game needs.");
+  }
   char text[16];
   std::snprintf(text, sizeof(text), "0x%08lX", static_cast<unsigned long>(code));
-  std::string reason = GameStopReason();
+  // The SDK logs "Guest stopped: <reason>" before the debugger break that ends
+  // the game (error 0x80000003, SDK patch 0022).
+  std::string reason = LastGameLogLine("Guest stopped: ");
   if (!reason.empty()) launcher::Log("game stopped: %s", reason.c_str());
   std::string message = launcher::Tf("The game closed unexpectedly (error {0}). Please report it with "
                       "fifawc14.log (Settings, Data, Logs opens its folder).",

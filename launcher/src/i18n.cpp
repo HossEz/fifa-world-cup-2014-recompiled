@@ -439,6 +439,12 @@ const Entry kEntries[] = {
      "desde 2008, AMD desde 2011).",
      "O jogo parou porque seu processador não é compatível com SSE4.2, que o jogo precisa (Intel a "
      "partir de 2008, AMD a partir de 2011)."},
+    {"The game stopped because your graphics card or its driver doesn't support Direct3D 12, "
+     "which the game needs.",
+     "El juego se detuvo porque tu tarjeta gráfica o su driver no es compatible con Direct3D 12, "
+     "que el juego necesita.",
+     "O jogo parou porque sua placa de vídeo ou o driver dela não é compatível com Direct3D 12, "
+     "que o jogo precisa."},
     {"The game couldn't read where the game files are from fifawc14.toml in {0}. Pick the game "
      "again in Settings, Data, Game.",
      "El juego no pudo leer dónde están sus archivos desde fifawc14.toml en {0}. Vuelve a elegir "
