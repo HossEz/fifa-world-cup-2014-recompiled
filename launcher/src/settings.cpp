@@ -480,9 +480,43 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   }
   sections.push_back(graphics);
 
-  // This menu's own sound; the game's volume is in the game's own settings.
-  Section sound{T("Menu sound"), 3, {}};
+  // The launcher itself: what it does after the game, and this menu's own sound
+  // (the game's volume is in the game's own settings).
+  Section app{T("Launcher"), 3, {}};
   {
+    // Unset, it closes under RecompLauncher, which backs up the saves once the
+    // launcher has closed (main.cpp).
+    Option after;
+    after.label = T("After the game closes");
+    after.help = T("Close the launcher takes you back to the desktop when you quit the game. "
+                   "If the game stops with an error, the launcher still shows why.");
+    after.choices = {{T("Show this menu"), {{"after_game", "\"menu\""}}, {}},
+                     {T("Close the launcher"), {{"after_game", "\"close\""}}, {}}};
+    bool recomplauncher = GetEnvironmentVariableW(L"RECOMPLAUNCHER", nullptr, 0) != 0;
+    after.defaults = {{"after_game", recomplauncher ? "\"close\"" : "\"menu\""}};
+    after.local = true;
+    app.options.push_back(after);
+
+    Option updates = OnOff("Check for updates", "check_updates", "true",
+                           T("At start, asks this project's GitHub page whether a newer version "
+                             "is out, and offers it. Nothing is sent about you or your game."));
+    updates.local = true;
+    app.options.push_back(updates);
+
+    Option shortcut;
+    shortcut.label = T("Desktop shortcut");
+    shortcut.action = T("Create");
+    shortcut.info = [] { return HasDesktopShortcut() ? std::string(T("On desktop")) : std::string(); };
+    shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
+    shortcut.outcome = [] {
+      return HasDesktopShortcut()
+                 ? std::make_pair(std::string(T("The shortcut is on your desktop.")), true)
+                 : std::make_pair(std::string(T("The shortcut couldn't be created.")), false);
+    };
+    shortcut.help = T("A shortcut to this launcher on your desktop, with the game's icon. Useful "
+                      "for the portable version, or if you deleted the one the installer made.");
+    app.options.push_back(shortcut);
+
     auto percent = [](const char* label, std::string key, std::string fallback, std::string help) {
       Option option;
       option.label = T(label);
@@ -502,17 +536,17 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
                          only_here("The game's EA Trax soundtrack, shuffled, while you're in "
                                    "this menu."));
     music.local = true;
-    sound.options.push_back(music);
-    sound.options.push_back(percent("Music volume", "music_volume", "100",
-                                    only_here("How loud this menu's music is.")));
+    app.options.push_back(music);
+    app.options.push_back(percent("Music volume", "music_volume", "100",
+                                  only_here("How loud this menu's music is.")));
     Option sounds = OnOff("Sounds", "menu_sounds", "true",
                           only_here("The game's menu sounds as you move, select and go back."));
     sounds.local = true;
-    sound.options.push_back(sounds);
-    sound.options.push_back(percent("Sounds volume", "sounds_volume", "100",
-                                    only_here("How loud this menu's sounds are.")));
+    app.options.push_back(sounds);
+    app.options.push_back(percent("Sounds volume", "sounds_volume", "100",
+                                  only_here("How loud this menu's sounds are.")));
   }
-  sections.push_back(sound);
+  sections.push_back(app);
 
   Section data{T("Data"), 2, {}};
   {
@@ -567,25 +601,6 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     logs.run = [data_folder] { OpenFolder(data_folder); };
     data.options.push_back(logs);
 
-    Option updates = OnOff("Check for updates", "check_updates", "true",
-                           T("At start, asks this project's GitHub page whether a newer version "
-                             "is out, and offers it. Nothing is sent about you or your game."));
-    updates.local = true;
-    data.options.push_back(updates);
-
-    Option shortcut;
-    shortcut.label = T("Desktop shortcut");
-    shortcut.action = T("Create");
-    shortcut.info = [] { return HasDesktopShortcut() ? std::string(T("On desktop")) : std::string(); };
-    shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
-    shortcut.outcome = [] {
-      return HasDesktopShortcut()
-                 ? std::make_pair(std::string(T("The shortcut is on your desktop.")), true)
-                 : std::make_pair(std::string(T("The shortcut couldn't be created.")), false);
-    };
-    shortcut.help = T("A shortcut to this launcher on your desktop, with the game's icon. Useful "
-                      "for the portable version, or if you deleted the one the installer made.");
-    data.options.push_back(shortcut);
   }
   sections.push_back(data);
   return sections;

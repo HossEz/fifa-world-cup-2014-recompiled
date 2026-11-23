@@ -193,6 +193,11 @@ fs::path GameDataRoot(const fs::path& data_folder) {
 
 fs::path DataFolder(const fs::path& game_folder);
 
+// RecompLauncher sets RECOMPLAUNCHER for every game it starts.
+bool StartedByRecompLauncher() {
+  return GetEnvironmentVariableW(L"RECOMPLAUNCHER", nullptr, 0) != 0;
+}
+
 // The refresh rate of the screen the game opens on (the `monitor` setting: 0 the
 // main one, otherwise its place with the main one first, as the game counts), or
 // 0 if Windows doesn't say.
@@ -939,9 +944,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
   std::unique_ptr<launcher::UpdateJob> update_job;
   {
     launcher::GameConfig settings(data_folder / "launcher.toml");
-    // RecompLauncher sets RECOMPLAUNCHER and brings the updates itself.
-    bool wanted = settings.Get("check_updates", "true") != "false" &&
-                  GetEnvironmentVariableW(L"RECOMPLAUNCHER", nullptr, 0) == 0;
+    // RecompLauncher brings the updates itself.
+    bool wanted = settings.Get("check_updates", "true") != "false" && !StartedByRecompLauncher();
     if (update_feed_given || (wanted && install_kind != launcher::InstallKind::kDeveloper)) {
       update_check = std::async(std::launch::async, launcher::CheckForUpdate, update_feed,
                                 std::string(launcher::LauncherVersion()));
@@ -1130,6 +1134,17 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         GetExitCodeProcess(g_game_process, &exit_code);
         CloseHandle(g_game_process);
         g_game_process = nullptr;
+        launcher::Log("game exited with code 0x%08lX", static_cast<unsigned long>(exit_code));
+        std::string message = GameExitMessage(exit_code);
+        // After the game closes (settings.cpp). Unset, it closes under
+        // RecompLauncher, which counts the session until the launcher closes and
+        // backs up the saves then. A crash still shows its message here.
+        std::string after = launcher::GameConfig(data_folder / "launcher.toml")
+                                .Get("after_game", StartedByRecompLauncher() ? "\"close\"" : "\"menu\"");
+        if (message.empty() && after == "\"close\"") {
+          running = false;
+          continue;
+        }
         ShowWindow(g_window, SW_SHOW);
         SetForegroundWindow(g_window);
         // Play was pressed on the mouse button's press, and the window hidden
@@ -1140,10 +1155,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
         }
         ui->ApplySoundSettings();
         // A crash looks like the menu coming back by itself: say what happened.
-        launcher::Log("game exited with code 0x%08lX", static_cast<unsigned long>(exit_code));
-        if (std::string message = GameExitMessage(exit_code); !message.empty()) {
-          ui->ShowMessage(message);
-        }
+        if (!message.empty()) ui->ShowMessage(message);
       }
       continue;
     }

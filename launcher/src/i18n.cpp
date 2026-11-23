@@ -37,7 +37,7 @@ const Entry kEntries[] = {
     // Settings.
     {"Display", "Pantalla", "Tela"},
     {"Graphics", "Gráficos", "Gráficos"},
-    {"Menu sound", "Sonido", "Som do menu"},
+    {"Launcher", "Launcher", "Launcher"},
     {"Data", "Datos", "Dados"},
     {"Off", "Desactivado", "Desligado"},
     {"On", "Activado", "Ligado"},
@@ -176,6 +176,15 @@ const Entry kEntries[] = {
      "ofrece. No se envía nada sobre ti ni sobre tu juego.",
      "Ao iniciar, consulta a página do projeto no GitHub para ver se há uma versão nova e a "
      "oferece. Nada sobre você ou seu jogo é enviado."},
+    {"After the game closes", "Al cerrar el juego", "Ao fechar o jogo"},
+    {"Close the launcher takes you back to the desktop when you quit the game. If the game stops "
+     "with an error, the launcher still shows why.",
+     "Cerrar el launcher te devuelve al escritorio cuando sales del juego. Si el juego se detiene "
+     "por un error, el launcher igual te muestra por qué.",
+     "Fechar o launcher leva você de volta à área de trabalho quando você sai do jogo. Se o jogo "
+     "parar por um erro, o launcher ainda mostra o motivo."},
+    {"Show this menu", "Mostrar este menú", "Mostrar este menu"},
+    {"Close the launcher", "Cerrar el launcher", "Fechar o launcher"},
     {"Squads", "Plantillas", "Elencos"},
     {"Import", "Importar", "Importar"},
     {"Imports a squads file, such as EA's last squad update. The game loads it by itself when it "
