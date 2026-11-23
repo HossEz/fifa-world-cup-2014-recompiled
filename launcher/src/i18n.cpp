@@ -42,108 +42,103 @@ const Entry kEntries[] = {
     {"Off", "Desactivado", "Desligado"},
     {"On", "Activado", "Ligado"},
     {"Language", "Idioma", "Idioma"},
-    {"The language of this menu and of the game, which asks for it at every start with this "
-     "one selected.",
-     "El idioma de este menú y del juego, que lo pregunta en cada inicio con este ya "
-     "seleccionado.",
-     "O idioma deste menu e do jogo, que pergunta por ele a cada início com este já "
-     "selecionado."},
+    {"The language for this menu and the game, if your game copy has it.",
+     "El idioma de este menú y del juego, si tu copia del juego lo tiene.",
+     "O idioma deste menu e do jogo, se a sua cópia do jogo tiver."},
     {"Window", "Ventana", "Janela"},
-    {"Fullscreen fills your screen and lets you switch apps quickly. Exclusive gives the game "
-     "the screen to itself. Windowed uses Window size.",
-     "Pantalla completa llena tu pantalla y te deja cambiar de app rápido. Exclusiva le da la "
-     "pantalla solo al juego. En ventana usa el Tamaño de ventana.",
-     "Tela cheia ocupa a tela toda e deixa trocar de app rápido. Exclusiva dá a tela só para o "
-     "jogo. Em janela usa o Tamanho da janela."},
+    {"Fullscreen is borderless and lets you switch apps quickly. Exclusive gives the game full "
+     "control of the display. Windowed uses Window size.",
+     "Pantalla completa es sin bordes y te deja cambiar de app rápido. Exclusiva le da al juego "
+     "control total del monitor. En ventana usa Tamaño de ventana.",
+     "Tela cheia é sem bordas e deixa trocar de app rápido. Exclusiva dá ao jogo controle total "
+     "do monitor. Em janela usa Tamanho da janela."},
     {"Fullscreen", "Pantalla completa", "Tela cheia"},
     {"Exclusive", "Exclusiva", "Exclusiva"},
     {"Windowed", "En ventana", "Em janela"},
     {"Window size", "Tamaño de ventana", "Tamanho da janela"},
-    {"The size of the game's window in Windowed mode. Automatic makes it as large as fits your "
-     "screen. A size larger than your screen is shrunk to fit.",
-     "El tamaño de la ventana del juego en modo En ventana. Automático la hace tan grande como "
-     "quepa en tu pantalla. Un tamaño mayor que tu pantalla se reduce para que quepa.",
-     "O tamanho da janela do jogo no modo Em janela. Automático deixa a janela no maior tamanho "
-     "que couber na tela. Um tamanho maior que a tela é reduzido para caber."},
+    {"The window size in Windowed mode. Automatic fills as much of your screen as it can.",
+     "El tamaño de la ventana en modo En ventana. Automático la hace tan grande como quepa en "
+     "tu pantalla.",
+     "O tamanho da janela no modo Em janela. Automático deixa a janela no maior tamanho que "
+     "couber na tela."},
     {"Automatic", "Automático", "Automático"},
     {"Monitor", "Monitor", "Monitor"},
     {"The screen the game opens on.", "La pantalla en la que se abre el juego.",
      "A tela em que o jogo abre."},
     {"Monitor {0}", "Monitor {0}", "Monitor {0}"},
-    {"On stops tearing and keeps the game at your screen's refresh rate or below. Off lets Frame "
-     "rate go higher, but can tear.",
-     "Activado evita el tearing y mantiene el juego a la frecuencia de tu pantalla o menos. "
-     "Desactivado permite una tasa más alta, pero puede haber tearing.",
-     "Ligado evita o tearing e mantém o jogo na taxa da sua tela ou abaixo. Desligado permite uma "
-     "taxa maior, mas pode ter tearing."},
+    {"On prevents screen tearing and caps the frame rate to your monitor's refresh rate. Off "
+     "removes the cap but may cause tearing.",
+     "Activado evita el tearing y limita la tasa de fotogramas a la frecuencia del monitor. "
+     "Desactivado quita el límite pero puede haber tearing.",
+     "Ligado evita o tearing e limita a taxa de quadros à frequência do monitor. Desligado remove "
+     "o limite mas pode causar tearing."},
     {"Picture", "Imagen", "Imagem"},
-    {"Fit keeps the right shape, with black bars on screens wider than 16:9. Stretch fills the "
-     "screen, but players and the HUD look wider.",
-     "Ajustar mantiene la forma correcta, con barras negras en pantallas más anchas que 16:9. "
-     "Estirar llena la pantalla, pero los jugadores y el HUD se ven más anchos.",
-     "Ajustar mantém a forma correta, com barras pretas em telas mais largas que 16:9. Esticar "
-     "preenche a tela, mas os jogadores e o HUD ficam mais largos."},
+    {"Fit keeps the game's 16:9 shape, with black bars on wider screens. Stretch fills the whole "
+     "screen but makes everything look stretched.",
+     "Ajustar mantiene la proporción 16:9 del juego, con barras negras en pantallas más anchas. "
+     "Estirar llena toda la pantalla pero deforma la imagen.",
+     "Ajustar mantém a proporção 16:9 do jogo, com barras pretas em telas mais largas. Esticar "
+     "preenche a tela toda mas distorce a imagem."},
     {"Button icons", "Iconos de botones", "Ícones dos botões"},
-    {"The controller buttons shown in the game and here. Automatic matches your controller each "
-     "time the game starts.",
-     "Los botones del mando que se muestran en el juego y aquí. Automático usa los de tu mando "
+    {"Which controller buttons are shown in the game and in this menu. Automatic detects your "
+     "controller each time the game starts.",
+     "Qué botones del mando se muestran en el juego y en este menú. Automático detecta tu mando "
      "cada vez que empieza el juego.",
-     "Os botões do controle mostrados no jogo e aqui. Automático usa os do seu controle sempre "
-     "que o jogo começa."},
+     "Quais botões do controle aparecem no jogo e neste menu. Automático detecta seu controle "
+     "cada vez que o jogo inicia."},
     {"Fit", "Ajustar", "Ajustar"},
     {"Stretch", "Estirar", "Esticar"},
     {"Frame rate", "Tasa de fotogramas", "Taxa de quadros"},
-    {"The game holds cutscenes at 40 FPS and many menus at 30, as on the console. These rates "
-     "lift both limits. Above 60 needs a faster PC, and heavy scenes may run below the rate you "
-     "pick.",
-     "El juego limita las escenas a 40 FPS y muchos menús a 30, como en la consola. Estas tasas "
-     "quitan ambos límites. Más de 60 requiere un PC más rápido, y las escenas exigentes pueden "
-     "ir más lentas.",
-     "O jogo limita as cenas a 40 FPS e muitos menus a 30, como no console. Estas taxas tiram os "
-     "dois limites. Acima de 60 exige um PC mais rápido, e cenas pesadas podem ficar abaixo."},
+    {"On console, cutscenes run at 40 FPS and many menus at 30. Picking a rate here removes both "
+     "limits. Above 60 needs a fast PC, and heavy scenes may still drop below your target.",
+     "En consola, las escenas corren a 40 FPS y muchos menús a 30. Elegir una tasa aquí quita "
+     "ambos límites. Más de 60 necesita un PC rápido, y las escenas exigentes pueden no llegar "
+     "al objetivo.",
+     "No console, as cenas rodam a 40 FPS e muitos menus a 30. Escolher uma taxa aqui remove os "
+     "dois limites. Acima de 60 precisa de um PC rápido, e cenas pesadas podem ficar abaixo da "
+     "meta."},
     {"As on console", "Como en consola", "Como no console"},
     {"Show FPS", "Mostrar FPS", "Mostrar FPS"},
-    {"The frame rate in the top left corner of the game.",
-     "Los FPS en la esquina superior izquierda del juego.",
-     "Os FPS no canto superior esquerdo do jogo."},
+    {"Shows the frame rate in the top left corner of the screen.",
+     "Muestra la tasa de fotogramas en la esquina superior izquierda de la pantalla.",
+     "Mostra a taxa de quadros no canto superior esquerdo da tela."},
     {"Render resolution", "Resolución de renderizado", "Resolução de renderização"},
-    {"What the game draws at, then fits to your screen, so any of these works on any screen. "
-     "720p is the console's own. 1440p is sharp on a 1080p screen. 4K needs a fast graphics card.",
-     "La resolución a la que dibuja el juego antes de ajustarla a tu pantalla, así que cualquiera "
-     "funciona en cualquier pantalla. 720p es la de la consola. 1440p se ve nítido en una "
-     "pantalla 1080p. 4K necesita una tarjeta gráfica potente.",
-     "A resolução em que o jogo desenha antes de ajustar à sua tela, então qualquer uma funciona "
-     "em qualquer tela. 720p é a do console. 1440p fica nítido numa tela 1080p. 4K precisa de uma "
-     "placa de vídeo potente."},
+    {"The resolution the game renders at before scaling to your screen. 720p is the original "
+     "console quality. 1440p looks sharp on a 1080p screen. 4K needs a powerful graphics card.",
+     "La resolución a la que dibuja el juego antes de ajustarla a tu pantalla. 720p es la calidad "
+     "original de la consola. 1440p se ve nítido en una pantalla 1080p. 4K necesita una tarjeta "
+     "gráfica potente.",
+     "A resolução em que o jogo renderiza antes de ajustar à sua tela. 720p é a qualidade original "
+     "do console. 1440p fica nítido numa tela 1080p. 4K precisa de uma placa de vídeo potente."},
     {"Upscaling", "Escalado", "Escala"},
-    {"FSR sharpens the picture as it's fitted to your screen, most of all at 720p on a 1080p "
-     "screen. It can look a bit artificial.",
-     "FSR hace más nítida la imagen al ajustarla a tu pantalla, sobre todo a 720p en una "
-     "pantalla 1080p. Puede verse algo artificial.",
-     "O FSR deixa a imagem mais nítida ao ajustá-la à tela, principalmente em 720p numa tela "
-     "1080p. Pode parecer um pouco artificial."},
+    {"FSR sharpens the image when it scales up to your screen, most noticeable at 720p on a "
+     "1080p monitor. Can look a little artificial.",
+     "FSR hace más nítida la imagen al escalarla a tu pantalla, sobre todo a 720p en un monitor "
+     "1080p. Puede verse un poco artificial.",
+     "O FSR deixa a imagem mais nítida ao escalá-la para sua tela, mais perceptível em 720p num "
+     "monitor 1080p. Pode parecer um pouco artificial."},
     {"Texture filtering", "Filtrado de texturas", "Filtragem de texturas"},
-    {"Keeps the pitch markings and the stands sharp at shallow angles. Costs next to nothing on "
-     "today's graphics cards.",
-     "Mantiene nítidas las líneas de la cancha y las tribunas en ángulos bajos. Casi no cuesta "
-     "rendimiento en las tarjetas gráficas actuales.",
-     "Mantém nítidas as linhas do campo e as arquibancadas em ângulos baixos. Quase não pesa nas "
-     "placas de vídeo atuais."},
+    {"Makes the pitch markings and stands stay sharp at low camera angles. Has almost no "
+     "performance cost on modern graphics cards.",
+     "Mantiene nítidas las líneas de la cancha y las tribunas en ángulos bajos. Casi no afecta "
+     "el rendimiento en tarjetas gráficas modernas.",
+     "Mantém nítidas as linhas do campo e as arquibancadas em ângulos baixos. Quase não impacta "
+     "o desempenho em placas de vídeo modernas."},
     {"Game's own", "La del juego", "A do jogo"},
-    {"Only in this menu. The game's own sound is set in the game.",
-     "Solo en este menú. El sonido del juego se ajusta en el juego.",
-     "Só neste menu. O som do jogo é ajustado no jogo."},
+    {"Only in this menu. The game's own volume is set inside the game.",
+     "Solo en este menú. El volumen del juego se ajusta dentro del juego.",
+     "Só neste menu. O volume do jogo é ajustado dentro do jogo."},
     {"Music", "Música", "Música"},
-    {"The game's EA Trax soundtrack, shuffled, while you're in this menu.",
-     "La banda sonora EA Trax del juego, en orden aleatorio, mientras estás en este menú.",
-     "A trilha sonora EA Trax do jogo, em ordem aleatória, enquanto você está neste menu."},
+    {"The game's EA Trax soundtrack, played on shuffle while you're in this menu.",
+     "La banda sonora EA Trax del juego, en orden aleatorio mientras estás en este menú.",
+     "A trilha sonora EA Trax do jogo, em ordem aleatória enquanto você está neste menu."},
     {"Music volume", "Volumen de la música", "Volume da música"},
     {"How loud this menu's music is.", "Qué tan fuerte suena la música de este menú.",
      "O volume da música deste menu."},
     {"Sounds", "Sonidos", "Sons"},
-    {"The game's menu sounds as you move, select and go back.",
-     "Los sonidos del menú del juego al moverte, seleccionar y volver.",
-     "Os sons de menu do jogo ao navegar, selecionar e voltar."},
+    {"The launcher's menu sounds while you navigate.",
+     "Los sonidos del launcher mientras navegas.",
+     "Os sons do launcher enquanto você navega."},
     {"Sounds volume", "Volumen de los sonidos", "Volume dos sons"},
     {"How loud this menu's sounds are.", "Qué tan fuertes suenan los sonidos de este menú.",
      "O volume dos sons deste menu."},
@@ -159,40 +154,40 @@ const Entry kEntries[] = {
      "Seu perfil, suas configurações e seus torneios salvos."},
     {"Shader cache", "Caché de shaders", "Cache de shaders"},
     {"Clear", "Borrar", "Limpar"},
-    {"Shaders the game has built, kept so later matches don't stutter. Clearing only helps if "
-     "graphics look wrong after an update.",
-     "Shaders que el juego ya creó, guardados para que los siguientes partidos no tengan "
-     "tirones. Borrarlos solo sirve si los gráficos se ven mal tras una actualización.",
-     "Shaders que o jogo já criou, guardados para que as próximas partidas não travem. Limpar só "
-     "ajuda se os gráficos ficarem errados depois de uma atualização."},
+    {"Compiled shaders the game saves to avoid stuttering in later matches. Clear this if "
+     "graphics look wrong or performance got worse after an update.",
+     "Shaders ya compilados que el juego guarda para evitar tirones en las siguientes partidas. "
+     "Bórralos si los gráficos se ven mal o el rendimiento empeoró tras una actualización.",
+     "Shaders já compilados que o jogo salva para evitar travamentos nas próximas partidas. "
+     "Limpe se os gráficos ficarem errados ou o desempenho piorou depois de uma atualização."},
     {"Logs", "Registros", "Registros"},
     {"The game's log (fifawc14.log). Attach it when you report a problem.",
      "El registro del juego (fifawc14.log). Adjúntalo cuando reportes un problema.",
      "O registro do jogo (fifawc14.log). Anexe-o quando relatar um problema."},
     {"Check for updates", "Buscar actualizaciones", "Procurar atualizações"},
-    {"At start, asks this project's GitHub page whether a newer version is out, and offers it. "
-     "Nothing is sent about you or your game.",
-     "Al iniciar, consulta la página de GitHub del proyecto por si hay una versión nueva y te la "
-     "ofrece. No se envía nada sobre ti ni sobre tu juego.",
-     "Ao iniciar, consulta a página do projeto no GitHub para ver se há uma versão nova e a "
-     "oferece. Nada sobre você ou seu jogo é enviado."},
+    {"Checks GitHub for a newer version when the launcher starts, and offers to install it. "
+     "Nothing about you or your game is sent.",
+     "Consulta GitHub al iniciar para ver si hay una versión nueva y te ofrece instalarla. No "
+     "se envía nada sobre ti ni sobre tu juego.",
+     "Consulta o GitHub ao iniciar para ver se há uma versão nova e oferece instalá-la. Nada "
+     "sobre você ou seu jogo é enviado."},
     {"After the game closes", "Al cerrar el juego", "Ao fechar o jogo"},
-    {"Close the launcher takes you back to the desktop when you quit the game. If the game stops "
-     "with an error, the launcher still shows why.",
-     "Cerrar el launcher te devuelve al escritorio cuando sales del juego. Si el juego se detiene "
-     "por un error, el launcher igual te muestra por qué.",
-     "Fechar o launcher leva você de volta à área de trabalho quando você sai do jogo. Se o jogo "
-     "parar por um erro, o launcher ainda mostra o motivo."},
+    {"Show this menu brings you back here after you quit. Close the launcher goes straight to "
+     "your desktop. Either way, errors still show up in the launcher.",
+     "Mostrar este menú te trae de vuelta aquí al salir. Cerrar el launcher va directo al "
+     "escritorio. En ambos casos, los errores siguen apareciendo en el launcher.",
+     "Mostrar este menu traz você de volta aqui ao sair. Fechar o launcher vai direto para a "
+     "área de trabalho. Nos dois casos, os erros ainda aparecem no launcher."},
     {"Show this menu", "Mostrar este menú", "Mostrar este menu"},
     {"Close the launcher", "Cerrar el launcher", "Fechar o launcher"},
     {"Squads", "Plantillas", "Elencos"},
     {"Import", "Importar", "Importar"},
-    {"Imports a squads file, such as EA's last squad update. The game loads it by itself when it "
-     "starts.",
-     "Importa un archivo de plantillas, como la última actualización de EA. El juego lo carga "
-     "solo al iniciar.",
-     "Importa um arquivo de elencos, como a última atualização da EA. O jogo o carrega sozinho "
-     "ao iniciar."},
+    {"Imports a squads file, for example a squad update. The game picks it up automatically when "
+     "it starts.",
+     "Importa un archivo de plantillas, por ejemplo una actualización de plantillas. El juego lo "
+     "carga automáticamente al iniciar.",
+     "Importa um arquivo de elencos, por exemplo uma atualização de elencos. O jogo o carrega "
+     "automaticamente ao iniciar."},
     {"Squads imported. The game uses them from its next start.",
      "Plantillas importadas. El juego las usa desde su próximo inicio.",
      "Elencos importados. O jogo os usa a partir do próximo início."},
@@ -209,17 +204,17 @@ const Entry kEntries[] = {
     {"Hold", "Mantén", "Segure"},
     {"to quit", "para salir", "para sair"},
     {"Quitting", "Saliendo", "Saindo"},
-    {"On desktop", "En el escritorio", "Na área de trabalho"},
+
     {"The shortcut is on your desktop.", "El acceso directo está en tu escritorio.",
      "O atalho está na sua área de trabalho."},
     {"The shortcut couldn't be created.", "No se pudo crear el acceso directo.",
      "Não foi possível criar o atalho."},
-    {"A shortcut to this launcher on your desktop, with the game's icon. Useful for the portable "
-     "version, or if you deleted the one the installer made.",
-     "Un acceso directo a este launcher en tu escritorio, con el ícono del juego. Útil para la "
-     "versión portable o si borraste el que creó el instalador.",
-     "Um atalho para este launcher na área de trabalho, com o ícone do jogo. Útil na versão "
-     "portátil ou se você apagou o que o instalador criou."},
+    {"Adds a shortcut to this launcher on your desktop with the game's icon. Handy for the "
+     "portable version, or if you deleted the one the installer created.",
+     "Añade un acceso directo a este launcher en tu escritorio con el ícono del juego. Útil para "
+     "la versión portable o si borraste el que creó el instalador.",
+     "Adiciona um atalho para este launcher na área de trabalho com o ícone do jogo. Útil na "
+     "versão portátil ou se você apagou o que o instalador criou."},
 
     // Controls.
     {"These are the keys for playing on the keyboard. Select an action to give it a new "

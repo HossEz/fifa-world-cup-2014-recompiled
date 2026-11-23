@@ -30,7 +30,7 @@
   "settings": [
     {
       "id": "window", "label": "Window", "group": "Display",
-      "help": "Fullscreen fills your screen and lets you switch apps quickly. Exclusive gives the game the screen to itself. Windowed uses Window size.",
+      "help": "Fullscreen is borderless and lets you switch apps quickly. Exclusive gives the game full control of the display. Windowed uses Window size.",
       "choices": [
         { "label": "Fullscreen", "set": { "fullscreen": "true", "fullscreen_exclusive": "false" } },
         { "label": "Exclusive", "set": { "fullscreen": "true", "fullscreen_exclusive": "true" } },
@@ -40,7 +40,7 @@
     },
     {
       "id": "window_size", "label": "Window size", "group": "Display",
-      "help": "The size of the game's window in Windowed mode. Automatic makes it as large as fits your screen. A size larger than your screen is shrunk to fit.",
+      "help": "The window size in Windowed mode. Automatic fills as much of your screen as it can.",
       "when": { "fullscreen": "false" },
       "choices": [
         { "label": "Automatic", "set": { "windowed_width": "0", "windowed_height": "0" } },
@@ -54,7 +54,7 @@
     },
     {
       "id": "picture", "label": "Picture", "group": "Display",
-      "help": "Fit keeps the right shape, with black bars on screens wider than 16:9. Stretch fills the screen, but players and the HUD look wider.",
+      "help": "Fit keeps the game's 16:9 shape, with black bars on wider screens. Stretch fills the whole screen but makes everything look stretched.",
       "choices": [
         { "label": "Fit", "set": { "present_letterbox": "true" } },
         { "label": "Stretch", "set": { "present_letterbox": "false" } }
@@ -63,7 +63,7 @@
     },
     {
       "id": "button_icons", "label": "Button icons", "group": "Display",
-      "help": "The controller buttons shown in the game. Automatic matches your controller each time the game starts.",
+      "help": "Which controller buttons are shown in the game. Automatic detects your controller each time the game starts.",
       "choices": [
         { "label": "Automatic", "set": { "button_icons": "\"auto\"" } },
         { "label": "Xbox", "set": { "button_icons": "\"xbox\"" } },
@@ -73,7 +73,7 @@
     },
     {
       "id": "vsync", "label": "VSync", "group": "Display",
-      "help": "On stops tearing and keeps the game at your screen's refresh rate or below. Off lets Frame rate go higher, but can tear.",
+      "help": "On prevents screen tearing and caps the frame rate to your monitor's refresh rate. Off removes the cap but may cause tearing.",
       "choices": [
         { "label": "On", "set": { "d3d12_allow_variable_refresh_rate_and_tearing": "false", "vsync_to_display": "true" } },
         { "label": "Off", "set": { "d3d12_allow_variable_refresh_rate_and_tearing": "true", "vsync_to_display": "false" } }
@@ -82,7 +82,7 @@
     },
     {
       "id": "frame_rate", "label": "Frame rate", "group": "Display",
-      "help": "The game holds cutscenes at 40 FPS and many menus at 30, as on the console. These rates lift both limits. Above 60 needs a faster PC.",
+      "help": "On console, cutscenes run at 40 FPS and many menus at 30. Picking a rate here removes both limits. Above 60 needs a fast PC.",
       "choices": [
         { "label": "60 FPS", "set": { "present_interval_cap": "1", "frame_rate_floor": "60", "present_late_tolerance": "100" } },
         { "label": "120 FPS", "set": { "present_interval_cap": "1", "frame_rate_floor": "120", "present_late_tolerance": "100" } },
@@ -95,7 +95,7 @@
     },
     {
       "id": "show_fps", "label": "Show FPS", "group": "Display",
-      "help": "The frame rate in the top left corner of the game.",
+      "help": "Shows the frame rate in the top left corner of the screen.",
       "choices": [
         { "label": "Off", "set": { "show_fps": "false" } },
         { "label": "On", "set": { "show_fps": "true" } }
@@ -104,7 +104,7 @@
     },
     {
       "id": "resolution", "label": "Render resolution", "group": "Graphics",
-      "help": "What the game draws at, then fits to your screen. 720p is the console's own. 1440p is sharp on a 1080p screen. 4K needs a fast graphics card.",
+      "help": "The resolution the game renders at before scaling to your screen. 720p is the original console quality. 1440p looks sharp on a 1080p screen. 4K needs a powerful graphics card.",
       "choices": [
         { "label": "720p", "set": { "resolution_scale": "1" } },
         { "label": "1440p", "set": { "resolution_scale": "2" } },
@@ -114,7 +114,7 @@
     },
     {
       "id": "upscaling", "label": "Upscaling", "group": "Graphics",
-      "help": "FSR sharpens the picture as it's fitted to your screen, most of all at 720p on a 1080p screen. It can look a bit artificial.",
+      "help": "FSR sharpens the image when it scales up to your screen, most noticeable at 720p on a 1080p monitor. Can look a little artificial.",
       "choices": [
         { "label": "Off", "set": { "present_effect": "\"bilinear\"" } },
         { "label": "FSR", "set": { "present_effect": "\"fsr\"" } }
@@ -123,7 +123,7 @@
     },
     {
       "id": "filtering", "label": "Texture filtering", "group": "Graphics",
-      "help": "Keeps the pitch markings and the stands sharp at shallow angles. Costs next to nothing on today's graphics cards.",
+      "help": "Makes the pitch markings and stands stay sharp at low camera angles. Has almost no performance cost on modern graphics cards.",
       "choices": [
         { "label": "Game's own", "set": { "anisotropic_override": "-1" } },
         { "label": "2x", "set": { "anisotropic_override": "2" } },

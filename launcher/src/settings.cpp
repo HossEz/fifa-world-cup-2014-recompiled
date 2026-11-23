@@ -327,8 +327,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     // In launcher.toml; the game gets it at Play (user_language, main.cpp).
     Option language;
     language.label = T("Language");
-    language.help = T("The language of this menu and of the game, which asks for it at every "
-                      "start with this one selected.");
+    language.help = T("The language for this menu and the game, if your game copy has it.");
     for (const LanguageInfo& info : Languages()) {
       language.choices.push_back({info.name, {{"language", std::string("\"") + info.code + "\""}}, {}});
     }
@@ -338,8 +337,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option window;
     window.label = T("Window");
-    window.help = T("Fullscreen fills your screen and lets you switch apps quickly. Exclusive "
-                    "gives the game the screen to itself. Windowed uses Window size.");
+    window.help = T("Fullscreen is borderless and lets you switch apps quickly. Exclusive gives "
+                    "the game full control of the display. Windowed uses Window size.");
     window.choices = {
         {T("Fullscreen"), {{"fullscreen", "true"}, {"fullscreen_exclusive", "false"}}, {}},
         {T("Exclusive"), {{"fullscreen", "true"}, {"fullscreen_exclusive", "true"}}, {}},
@@ -349,8 +348,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option size;
     size.label = T("Window size");
-    size.help = T("The size of the game's window in Windowed mode. Automatic makes it as large "
-                  "as fits your screen. A size larger than your screen is shrunk to fit.");
+    size.help = T("The window size in Windowed mode. Automatic fills as much of your screen as "
+                  "it can.");
     size.applies = [](const GameConfig& config) { return config.Get("fullscreen", "true") == "false"; };
     size.choices = {{T("Automatic"), {{"windowed_width", "0"}, {"windowed_height", "0"}}, {}}};
     // The 16:9 sizes that fit the chosen monitor (1280 x 720 always). Changing
@@ -370,8 +369,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option picture;
     picture.label = T("Picture");
-    picture.help = T("Fit keeps the right shape, with black bars on screens wider than 16:9. "
-                     "Stretch fills the screen, but players and the HUD look wider.");
+    picture.help = T("Fit keeps the game's 16:9 shape, with black bars on wider screens. Stretch "
+                     "fills the whole screen but makes everything look stretched.");
     picture.choices = {{T("Fit"), {{"present_letterbox", "true"}}, {}},
                        {T("Stretch"), {{"present_letterbox", "false"}}, {}}};
     picture.defaults = {{"present_letterbox", "true"}};
@@ -380,8 +379,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     // The game's button icons (pc/src/game_files.h) and this menu's hints.
     Option buttons;
     buttons.label = T("Button icons");
-    buttons.help = T("The controller buttons shown in the game and here. Automatic matches your "
-                     "controller each time the game starts.");
+    buttons.help = T("Which controller buttons are shown in the game and in this menu. Automatic "
+                     "detects your controller each time the game starts.");
     buttons.choices = {{T("Automatic"), {{"button_icons", "\"auto\""}}, {}},
                        {"Xbox", {{"button_icons", "\"xbox\""}}, {}},
                        {"PlayStation", {{"button_icons", "\"playstation\""}}, {}}};
@@ -403,8 +402,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option sync;
     sync.label = "VSync";
-    sync.help = T("On stops tearing and keeps the game at your screen's refresh rate or below. "
-                  "Off lets Frame rate go higher, but can tear.");
+    sync.help = T("On prevents screen tearing and caps the frame rate to your monitor's refresh "
+                  "rate. Off removes the cap but may cause tearing.");
     // At Play, On also lowers the game's rate to the screen's (main.cpp).
     sync.choices = {{T("On"),
                      {{"d3d12_allow_variable_refresh_rate_and_tearing", "false"},
@@ -419,9 +418,9 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     display.options.push_back(sync);
     Option rate;
     rate.label = T("Frame rate");
-    rate.help = T("The game holds cutscenes at 40 FPS and many menus at 30, as on the console. "
-                  "These rates lift both limits. Above 60 needs a faster PC, and heavy scenes may "
-                  "run below the rate you pick.");
+    rate.help = T("On console, cutscenes run at 40 FPS and many menus at 30. Picking a rate here "
+                  "removes both limits. Above 60 needs a fast PC, and heavy scenes may still drop "
+                  "below your target.");
     for (int fps : {60, 120, 144, 165, 240}) {
       rate.choices.push_back({std::to_string(fps) + " FPS",
                               {{"present_interval_cap", "1"},
@@ -440,7 +439,7 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     display.options.push_back(rate);
 
     display.options.push_back(OnOff("Show FPS", "show_fps", "false",
-                                    T("The frame rate in the top left corner of the game.")));
+                                    T("Shows the frame rate in the top left corner of the screen.")));
   }
   sections.push_back(display);
 
@@ -448,9 +447,9 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
   {
     Option resolution;
     resolution.label = T("Render resolution");
-    resolution.help = T("What the game draws at, then fits to your screen, so any of these works "
-                        "on any screen. 720p is the console's own. 1440p is sharp on a 1080p "
-                        "screen. 4K needs a fast graphics card.");
+    resolution.help = T("The resolution the game renders at before scaling to your screen. 720p "
+                        "is the original console quality. 1440p looks sharp on a 1080p screen. "
+                        "4K needs a powerful graphics card.");
     resolution.choices = {{"720p", {{"resolution_scale", "1"}}, {}},
                           {"1440p", {{"resolution_scale", "2"}}, {}},
                           {"4K", {{"resolution_scale", "3"}}, {}}};
@@ -459,8 +458,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option upscaling;
     upscaling.label = T("Upscaling");
-    upscaling.help = T("FSR sharpens the picture as it's fitted to your screen, most of all at "
-                       "720p on a 1080p screen. It can look a bit artificial.");
+    upscaling.help = T("FSR sharpens the image when it scales up to your screen, most noticeable "
+                       "at 720p on a 1080p monitor. Can look a little artificial.");
     upscaling.choices = {{T("Off"), {{"present_effect", "\"bilinear\""}}, {}},
                          {"FSR", {{"present_effect", "\"fsr\""}}, {}}};
     upscaling.defaults = {{"present_effect", "\"bilinear\""}};
@@ -468,8 +467,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
 
     Option filtering;
     filtering.label = T("Texture filtering");
-    filtering.help = T("Keeps the pitch markings and the stands sharp at shallow angles. Costs "
-                       "next to nothing on today's graphics cards.");
+    filtering.help = T("Makes the pitch markings and stands stay sharp at low camera angles. Has "
+                       "almost no performance cost on modern graphics cards.");
     filtering.choices = {{T("Game's own"), {{"anisotropic_override", "-1"}}, {}},
                          {"2x", {{"anisotropic_override", "2"}}, {}},
                          {"4x", {{"anisotropic_override", "3"}}, {}},
@@ -488,8 +487,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     // launcher has closed (main.cpp).
     Option after;
     after.label = T("After the game closes");
-    after.help = T("Close the launcher takes you back to the desktop when you quit the game. "
-                   "If the game stops with an error, the launcher still shows why.");
+    after.help = T("Show this menu brings you back here after you quit. Close the launcher goes "
+                   "straight to your desktop. Either way, errors still show up in the launcher.");
     after.choices = {{T("Show this menu"), {{"after_game", "\"menu\""}}, {}},
                      {T("Close the launcher"), {{"after_game", "\"close\""}}, {}}};
     bool recomplauncher = GetEnvironmentVariableW(L"RECOMPLAUNCHER", nullptr, 0) != 0;
@@ -498,23 +497,23 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     app.options.push_back(after);
 
     Option updates = OnOff("Check for updates", "check_updates", "true",
-                           T("At start, asks this project's GitHub page whether a newer version "
-                             "is out, and offers it. Nothing is sent about you or your game."));
+                           T("Checks GitHub for a newer version when the launcher starts, and "
+                             "offers to install it. Nothing about you or your game is sent."));
     updates.local = true;
     app.options.push_back(updates);
 
     Option shortcut;
     shortcut.label = T("Desktop shortcut");
     shortcut.action = T("Create");
-    shortcut.info = [] { return HasDesktopShortcut() ? std::string(T("On desktop")) : std::string(); };
     shortcut.run = [data_folder] { CreateDesktopShortcut(data_folder); };
     shortcut.outcome = [] {
       return HasDesktopShortcut()
                  ? std::make_pair(std::string(T("The shortcut is on your desktop.")), true)
                  : std::make_pair(std::string(T("The shortcut couldn't be created.")), false);
     };
-    shortcut.help = T("A shortcut to this launcher on your desktop, with the game's icon. Useful "
-                      "for the portable version, or if you deleted the one the installer made.");
+    shortcut.help = T("Adds a shortcut to this launcher on your desktop with the game's icon. "
+                      "Handy for the portable version, or if you deleted the one the installer "
+                      "created.");
     app.options.push_back(shortcut);
 
     auto percent = [](const char* label, std::string key, std::string fallback, std::string help) {
@@ -530,17 +529,17 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     };
     auto only_here = [](const char* text) {
       return std::string(T(text)) + " " +
-             T("Only in this menu. The game's own sound is set in the game.");
+             T("Only in this menu. The game's own volume is set inside the game.");
     };
     Option music = OnOff("Music", "menu_music", "true",
-                         only_here("The game's EA Trax soundtrack, shuffled, while you're in "
-                                   "this menu."));
+                         only_here("The game's EA Trax soundtrack, played on shuffle while "
+                                   "you're in this menu."));
     music.local = true;
     app.options.push_back(music);
     app.options.push_back(percent("Music volume", "music_volume", "100",
                                   only_here("How loud this menu's music is.")));
     Option sounds = OnOff("Sounds", "menu_sounds", "true",
-                          only_here("The game's menu sounds as you move, select and go back."));
+                          only_here("The launcher's menu sounds while you navigate."));
     sounds.local = true;
     app.options.push_back(sounds);
     app.options.push_back(percent("Sounds volume", "sounds_volume", "100",
@@ -561,8 +560,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
     Option squads;
     squads.label = T("Squads");
     squads.action = T("Import");
-    squads.help = T("Imports a squads file, such as EA's last squad update. The game loads it "
-                    "by itself when it starts.");
+    squads.help = T("Imports a squads file, for example a squad update. The game picks it up "
+                    "automatically when it starts.");
     squads.run = [user_folder, imported] { *imported = PickAndImportSquads(user_folder); };
     squads.outcome = [imported]() -> std::pair<std::string, bool> {
       switch (*imported) {
@@ -590,8 +589,8 @@ std::vector<Section> MakeSections(const fs::path& data_folder, const fs::path& u
       std::error_code ec;
       fs::remove_all(shaders, ec);
     };
-    cache.help = T("Shaders the game has built, kept so later matches don't stutter. Clearing "
-                   "only helps if graphics look wrong after an update.");
+    cache.help = T("Compiled shaders the game saves to avoid stuttering in later matches. Clear "
+                   "this if graphics look wrong or performance got worse after an update.");
     data.options.push_back(cache);
 
     Option logs;
