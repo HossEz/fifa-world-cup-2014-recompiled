@@ -1221,6 +1221,10 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
       if (pick) {
         fs::path picked = PickLocation(pick == 2);
         pick = 0;
+        // The dialog took the click's release, as with Play above.
+        for (int button = 0; button < ImGuiMouseButton_COUNT; ++button) {
+          ImGui::GetIO().AddMouseButtonEvent(button, false);
+        }
         if (!picked.empty()) setup->Offer(picked);
         last = std::chrono::steady_clock::now();
       }

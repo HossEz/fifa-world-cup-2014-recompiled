@@ -430,7 +430,13 @@ void Ui::SettingsCommand(Command command) {
       } else {
         armed_option_ = -1;
         Sound(Audio::Effect::kSelect);
-        if (option.run) option.run();
+        if (option.run) {
+          option.run();
+          // A file dialog it opened took the click's release.
+          for (int button = 0; button < ImGuiMouseButton_COUNT; ++button) {
+            ImGui::GetIO().AddMouseButtonEvent(button, false);
+          }
+        }
         if (option.outcome) {
           auto [text, ok] = option.outcome();
           if (!text.empty()) ShowMessage(text, ok);
