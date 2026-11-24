@@ -23,7 +23,7 @@ The only official download is this page's [Releases](https://github.com/HossEz/f
 
 </div>
 
-<img width="1100" height="700" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/b4625ef4-2b4c-4930-9465-ddfba3f16aa7" />
+<img width="1100" height="700" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/94cf4ed0-71ff-411c-8713-f2d8be19ef16" />
 
 <sub>Launcher preview · 2014 FIFA World Cup Brazil: Recompiled</sub>
 
@@ -34,7 +34,7 @@ The only official download is this page's [Releases](https://github.com/HossEz/f
    and run it. It installs into Program Files (Windows asks for permission
    once) and opens the launcher. Prefer no install? Take the
    `-portable.zip`, unzip it anywhere and run `Launcher.exe`. It keeps everything, saves included, in its own folder.
-   Settings → Data → Desktop shortcut adds a desktop shortcut with the game's icon.
+   The portable version has no shortcut, but Settings → Launcher → Desktop shortcut makes one.
 
    > The program isn't code-signed, so Windows may show "Windows protected your PC" the first time. Choose **More info**, then **Run anyway**.
 2. The launcher asks for your copy of the game, either its folder (the one with
@@ -44,8 +44,8 @@ The only official download is this page's [Releases](https://github.com/HossEz/f
 
 To quit the game, hold **Back + Start** (**Create + Options** on PlayStation) for 2 seconds, or press **Alt+F4**.
 
-The launcher's Settings set how the game runs (window, resolution, frame
-rate, Show FPS, ...) and where it's read from. A controller is recommended
+The launcher's Settings control how the game runs, such as the window,
+resolution and frame rate. A controller is recommended
 (Xbox, PlayStation and others). The game shows Xbox or PlayStation buttons to
 match your controller, or the ones you choose in Settings → Display → Button
 icons. The keyboard works too, and its keys can be changed on the Controls page.
@@ -56,23 +56,22 @@ icons. The keyboard works too, and its keys can be changed on the Controls page.
 
 ### Updates
 
-At the start the launcher checks this page for a newer release and offers it.
+When it starts, the launcher checks this page for a newer release and offers it.
 **Update now** downloads it, checks it against the release's checksums and
-installs it (the installed version asks Windows for permission, as when it was
-installed, and the portable version replaces its own files). Settings and saves stay.
-Settings → Data → Check for updates turns this off.
+installs it. Your settings and saves stay.
+Settings → Launcher → Check for updates turns this off.
 
 ### Requirements
 
-The game is heavy on the graphics card, more than on the processor. Integrated
-graphics will run the game poorly, especially Intel iGPUs (check [Known issues](#known-issues)).
+The game relies more on the graphics card than the processor. Integrated
+graphics run it poorly, especially Intel's (see [Known issues](#known-issues)).
 
 | Requirement | Details |
 |---|---|
 | Windows | 10 or 11, 64-bit |
 | Graphics | Direct3D 12, with up-to-date drivers |
-| Processor | With SSE4.2 (Intel from 2008, AMD from 2011) |
-| The game | Not included: your own copy of *2014 FIFA World Cup Brazil* for Xbox 360, as a disc image (`.iso`) or its folder with `default.xex` (the launcher checks if your copy is playable) |
+| Processor | A modern 64-bit processor with SSE4.2 |
+| The game | Your own copy of *2014 FIFA World Cup Brazil* for Xbox 360, as an `.iso` or a folder with `default.xex` |
 
 ### Where things are (by default)
 
