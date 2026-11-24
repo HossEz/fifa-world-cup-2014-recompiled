@@ -23,7 +23,7 @@ The only official download is this page's [Releases](https://github.com/HossEz/f
 
 </div>
 
-<img width="1100" height="700" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/94cf4ed0-71ff-411c-8713-f2d8be19ef16" />
+<img width="1100" height="700" alt="A screenshot of the launcher" src="https://github.com/user-attachments/assets/45d4913b-07e0-472f-b6fe-41c48a1a19e2" />
 
 <sub>Launcher preview · 2014 FIFA World Cup Brazil: Recompiled</sub>
 
