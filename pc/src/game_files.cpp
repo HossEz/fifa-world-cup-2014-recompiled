@@ -396,6 +396,21 @@ int BuildPlayStationFiles(Builder& builder) {
   return built;
 }
 
+// The Brazuca Final Rio (ball 92) is encrypted with a key that came from EA's
+// servers with the catalogue, so the game can't read it and the ball is
+// invisible. Since the catalogue is unlocked the game uses it in the final, so
+// ball 92 gets the normal Brazuca's files (ball 91).
+int BuildFinalBall(Builder& builder) {
+  const std::string ball = "data/sceneassets/ball/ball_";
+  int built = 0;
+  for (const char* part : {".rx3", "_textures.rx3"}) {
+    if (auto file = builder.FromArchives(ball + "91" + part)) {
+      if (builder.Put(ball + "92" + part, *file)) ++built;
+    }
+  }
+  return built;
+}
+
 bool g_loose_files_first = false;
 
 }  // namespace
@@ -435,10 +450,9 @@ void SetUpGameFiles(rex::Runtime* runtime) {
   Builder builder(vfs, folder);
   int languages = BuildLanguageFiles(vfs, builder, playstation);
   int files = 0;
-  if (playstation) {
-    files = BuildPlayStationFiles(builder);
-    g_loose_files_first = files > 0;
-  }
+  if (playstation) files = BuildPlayStationFiles(builder);
+  const int ball = BuildFinalBall(builder);
+  g_loose_files_first = files + ball > 0;
   if (g_loose_files_first) {
     // Reading loose files first, the game looks on disk for every file it loads;
     // a miss of one its archives have is expected, so it isn't logged.
@@ -451,10 +465,10 @@ void SetUpGameFiles(rex::Runtime* runtime) {
         });
   }
   builder.Link();
-  REXLOG_INFO("game files: {} buttons ({}), {} files; {} language files reworded",
+  REXLOG_INFO("game files: {} buttons ({}), {} files; {} language files reworded; final ball {}",
               playstation ? "PlayStation" : "Xbox",
               choice == "playstation" || choice == "xbox" ? "chosen"
               : playstation                               ? "a PlayStation controller is connected"
                                                           : "no PlayStation controller",
-              files, languages);
+              files, languages, ball == 2 ? "replaced" : "not replaced");
 }
