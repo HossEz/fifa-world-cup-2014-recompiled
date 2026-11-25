@@ -78,7 +78,7 @@ struct Section {
 enum class Glyph { kFace, kBumper, kTrigger, kStick, kPad, kSmall };
 struct ControlRow {
   const char* label;    // what it does: attacking / defending (one when both are the same)
-  const char* button;   // "A", "LB", "L", "D-pad", ...
+  const char* button;   // "A", "LB", "L", "Up" (the D-pad), ...
   Glyph glyph;
   const char* setting;  // keybind_*
 };

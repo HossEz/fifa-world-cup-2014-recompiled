@@ -1172,7 +1172,7 @@ void Ui::DrawGlyph(float x, float y, float size, const ControlRow& row) {
       return;
     }
     case Glyph::kPad: {
-      // The D-pad: a cross.
+      // The D-pad: a cross with the pressed arm lit.
       float arm = size * 0.36f, len = size * 0.52f, round = size * 0.08f;
       for (float dy : {2 * s, 0.0f}) {
         ImU32 color = dy ? shadow : plastic;
@@ -1180,6 +1180,16 @@ void Ui::DrawGlyph(float x, float y, float size, const ControlRow& row) {
                              color, round);
         draw_->AddRectFilled(ImVec2(x - len, y - arm * 0.5f + dy), ImVec2(x + len, y + arm * 0.5f + dy),
                              color, round);
+      }
+      float h = arm * 0.5f;
+      if (named("Up")) {
+        draw_->AddRectFilled(ImVec2(x - h, y - len), ImVec2(x + h, y - h), ink, round, ImDrawFlags_RoundCornersTop);
+      } else if (named("Down")) {
+        draw_->AddRectFilled(ImVec2(x - h, y + h), ImVec2(x + h, y + len), ink, round, ImDrawFlags_RoundCornersBottom);
+      } else if (named("Left")) {
+        draw_->AddRectFilled(ImVec2(x - len, y - h), ImVec2(x - h, y + h), ink, round, ImDrawFlags_RoundCornersLeft);
+      } else if (named("Right")) {
+        draw_->AddRectFilled(ImVec2(x + h, y - h), ImVec2(x + len, y + h), ink, round, ImDrawFlags_RoundCornersRight);
       }
       draw_->AddCircleFilled(ImVec2(x, y), arm * 0.22f, IM_COL32(85, 91, 97, 255));
       return;
